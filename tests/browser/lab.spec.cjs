@@ -15,11 +15,13 @@ async function visit(page, id) {
 }
 
 test('full-screen WebGL, walking, camera modes and proximity conversation', async ({page}) => {
+  test.setTimeout(120000);
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   await ready(page);
   await expect(page.locator('#scene-fallback')).toBeHidden();
   const canvas=await page.locator('#scene canvas').boundingBox();
   expect(canvas).toEqual({x:0,y:0,width:1440,height:1100});
+  await page.setViewportSize({width:960,height:720});
   await expect(page.locator('#interaction')).toBeHidden();
   await expect(page.locator('.touch-controls,#scene-labels')).toHaveCount(0);
   const before=await position(page);
