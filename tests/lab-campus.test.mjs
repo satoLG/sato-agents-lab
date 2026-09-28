@@ -5,7 +5,7 @@ import {parcelDrop,groundHeight,FLOOR,CAMPUS_SCALE} from '../static/js/lab-campu
 test('walkable paving is a single level and the campus is thirty percent smaller',()=>{
   assert.equal(CAMPUS_SCALE,.7);
   for(const [x,z]of [[0,46],[0,29],[-8,24],[0,17],[0,-3],[19,-14]])assert.equal(groundHeight(x,z),FLOOR);
-  assert.equal(groundHeight(40,46),.02);
+  assert.equal(groundHeight(40,46),.1);
 });
 test('parcel drop accelerates, bounces without penetrating the tray and settles on it',()=>{
   const a=parcelDrop(0).y,b=parcelDrop(.2).y,c=parcelDrop(.4).y;
@@ -14,4 +14,14 @@ test('parcel drop accelerates, bounces without penetrating the tray and settles 
   assert.ok(Math.abs(parcelDrop(.49999).y-parcelDrop(.5).y)<.001);
   assert.ok(Math.abs(parcelDrop(3).y-.45)<1e-6);
   assert.ok(parcelDrop(3).tilt<1e-6);
+});
+
+
+test('forest height field is flat beneath roads and irregular outside the clearing',async()=>{
+  const {terrainHeight,pavementHeight}=await import('../static/js/lab-landscape.js');
+  for(const [x,z] of [[0,46],[-50,13],[0,76],[32,-31]])assert.equal(terrainHeight(x,z),.02);
+  assert.equal(pavementHeight(0,46),.06);assert.equal(pavementHeight(45,46),.035);
+  const heights=[terrainHeight(-95,-85),terrainHeight(-88,-85),terrainHeight(80,100)];
+  assert.ok(heights.every(h=>h>.5));assert.ok(new Set(heights).size===3);
+  assert.ok(Math.abs(terrainHeight(80.001,100)-terrainHeight(80,100))<.01);
 });

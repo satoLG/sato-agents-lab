@@ -8,3 +8,5 @@ served locally, including the HDR sky, and require no third-party runtime reques
 * `sky.hdr`: [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky), Greg Zaal / Jarod Guest.
 
 License: https://polyhaven.com/license — CC0.
+
+* `forest-floor.jpg`: [Forest Floor](https://polyhaven.com/a/forest_floor), eye-candy.xyz, 1K diffuse, CC0. Used for the soil/grass transition and planting beds.

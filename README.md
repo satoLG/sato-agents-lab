@@ -121,6 +121,18 @@ laterais e de fundo permanecem; somente as paredes entre a câmera e o interior 
 O piso contínuo, as bases dos objetos e os pés dos personagens usam uma altura compartilhada.
 Os letreiros usam pontos luminosos, atrás das bancadas, com suportes separados do aro.
 
+O exterior segue a composição da referência do Nintendo Museum: painéis modulares
+com juntas, faixas contínuas de vidro, marquise longa e painel escuro junto à quina.
+A cápsula em relevo contorna somente “Sato Agents”, com “LAB” separado abaixo.
+A calçada tem contorno arredondado, meios-fios, grelhas de drenagem e canteiros com
+árvores e forrações; uma faixa de asfalto distingue a rua da área de pedestres.
+
+A clareira é cercada por floresta instanciada, com menos cartões de folhagem nas
+árvores distantes. O relevo usa ruído em múltiplas escalas e a mesma interpolação
+dos triângulos para apoiar troncos e personagens. Um shader mistura grama e solo
+Forest Floor da Poly Haven, com borda irregular. O terreno distante desvanece
+sobre o céu real por alfa, eliminando a faixa sólida da fog no limite do plano.
+
 Pacotes reutilizáveis percorrem as esteiras, caem com aceleração, quicam e se acomodam
 em bandejas de triagem com caixas acumuladas. Cinco entregadores percorrem rotas que
 desviam de equipamentos e posições de trabalhadores, param para coleta/depósito e
