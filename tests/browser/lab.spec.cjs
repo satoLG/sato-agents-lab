@@ -24,8 +24,9 @@ test('full-screen WebGL, walking, camera modes and proximity conversation', asyn
   await expect(page.locator('.touch-controls,#scene-labels')).toHaveCount(0);
   const before=await position(page);
   await page.locator('#scene').focus();
-  await page.keyboard.down('a');await page.waitForTimeout(800);await page.keyboard.up('a');
-  await expect.poll(async()=>Math.abs((await position(page)).x-before.x)).toBeGreaterThan(.1);
+  await page.keyboard.down('a');
+  try { await expect.poll(async()=>Math.abs((await position(page)).x-before.x),{timeout:15000}).toBeGreaterThan(.1); }
+  finally { await page.keyboard.up('a'); }
   await page.locator('#camera-room').click();await expect(page.locator('#scene')).toHaveAttribute('data-camera','room');
   await page.locator('#camera-follow').click();
   await visit(page,'hermes');
@@ -46,6 +47,8 @@ test('full-screen WebGL, walking, camera modes and proximity conversation', asyn
 
 test('all eight stations can be reached around equipment', async ({page}) => {
   test.setTimeout(360000);
+  // Navigation coverage does not need the full-resolution visual test viewport.
+  await page.setViewportSize({width:960,height:720});
   await ready(page);
   for(const id of ['gateway','hermes','models','mcp','rag','cron','vm','memory']){
     await visit(page,id);

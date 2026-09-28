@@ -1,0 +1,5 @@
+@font-face{font-family:Nunito;src:url('../fonts/Nunito.ttf') format('truetype');font-weight:200 900;font-display:swap}
+:root{--font:Nunito,sans-serif;--mono:Nunito,sans-serif;--font-sans:Nunito,sans-serif;--font-mono:Nunito,sans-serif;font-family:Nunito,sans-serif}
+body,button,input,textarea,select,code,pre,kbd,body *{font-family:Nunito,sans-serif}
+.brand-logo,.brand-icon{object-fit:contain;background:#fff;border-radius:9px;padding:3px;flex-shrink:0}
+.brand-icon{width:36px;height:36px;letter-spacing:normal}

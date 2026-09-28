@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:navigation": "node --test tests/lab-navigation.test.mjs",
+    "test:navigation": "node --test tests/lab-navigation.test.mjs tests/lab-campus.test.mjs",
     "test:browser": "playwright test",
     "build:three": "node tools/build-three.mjs",
     "build:sato": "node tools/build-sato.mjs",

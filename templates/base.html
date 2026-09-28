@@ -5,30 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>{% block title %}Hermes{% endblock %}</title>
-<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ url_for('static', filename='sato-logo.png') }}" type="image/png">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='sato-logo.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/identity.css') }}">
 {% block head %}{% endblock %}
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="/">
-    <svg class="brand-logo" viewBox="0 0 64 64" role="img" aria-label="Sato Agents">
-      <path class="sk-stroke" d="M20 9 C13 10 11 17 11.5 22 C12 27 15 30 20 30.5 C26 31 32 30 33 24 C34 17 30 10 20 9 Z"/>
-      <path class="sk-stroke" d="M11.6 20.5 C17 19.6 27 19.9 33 20.2"/>
-      <path class="sk-stroke" d="M17 15.5 C18.4 14.6 20 14.7 21.2 15.7"/>
-      <rect class="sk-fill-robot" x="16.5" y="23" width="5" height="4" rx="0.8"/>
-      <path class="sk-stroke sk-robot" d="M28 12.5 C29.5 9.5 30.6 8.2 31.5 5.5"/>
-      <circle class="sk-fill-robot" cx="31.9" cy="4.4" r="2"/>
-      <path class="sk-stroke sk-laser" d="M22.5 25 L41 24.4"/>
-      <path class="sk-stroke sk-laser" d="M43.5 22.6 L52 21.8"/>
-      <circle class="sk-fill-laser" cx="56" cy="21.4" r="2.4"/>
-      <path class="sk-stroke" d="M22 31 C22.6 36 22.2 41 22.5 45.5"/>
-      <path class="sk-stroke" d="M22.2 35 C18.5 37.4 15.6 38.6 12 39.4"/>
-      <path class="sk-stroke sk-robot" d="M22.4 34.4 C27 35.6 30.6 36.8 34 39"/>
-      <path class="sk-stroke" d="M22.5 45.5 C20 49.6 17.6 53.4 15.6 57.5"/>
-      <path class="sk-stroke sk-robot" d="M22.5 45.5 C25.4 49.4 27.6 53.2 29.6 57.6"/>
-    </svg>
+    <img class="brand-logo" src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="48" height="48">
     <span class="brand-name">Sato Agents<span class="brand-sub">{% block subtitle %}Hermes observability{% endblock %}</span></span>
   </a>
   <div class="topbar-actions">{% block actions %}{% endblock %}</div>

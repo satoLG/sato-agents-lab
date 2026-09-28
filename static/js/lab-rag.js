@@ -2,7 +2,7 @@ import * as T from '../vendor/three.module.min.js';
 
 const COLORS={root:'#66dfff',repo:'#7ce7bc',category:'#ffc575',doc:'#bbdaf0',query:'#c0a1ff'};
 export function createRagDome(world,art,zone){
-  const {mesh,ring,glow,textPlane}=art,root=new T.Group();root.position.set(zone.x,.55,zone.z);root.scale.setScalar(1.8);world.add(root);
+  const {mesh,ring,glow,textPlane}=art,root=new T.Group();root.position.set(zone.x,.06,zone.z);root.scale.setScalar(1.8);world.add(root);
   const glass=new T.MeshBasicMaterial({color:'#66dcff',transparent:true,opacity:.085,depthWrite:false,side:T.DoubleSide,blending:T.AdditiveBlending});
   mesh(root,new T.SphereGeometry(2.95,32,16,0,Math.PI*2,0,Math.PI/2),glass,0,0,0,false);
   ring(root,2.95,.055,glow('#70c8db'),0,0,0,true);

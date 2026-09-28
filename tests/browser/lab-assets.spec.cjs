@@ -13,7 +13,7 @@ test('lab avoids cached legacy JavaScript, including relative module imports',as
   await page.goto('/lab');
   await expect(page.locator('#loading')).toBeHidden({timeout:20000});
   await expect(page.locator('#scene canvas')).toHaveCount(1);
-  await expect(page.locator('#sectors button')).toHaveCount(7);
+  await expect(page.locator('#sectors button')).toHaveCount(8);
   await page.locator('#map-toggle').click();await expect(page.locator('#map-panel')).toBeVisible();
   expect(errors).toEqual([]);expect(legacy).toEqual([]);
   for(const file of ['js/lab.js','js/lab-scene.js','js/lab-avatar.js','vendor/GLTFLoader.js','models/sato.glb']){

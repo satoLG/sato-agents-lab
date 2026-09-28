@@ -70,7 +70,7 @@ function styleSheet() {
         label: "data(label)",
         color: "#c3c2b7",
         "font-size": 10,
-        "font-family": "system-ui, sans-serif",
+        "font-family": "Nunito, sans-serif",
         "text-valign": "bottom",
         "text-margin-y": 4,
         "text-wrap": "ellipsis",

@@ -106,6 +106,30 @@ executa o worker em segundo plano. O Hermes instalado deve estar em
 `~/.hermes/hermes-agent`; o worker usa a configuração de provider desse Hermes.
 Quando o provider falha, a pergunta continua no banco para nova tentativa.
 
+### Campus e identidade visual
+
+A identidade compartilhada usa a imagem fornecida pelo proprietário (`static/sato-logo.png`)
+como logo e favicon e a Nunito local em todas as páginas e textos da cena.
+O campus usa escala visual 0,7, com navegação em coordenadas lógicas, fachada mais baixa,
+letreiro arredondado e enquadramento inicial responsivo. Os materiais CC0 de 1K e o céu
+HDR da Poly Haven estão em `static/textures/polyhaven/`, com fontes e licença no README.
+Nenhum desses recursos depende de CDN em produção.
+
+A recepção tem balcões físicos, mapa de setores e uma divisória com passagem central
+para visitantes e dois vãos de esteira. O salão é revelado depois da travessia. As paredes
+laterais e de fundo permanecem; somente as paredes entre a câmera e o interior são recortadas.
+O piso contínuo, as bases dos objetos e os pés dos personagens usam uma altura compartilhada.
+Os letreiros usam pontos luminosos, atrás das bancadas, com suportes separados do aro.
+
+Pacotes reutilizáveis percorrem as esteiras, caem com aceleração, quicam e se acomodam
+em bandejas de triagem com caixas acumuladas. Cinco entregadores percorrem rotas que
+desviam de equipamentos e posições de trabalhadores, param para coleta/depósito e
+voltam sem carga. Isso continua sendo uma ilustração da arquitetura, não telemetria de tarefas.
+
+Validação: `npm run test:navigation` inclui piso e queda de pacotes; os testes de navegador
+em `tests/browser/campus.spec.cjs` verificam identidade, divisória, paredes, recursos locais,
+rotas de entrega e depósito. O teste de visita às oito estações verifica a navegação real.
+
 ### Atualizar a VM
 
 O job Hermes `update-dashboard` roda a cada 30 minutos em modo `no_agent`.
