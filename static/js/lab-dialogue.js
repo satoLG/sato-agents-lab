@@ -24,9 +24,9 @@ export function createDialogue(container){
     if(!active||!robot)return;
     const right=new T.Vector3().setFromMatrixColumn(camera.matrixWorld,0),width=container.clientWidth,mobile=width<700;
     for(const [role,actor]of [['user',avatar],['robot',robot]]){
-      const p=panels[role],distance=camera.position.distanceTo(actor.position),scale=distance*2*Math.tan(T.MathUtils.degToRad(camera.fov/2))/container.clientHeight;
+      const p=panels[role],actorPosition=actor.getWorldPosition(new T.Vector3()),distance=camera.position.distanceTo(actorPosition),scale=distance*2*Math.tan(T.MathUtils.degToRad(camera.fov/2))/container.clientHeight;
       p.el.style.width=`${mobile?Math.min(225,width*.46):320}px`;
-      p.sprite.position.copy(actor.position).add(new T.Vector3(0,role==='robot'?4.8:4.15,0));
+      p.sprite.position.copy(actorPosition).add(new T.Vector3(0,role==='robot'?4.8:4.15,0));
       p.sprite.position.addScaledVector(right,(role==='user'?-1:1)*(mobile?width*.19:170)*scale);
       p.sprite.scale.setScalar(scale*(mobile?.85:1));
     }
