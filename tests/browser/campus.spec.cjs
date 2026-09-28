@@ -41,3 +41,18 @@ test('campus cutaways, grounded actors, courier routes and parcel landing',async
   expect(result.routes).toHaveLength(5);for(const route of result.routes){expect(route.length).toBeGreaterThan(1);expect(route.clear).toBe(true);}
   expect(errors).toEqual([]);
 });
+
+
+test('forest terrain shader compiles and corner sign is separate from Lab',async({page})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+  await page.route('**/js/lab-scene.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.__exterior={world,camera,campus};renderer.render(world,camera);')});});
+  await page.goto('/lab');await page.waitForFunction(()=>window.__exterior);
+  const info=await page.evaluate(async()=>{
+    const {world,camera,campus}=window.__exterior,T=await import('/static/vendor/three.module.min.js');
+    const sign=world.getObjectByName('sato-agents-corner-sign'),point=sign.getWorldPosition(new T.Vector3()).project(camera);
+    return {signVisible:Math.abs(point.x)<1&&Math.abs(point.y)<1,signChildren:sign.children.length,trees:campus.landscape.treeCount,gardens:campus.landscape.gardenCount,fade:campus.landscape.terrain.material.transparent,solidFog:campus.landscape.terrain.material.fog};
+  });
+  expect(info.signVisible).toBe(true);expect(info.signChildren).toBe(3);
+  expect(info.trees).toBeGreaterThan(300);expect(info.gardens).toBe(4);expect(info.fade).toBe(true);expect(info.solidFog).toBe(false);
+  expect(errors).toEqual([]);
+});

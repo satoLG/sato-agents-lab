@@ -26,12 +26,12 @@ export async function createLabScene(container, callbacks) {
   container.append(renderer.domElement);
   const audio=createLabAudio(),dialogue=createDialogue(container);
   const world = new T.Scene(); world.background = new T.Color('#c5dde4');
-  world.fog = new T.Fog('#999caa', 105, 225);
+  world.fog = new T.Fog('#bfd2d7', 115, 260);
   const environment = await loadEnvironment(renderer,world);
   const hall = new T.Group(); hall.name='main-laboratory'; world.add(hall);
   const camera = new T.PerspectiveCamera(42, 1, .1, 400);
   const aim = new T.Vector3(0, 7, 10), target = aim.clone();
-  let azimuth = .18, elevation = .28, radius = 78, targetRadius = 78, paused = false, stale = false;
+  let azimuth = -.48, elevation = .22, radius = 84, targetRadius = 84, paused = false, stale = false;
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
   let dirty = true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
@@ -357,7 +357,7 @@ export async function createLabScene(container, callbacks) {
   container.addEventListener('wheel',e=>{if(chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
   container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();leaveArrival();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
-  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView)targetRadius=Math.max(78,65/camera.aspect);else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
+  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView)targetRadius=Math.max(84,66/camera.aspect);else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
   const direction=new T.Vector3(),travelDirection=new T.Vector3();
   let movementSpeed=0,previousLocation='',previousCandidate='',wasInterior=false;
   function frame(ms){

@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 import {batchStatic} from './lab-batch.js';
+import {createLandscape,terrainHeight,pavementHeight} from './lab-landscape.js';
 import {findPath} from './lab-navigation.js';
 
 export const CAMPUS_SCALE = .7;
@@ -16,7 +17,7 @@ export const slotsFor = id => id==='rag'?[[0,7.8],[-6.6,5.5],[6.6,5.5],[0,10.5]]
   [[0,2],[-3.5,1.8],[3.5,1.8],[0,4.3]];
 
 export function groundHeight(x,z) {
-  return Math.abs(x)<=34 && z>=-33 && z<=58 ? FLOOR : .02;
+  return pavementHeight(x,z) ?? terrainHeight(x,z);
 }
 
 export function createCampus(world,art,obstacles,materials){
@@ -25,47 +26,11 @@ export function createCampus(world,art,obstacles,materials){
     const plane=mesh(world,new T.PlaneGeometry(w,d),material,x,y,z,false);
     plane.rotation.x=-Math.PI/2;plane.receiveShadow=true;return plane;
   };
-  // Ground extends beyond the far clipping plane, so its edge can never appear.
-  surface(2000,2000,.02,materials.grass,0,10);
-  const paving=(w,d,x,z)=>{
-    const material=materials.paving.clone();
-    for(const key of ['map','normalMap'])if(material[key]){material[key]=material[key].clone();material[key].repeat.set(w/5,d/5);}
-    surface(w,d,FLOOR,material,x,z);
-  };
-  // Separate rectangles avoid coplanar exterior/interior planes and depth flicker.
-  paving(68,29,0,43.5);paving(2,60,-33,-1);paving(2,60,33,-1);paving(68,2,0,-32);
+  const landscape=createLandscape(world,art,obstacles,materials);
   surface(63.4,59.4,FLOOR+.001,mat('#ccd4cd',0,.88),0,-1);
-  let seed=137;const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  // Broadleaf silhouettes: branches and instanced individual leaves, not cones.
-  const leafGeo=new T.IcosahedronGeometry(1,0),leafMat=mat('#597848',0,1);
-  const leaves=new T.InstancedMesh(leafGeo,leafMat,40*100);leaves.castShadow=false;leaves.receiveShadow=true;
-  const dummy=new T.Object3D();let leafIndex=0;
-  for(let i=0;i<40;i++){
-    const x=(i%2?-1:1)*(39+random()*62),z=-65+random()*170,h=4+random()*3;
-    cylinder(world,.25,h,'#75634a',x,h/2+.02,z,.13);
-    for(let k=0;k<5;k++){
-      const a=k*Math.PI*2/5,dx=Math.cos(a)*1.6,dz=Math.sin(a)*1.6;
-      rod(world,[x,h*.55,z],[x+dx,h*.92,z+dz],.1,mat('#75634a'));
-    }
-    for(let k=0;k<100;k++){
-      const a=random()*Math.PI*2,r=Math.sqrt(random())*2.9;
-      dummy.position.set(x+Math.cos(a)*r,h+.3+random()*2-r*.35,z+Math.sin(a)*r);
-      dummy.scale.set(.45+random()*.45,.12+random()*.18,.35+random()*.5);
-      dummy.rotation.set(random(),random()*Math.PI,random());dummy.updateMatrix();leaves.setMatrixAt(leafIndex,dummy.matrix);
-      leaves.setColorAt(leafIndex++,new T.Color().setHSL(.22+random()*.06,.27+random()*.15,.24+random()*.16));
-    }
-    if(Math.abs(x)<46&&z>-33&&z<59)obstacles.push({x,z,w:1.1,d:1.1});
-  }world.add(leaves);
-  for(const x of [-13,13]){
-    box(world,2,.45,15,'#7a8e80',x,FLOOR+.225,43);
-    box(world,1.8,.1,14.8,'#556c45',x,FLOOR+.5,43);
-    for(let z=37;z<=49;z+=2)cylinder(world,.75,.6,'#6a8657',x,FLOOR+.8,z);
-    for(const z of [34,51]){cylinder(world,.09,2.2,'#344d4c',x,FLOOR+1.1,z);box(world,.65,.12,.65,glow('#fff4c4'),x,FLOOR+2.2,z);}
-    obstacles.push({x,z:43,w:2,d:15});
-  }
   const walls=[],upper=new T.Group();world.add(upper);
-  const facade=mat('#e1e5d9',0,.8),frame=mat('#45625f',.35,.5);
-  const glass=new T.MeshStandardMaterial({color:'#89b7bd',metalness:.45,roughness:.18,envMapIntensity:1.1});
+  const facade=mat('#a9afac',.12,.75),frame=mat('#455451',.45,.42);
+  const glass=new T.MeshStandardMaterial({color:'#647f82',metalness:.45,roughness:.18,envMapIntensity:1.1});
   function wall(name,x,z,w,d){
     const group=new T.Group();group.name=name;world.add(group);
     box(group,w,8,d,facade,x,4,z);box(group,w,.18,d+.06,'#68877e',x,.16,z);
@@ -80,25 +45,62 @@ export function createCampus(world,art,obstacles,materials){
   }
   const front=wall('front-left',-18.25,29,27.5,.45),frontRight=wall('front-right',18.25,29,27.5,.45);
   const left=wall('west',-32,-1,.45,60),right=wall('east',32,-1,.45,60),back=wall('north',0,-31,64,.45);
-  // Recessed panes, deep sill, vertical mullion and slim top shade.
-  function window(parent,x,y,z,angle=0){
-    const g=new T.Group();g.position.set(x,y,z);g.rotation.y=angle;parent.add(g);
-    box(g,3.35,2.55,.22,frame);box(g,3.05,2.25,.08,glass,0,0,.15);
-    box(g,.055,2.25,.1,'#c5d2c8',0,0,.22);box(g,3.5,.12,.5,'#b2c3b6',0,-1.34,.11);
-    box(g,3.6,.12,.65,'#d0d9cc',0,1.36,.18);
+  // Large modular metal panels, with recessed joints and continuous glazing.
+  const panelColors=['#e1e3df','#d8dcd8','#cdd3cf','#e8e9e3'];
+  function panels(parent,side,fromY,toY){
+    for(let row=fromY;row<toY;row+=4)for(let col=0;col<12;col++){
+      const u=-32+col*(64/12)+(64/12)/2,color=panelColors[(col*7+row/4*3)%panelColors.length];
+      if(side==='front'||side==='back'){
+        if(side==='front'&&row<4&&Math.abs(u)<5)continue;
+        box(parent,64/12-.045,3.94,.12,color,u,row+2,side==='front'?29.29:-31.29);
+      }else{
+        const z=-31+col*5+2.5;box(parent,.12,3.94,4.95,color,side==='left'?-32.29:32.29,row+2,z);
+      }
+    }
   }
-  for(const x of [-27,-21,-15,-9,9,15,21,27])window(x<0?front.group:frontRight.group,x,3.4,29.28);
-  for(const side of [-1,1])for(const z of [-24,-16,-8,0,8,23])window(side<0?left.group:right.group,side*32.25,3.4,z,side*Math.PI/2);
+  panels(front.group,'front',0,8);panels(left.group,'left',0,8);panels(right.group,'right',0,8);panels(back.group,'back',0,8);
+  // Ground-level panel geometry belongs to the matching wall for camera cutaways.
+  for(const child of [...front.group.children])if(child.position.x>4.5)frontRight.group.attach(child);
+  function ribbon(parent,x,y,z,width,height=2.6,angle=0){
+    const g=new T.Group();g.position.set(x,y,z);g.rotation.y=angle;parent.add(g);
+    box(g,width,height,.18,frame);box(g,width-.12,height-.12,.08,glass,0,0,.12);
+    for(let x=-width/2+.06;x<width/2;x+=2.8)box(g,.055,height,.12,'#a0aaa5',x,0,.19);
+    box(g,width,.09,.26,'#c5ccc5',0,-height/2,.1);
+  }
+  ribbon(front.group,-21.5,3.1,29.46,19,2.7);ribbon(frontRight.group,19,3.1,29.46,24,2.7);
+  ribbon(left.group,-32.46,3.5,-7,38,1.6,-Math.PI/2);ribbon(right.group,32.46,3.5,-7,38,1.6,Math.PI/2);
+  ribbon(back.group,0,3.5,-31.46,54,1.6,Math.PI);
   box(front.group,9,3.5,.45,facade,0,6.25,29);
   [front,frontRight,left,right,back].forEach(w=>w.seal());
   box(upper,64,12,60,facade,0,14,-1);
-  for(const y of [10.2,14])for(const x of [-27,-21,-15,-9,-3,3,9,15,21,27])window(upper,x,y,29.15);
-  box(upper,65,.4,61,'#81998d',0,20,-1);
-  textPlane(upper,'Sato Agents Lab',25,3.1,0,18.1,29.28,{color:'#214d46',background:'#f0f3e8',size:96,rounded:true});
-  const logo=new T.TextureLoader().load(new URL('../sato-logo.png',import.meta.url).href);logo.colorSpace=T.SRGBColorSpace;
-  mesh(upper,new T.PlaneGeometry(2.5,2.3),new T.MeshBasicMaterial({map:logo}),-15,18.1,29.3,false);
-  box(upper,10,.24,4.2,'#e1e5d9',0,4.5,30.5);
-  textPlane(upper,'RECEPÇÃO / GATEWAY',7.8,.65,0,3.9,30.8,{color:'#ddf7e8',background:'#244c45',size:64});
+  panels(upper,'front',8,20);panels(upper,'left',8,20);panels(upper,'right',8,20);panels(upper,'back',8,20);
+  ribbon(upper,7.5,12,29.46,46,2.8);
+  ribbon(upper,-32.46,12,-5,48,2.8,-Math.PI/2);ribbon(upper,32.46,12,-5,48,2.8,Math.PI/2);
+  ribbon(upper,0,12,-31.46,54,2.8,Math.PI);
+  for(const x of [-10,0,10,20,28]){
+    box(upper,1.25,.62,.12,'#53615c',x,16.7,29.45);
+    for(let j=0;j<4;j++)box(upper,1.16,.045,.04,'#c1c9c0',x,16.5+j*.13,29.53);
+  }
+  box(upper,64.5,.23,60.5,'#89948c',0,20,-1);
+  box(upper,63.8,.12,59.8,'#b3bcb3',0,19.86,-1);
+  // Raised corner sign: only the brand sits inside the capsule; LAB is below.
+  box(upper,16,12.05,.25,'#4c525d',-24,14,29.55);
+  const plaque=new T.Group();plaque.name='sato-agents-corner-sign';plaque.position.set(-24,16,29.73);upper.add(plaque);
+  function capsule(w,h){const r=h/2,shape=new T.Shape();shape.moveTo(-w/2+r,-r);shape.lineTo(w/2-r,-r);shape.absarc(w/2-r,0,r,-Math.PI/2,Math.PI/2,false);shape.lineTo(-w/2+r,r);shape.absarc(-w/2+r,0,r,Math.PI/2,Math.PI*1.5,false);return shape;}
+  const outline=capsule(13.1,2.7);outline.holes.push(new T.Path(capsule(12.78,2.38).getPoints(32)));
+  mesh(plaque,new T.ExtrudeGeometry(outline,{depth:.14,bevelEnabled:true,bevelThickness:.02,bevelSize:.02,bevelSegments:1,steps:1}),mat('#f6f5ed',.2,.35),0,0,.02);
+  function signText(text,w,h,y){
+    const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=Math.round(2048*h/w);const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fafbf5';ctx.font=`800 ${canvas.height*.76}px Nunito`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='#121a24';ctx.shadowBlur=5;ctx.shadowOffsetY=6;ctx.fillText(text,1024,canvas.height*.5,1900);
+    const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=8;
+    mesh(plaque,new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:tex,transparent:true,toneMapped:false}),0,y,.2,false);
+  }
+  signText('Sato Agents',11.9,2.15,0);signText('L A B',4.7,1.1,-2.45);
+  // Long folded canopy, as in the reference, with a dark underside.
+  box(upper,40,1.05,3.6,'#d5dbd5',7,5.55,30.65);
+  box(upper,40,.1,3.6,'#7b8980',7,4.99,30.65);
+  for(const x of [-10,-2,6,14,22])box(upper,.12,.65,3.4,'#a7b3a9',x,4.63,30.5);
+  textPlane(upper,'RECEPÇÃO / GATEWAY',7.8,.6,0,4.45,32.5,{color:'#e9f0e5',background:'#34483e',size:70});
   const upperMaterials=new Set(),upperClones=new Map();upper.traverse(o=>{if(o.isMesh){if(!upperClones.has(o.material))upperClones.set(o.material,o.material.clone());o.material=upperClones.get(o.material);upperMaterials.add(o.material);}});
   batchStatic(upper);upper.traverse(o=>o.userData.dynamic=true);upperMaterials.forEach(m=>{m.transparent=true;m.forceSinglePass=true;});
   const doors=[];
@@ -127,7 +129,7 @@ export function createCampus(world,art,obstacles,materials){
   const metro=createMetroMap(partition,art);
   partition.traverse(o=>o.userData.dynamic=true);
   let upperOpacity=1,enteredHall=false;
-  return {walls,partition,metro,tick(dt,position,camera){
+  return {walls,partition,metro,landscape,tick(dt,position,camera){
     const interior=1-T.MathUtils.smoothstep(position.z,28,32);
     if(position.z<16)enteredHall=true;else if(position.z>19)enteredHall=false;
     upperOpacity=T.MathUtils.damp(upperOpacity,1-interior,7,dt);upper.visible=upperOpacity>.01;
