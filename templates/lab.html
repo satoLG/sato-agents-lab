@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab-campus.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
 </head>
-<body data-started="false">
+<body data-started="false" data-loading="true">
 <main id="lab" aria-label="Laboratório interativo do Hermes">
   <div id="scene" tabindex="0" aria-label="Laboratório 3D. Clique ou toque no chão para caminhar. WASD também move. E conversa com o robô próximo."></div>
   <button id="lab-play" class="lab-play" type="button" aria-label="Iniciar exploração" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7Z" fill="currentColor" stroke="none"/></svg></button>
@@ -38,7 +38,7 @@
     <p class="rag-note">Layout 3D ilustrativo; distâncias da busca calculadas pela base vetorial. As linhas representam relações do catálogo e resultados, não o trajeto interno do algoritmo.</p>
   </aside>
   <div id="toast" class="toast glass" role="status" hidden></div>
-  <div id="loading" class="loading glass"><span class="loader-orbit">◎</span><strong>Preparando o laboratório</strong><small>UM LUGAR PARA SUAS IDEIAS</small></div>
+  <div id="loading" class="lab-loading" role="status" aria-live="polite"><div class="loading-core"><span class="loading-label">SATO AGENTS LAB</span><div id="loading-progress" class="loading-segments" role="progressbar" aria-label="Carregando cena 3D" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><small id="loading-stage">PREPARANDO CENA</small></div></div>
   <div id="scene-fallback" class="fallback glass" hidden><h1>O laboratório precisa de WebGL 2.</h1><p>A telemetria continua disponível no painel. Para explorar e conversar com os robôs, abra em um navegador com aceleração gráfica.</p><a href="/dashboard">Abrir dashboard ↗</a></div>
   <aside id="map-panel" class="map-panel overlay glass" aria-label="Estações e robôs" hidden>
     <div class="panel-heading"><div><small>INSTALAÇÃO 01</small><h2>Estações</h2></div><button type="button" data-close="map-panel" aria-label="Fechar estações">×</button></div>

@@ -14,7 +14,7 @@
 @media(max-height:600px){.campus-welcome{padding:14px;bottom:95px}.campus-welcome h1{font-size:22px}.campus-welcome p,.campus-welcome span{display:none}.speech-text{max-height:85px;font-size:14px}.robot-chat{bottom:8px;max-height:35dvh}.chat-header{padding:5px 12px}.chat-suggestions{display:none}}
 
 /* The scene is the entry screen; only SVG controls remain during exploration. */
-#lab .brand,#lab .location,#lab .telemetry-chip,#lab .map-toggle,#campus-welcome,#interaction,#rag-action,#loading,#toast,#map-panel,#telemetry-panel{display:none!important}
+#lab .brand,#lab .location,#lab .telemetry-chip,#lab .map-toggle,#campus-welcome,#interaction,#rag-action,#toast,#map-panel,#telemetry-panel{display:none!important}
 body[data-started=false] .hud-top,body[data-started=false] .hud-bottom{visibility:hidden;pointer-events:none}
 .lab-play{position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:64px;height:64px;border:1px solid #ffffff50;border-radius:50%;background:#14252b28;color:#fff;backdrop-filter:blur(5px);opacity:.8;transition:background .2s,opacity .2s}
 .lab-play:hover,.lab-play:focus-visible{opacity:1;background:#14252b70}.lab-play:disabled{opacity:.25;cursor:wait}body[data-started=true] .lab-play{display:none}
@@ -25,3 +25,17 @@ body[data-started=false] .hud-top,body[data-started=false] .hud-bottom{visibilit
 #lab .hud-bottom{left:auto;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:auto}
 #lab .sound-toggle{position:static;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:50%;background:#14252b60;border-color:#ffffff25}
 .sound-toggle[aria-pressed=false] .sound-on,.sound-toggle[aria-pressed=true] .sound-off{display:none}
+
+/* The WebGL canvas becomes visible behind the segmented load indicator. */
+body[data-loading=true] #scene{filter:blur(22px) brightness(.68);transform:scale(1.04)}
+#scene{transition:filter 1.15s ease,transform 1.15s ease}
+body[data-loading=true] .lab-play{visibility:hidden}
+#lab .lab-loading{position:absolute;inset:0;z-index:12;display:grid;place-items:center;width:100%;max-width:none;padding:24px;transform:none;border-radius:0;background:linear-gradient(135deg,#0b222ee8,#1a3342af);opacity:1;transition:opacity .9s ease;pointer-events:auto}
+body[data-loading=false] #lab .lab-loading{opacity:0;pointer-events:none}
+.loading-core{width:min(330px,calc(100vw - 56px));display:grid;gap:19px;text-align:center;color:#e7f3ef}
+.loading-label{font:800 12px Nunito,sans-serif;letter-spacing:.31em}
+.loading-core small{font:700 9px Nunito,sans-serif;letter-spacing:.2em;color:#bad0cd}
+.loading-segments{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;width:100%;height:18px}
+.loading-segments span{display:block;border:1px solid #d9eeea63;border-radius:2px;background:#b9d0ce28;box-shadow:inset 0 1px #ffffff12;transition:background .18s,box-shadow .18s}
+.loading-segments span.on{background:#d2f0d0;box-shadow:0 0 12px #adf0ce80,inset 0 2px #fff9}
+@media(prefers-reduced-motion:reduce){#scene,#lab .lab-loading,.loading-segments span{transition:none}}

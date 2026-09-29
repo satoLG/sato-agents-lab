@@ -16,8 +16,8 @@ const LIVE = new Set(['recent', 'running', 'process']);
 const NAMES = {gateway:'GATEWAYS',hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON',vm:'VM'};
 
 export async function createLabScene(container, callbacks) {
-  await document.fonts.load('700 48px Nunito');
-  const hero = await loadSatoAvatar();
+  await document.fonts.load('700 48px Nunito');callbacks.onLoadProgress?.(18,'PREPARANDO PERSONAGEM');
+  const hero = await loadSatoAvatar();callbacks.onLoadProgress?.(37,'CARREGANDO AMBIENTE');
   const renderer = new T.WebGLRenderer({antialias: true, alpha: false, powerPreference: 'high-performance'});
   let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
   renderer.setPixelRatio(pixelRatio);
@@ -28,13 +28,15 @@ export async function createLabScene(container, callbacks) {
   const audio=createLabAudio(),dialogue=createDialogue(container);
   const world = new T.Scene(); world.background = new T.Color('#c5dde4');
   world.fog = new T.Fog('#bfd2d7', 115, 260);
-  const environment = await loadEnvironment(renderer,world);
+  const environment = await loadEnvironment(renderer,world);callbacks.onLoadProgress?.(61,'MONTANDO LABORATÓRIO');
   const hall = new T.Group(); hall.name='main-laboratory'; world.add(hall);
   const camera = new T.PerspectiveCamera(42, 1, .1, 400);
-  const aim = new T.Vector3(-23, 12.5, 29).multiplyScalar(CAMPUS_SCALE), target = aim.clone();
-  let azimuth = -.42, elevation = .13, radius = 22, targetRadius = 22, paused = false, stale = false;
+  const openingTarget=()=>camera.aspect<.8?new T.Vector3(-19,8,23):new T.Vector3(5,2,9);
+  const openingAzimuth=()=>camera.aspect<.8?-.45:-.72;
+  const aim = openingTarget().multiplyScalar(CAMPUS_SCALE), target = aim.clone();
+  let azimuth = -.72, elevation = .14, radius = 55, targetRadius = 55, paused = false, stale = false;
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
-  let dirty = true;
+  let dirty = true,firstFrame=true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
   const chamber=createChamberMaterials();let furnishing=false;
   const mats = new Map(), geometries = new Map();
@@ -104,6 +106,7 @@ export async function createLabScene(container, callbacks) {
   const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
   const campus=createCampus(world,art,obstacles,environment,chamber);
   furnishing=true;
+  callbacks.onLoadProgress?.(79,'PREPARANDO CENA');
   // Floor conduits link the sectors to the nucleus; these are architecture, not traces.
   for (const [id, zone] of Object.entries(ZONES)) {
     if (id === 'hermes'||id==='gateway') continue;
@@ -313,7 +316,7 @@ export async function createLabScene(container, callbacks) {
     if(chatId&&!robots.has(chatId))endChat();
   }
   function stopWalking(){keys.clear();route=[];movementSpeed=0;destination.visible=false;dirty=true;}
-  const cornerRadius=()=>Math.max(22,13/camera.aspect);
+  const cornerRadius=()=>camera.aspect<.8?Math.max(45,20/camera.aspect):55;
   const outside=()=>avatar.position.z>29||Math.abs(avatar.position.x)>32||avatar.position.z<-31;
   function start(){if(started)return;started=true;arrivalView=false;cameraMode='follow';targetRadius=30*CAMPUS_SCALE;targetElevation=.48;targetAzimuth=.55;callbacks.onCamera('follow');dirty=true;}
   function leaveArrival(){if(started&&arrivalView){arrivalView=false;targetRadius=30*CAMPUS_SCALE;}}
@@ -353,7 +356,7 @@ export async function createLabScene(container, callbacks) {
     callbacks.onCamera(cameraMode);dirty=true;
   }
   function emote(kind){audio.cue(kind==='error'?'error':'answer');if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
-  function setCameraMode(mode){if(!started||chatId||study)return;arrivalView=false;cameraMode=mode;const exterior=outside();targetRadius=mode==='room'?(exterior?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE):(exterior?30:27)*CAMPUS_SCALE;targetElevation=mode==='room'?(exterior?.13:.77):.64;targetAzimuth=mode==='room'&&exterior?-.42:.55;callbacks.onCamera(mode);dirty=true;}
+  function setCameraMode(mode){if(!started||chatId||study)return;arrivalView=false;cameraMode=mode;const exterior=outside();targetRadius=mode==='room'?(exterior?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE):(exterior?30:27)*CAMPUS_SCALE;targetElevation=mode==='room'?(exterior?.14:.77):.64;targetAzimuth=mode==='room'&&exterior?openingAzimuth():.55;callbacks.onCamera(mode);dirty=true;}
   function setStale(value){stale=value;installations.setStale(value);dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}}
   // Rays reach actual robot meshes and actual physical signboards, not HTML labels.
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),floor=new T.Plane(new T.Vector3(0,1,0),-FLOOR*CAMPUS_SCALE);let drag=null;
@@ -372,7 +375,7 @@ export async function createLabScene(container, callbacks) {
   container.addEventListener('wheel',e=>{if(!started||chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
   container.addEventListener('keydown',e=>{if(!started||chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();leaveArrival();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
-  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView){targetRadius=cornerRadius();radius=targetRadius;}else if(cameraMode==='room'&&!chatId)targetRadius=outside()?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
+  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView){targetRadius=cornerRadius();radius=targetRadius;azimuth=targetAzimuth=openingAzimuth();aim.copy(openingTarget()).multiplyScalar(CAMPUS_SCALE);}else if(cameraMode==='room'&&!chatId)targetRadius=outside()?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
   const direction=new T.Vector3(),travelDirection=new T.Vector3();
   let movementSpeed=0,previousLocation='',previousCandidate='',wasInterior=false;
   function frame(ms){
@@ -410,8 +413,8 @@ export async function createLabScene(container, callbacks) {
     if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(savedCamera.aim).divideScalar(CAMPUS_SCALE);target.y+=2.2;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
     else if(study){target.set(ZONES.rag.x,3.1,ZONES.rag.z);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
     else if(arrivalView||cameraMode==='room'&&outside()){
-      target.set(-23,12.5,29);targetRadius=cornerRadius();
-      const drift=paused?0:1;targetAzimuth=-.42+Math.sin(animationTime*.24)*.009*drift;targetElevation=.13+Math.sin(animationTime*.33)*.005*drift;
+      target.copy(openingTarget());targetRadius=cornerRadius();
+      targetAzimuth=openingAzimuth();targetElevation=.14;
     }
     else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=1.1;}
     else {target.set(0,1,0);targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;targetElevation=.77;}
@@ -419,6 +422,12 @@ export async function createLabScene(container, callbacks) {
     const changing=aim.distanceToSquared(target)>.0001||Math.abs(radius-targetRadius)>.002||Math.abs(azimuth-targetAzimuth)>.002||Math.abs(elevation-targetElevation)>.002;
     aim.lerp(target,1-Math.exp(-elapsed*5));radius=T.MathUtils.lerp(radius,targetRadius,1-Math.exp(-elapsed*5));azimuth=dampAngle(azimuth,targetAzimuth,elapsed,6);elevation=T.MathUtils.lerp(elevation,targetElevation,1-Math.exp(-elapsed*5));
     camera.position.set(aim.x+Math.sin(azimuth)*Math.cos(elevation)*radius,aim.y+Math.sin(elevation)*radius,aim.z+Math.cos(azimuth)*Math.cos(elevation)*radius);camera.lookAt(aim);
+    if(arrivalView&&!paused){
+      // Tiny hand-held drift exists only before Play; the exploration camera stays steady.
+      camera.position.x+=Math.sin(animationTime*1.8)*.035+Math.sin(animationTime*2.7)*.012;
+      camera.position.y+=Math.sin(animationTime*1.4+.7)*.025;
+      camera.lookAt(aim);
+    }
     if(emoteUntil&&ms>emoteUntil){hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;emoteUntil=0;dirty=true;}
     if(!dirty&&paused&&!moving&&!wasMoving&&!changing&&!hero.transitioning)return;dirty=false;wasMoving=moving;
     hero.update(dt,{speed:dist(before,avatar.position)/dt,reduced:paused});
@@ -441,13 +450,14 @@ export async function createLabScene(container, callbacks) {
     installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
     for(const {rig,speed} of parcels.couriers)poseRig(rig,animationTime,dt,{speed,work:0,reduced:paused});
     parcels.tick(animationTime,enteredHall);
-    renderer.render(world,camera);dialogue.render(camera,avatar,robots.get(chatId)?.rig.root);
+    renderer.render(world,camera);if(firstFrame){firstFrame=false;callbacks.onReady?.();}dialogue.render(camera,avatar,robots.get(chatId)?.rig.root);
   }
   function setRagOpen(value){
     if(value){if(chatId||!inside('rag'))return false;stopWalking();study=true;savedStudyCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;targetElevation=.54;targetAzimuth=.28;callbacks.onCamera('rag');}
     else if(study){study=false;previousCandidate=null;cameraMode=savedStudyCamera.mode;targetRadius=savedStudyCamera.radius;targetAzimuth=savedStudyCamera.azimuth;targetElevation=savedStudyCamera.elevation;savedStudyCamera=null;callbacks.onCamera(cameraMode);}
     dirty=true;return true;
   }
+  callbacks.onLoadProgress?.(93,'RENDERIZANDO');
   world.scale.setScalar(CAMPUS_SCALE);hall.visible=false;
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
