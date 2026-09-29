@@ -1,4 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
+import {createExteriorFade} from './lab-chamber-materials.js';
 import {batchStatic} from './lab-batch.js';
 import {createLandscape,terrainHeight,pavementHeight} from './lab-landscape.js';
 import {findPath} from './lab-navigation.js';
@@ -20,14 +21,18 @@ export function groundHeight(x,z) {
   return pavementHeight(x,z) ?? terrainHeight(x,z);
 }
 
-export function createCampus(world,art,obstacles,materials){
+export function createCampus(world,art,obstacles,materials,chamber){
   const {box,mesh,mat,textPlane,glow,cylinder,rod}=art;
   const surface=(w,d,y,material,x=0,z=0)=>{
     const plane=mesh(world,new T.PlaneGeometry(w,d),material,x,y,z,false);
     plane.rotation.x=-Math.PI/2;plane.receiveShadow=true;return plane;
   };
-  const landscape=createLandscape(world,art,obstacles,materials);
-  surface(63.4,59.4,FLOOR+.001,mat('#ccd4cd',0,.88),0,-1);
+  const exterior=new T.Group();exterior.name='campus-exterior';world.add(exterior);
+  const landscape=createLandscape(exterior,art,obstacles,materials),fadeExterior=createExteriorFade(exterior);
+  batchStatic(exterior);exterior.traverse(o=>o.userData.dynamic=true);
+  const skyIntensity=world.backgroundIntensity,fogColor=world.fog.color.clone(),nightFog=new T.Color('#080e16');
+  let darkness=0;
+  const floor=surface(63.4,59.4,FLOOR+.001,chamber.floor,0,-1);floor.name='chamber-tile-floor';
   const walls=[],upper=new T.Group();world.add(upper);
   const facade=mat('#a9afac',.12,.75),frame=mat('#455451',.45,.42);
   const glass=new T.MeshStandardMaterial({color:'#647f82',metalness:.45,roughness:.18,envMapIntensity:1.1});
@@ -42,6 +47,13 @@ export function createCampus(world,art,obstacles,materials){
       walls.push({group,materials,x,z,name,opacity:1});
     };
     return {group,seal};
+  }
+  function lining(group,w,x,z,angle=0){
+    const panel=mesh(group,new T.PlaneGeometry(w,7.75),chamber.wall(w,7.75),x,4,z);panel.rotation.y=angle;
+    const trim=new T.Group();trim.position.set(x,0,z);trim.rotation.y=angle;group.add(trim);
+    box(trim,w,.22,.1,'#39464d',0,.2,0);
+    box(trim,w,.14,.15,'#293a42',0,7.65,0);
+    box(trim,w-.3,.055,.18,glow('#96e7f5'),0,7.64,.06);
   }
   const front=wall('front-left',-18.25,29,27.5,.45),frontRight=wall('front-right',18.25,29,27.5,.45);
   const left=wall('west',-32,-1,.45,60),right=wall('east',32,-1,.45,60),back=wall('north',0,-31,64,.45);
@@ -71,6 +83,8 @@ export function createCampus(world,art,obstacles,materials){
   ribbon(left.group,-32.46,3.5,-7,38,1.6,-Math.PI/2);ribbon(right.group,32.46,3.5,-7,38,1.6,Math.PI/2);
   ribbon(back.group,0,3.5,-31.46,54,1.6,Math.PI);
   box(front.group,9,3.5,.45,facade,0,6.25,29);
+  lining(front.group,27.3,-18.25,28.74,Math.PI);lining(frontRight.group,27.3,18.25,28.74,Math.PI);
+  lining(left.group,59.4,-31.74,-1,Math.PI/2);lining(right.group,59.4,31.74,-1,-Math.PI/2);lining(back.group,63.4,0,-30.74);
   [front,frontRight,left,right,back].forEach(w=>w.seal());
   box(upper,64,12,60,facade,0,14,-1);
   panels(upper,'front',8,20);panels(upper,'left',8,20);panels(upper,'right',8,20);panels(upper,'back',8,20);
@@ -114,7 +128,7 @@ export function createCampus(world,art,obstacles,materials){
   obstacles.push({x:-18.25,z:29,w:27.5,d:.6},{x:18.25,z:29,w:27.5,d:.6},{x:-32,z:-1,w:.6,d:60},{x:32,z:-1,w:.6,d:60},{x:0,z:-31,w:64,d:.6});
   // Full-height partition with a central visitor passage and two parcel hatches.
   const partition=new T.Group();partition.name='gateway-partition';world.add(partition);
-  const partitionMaterial=facade.clone();partitionMaterial.transparent=true;
+  const partitionMaterial=chamber.equipment('#89949b',.2,.78).clone();partitionMaterial.transparent=true;
   for(const [x,w]of [[-21,22],[-5.75,4.5],[5.75,4.5],[21,22]])box(partition,w,8.8,.5,partitionMaterial,x,4.4,18);
   box(partition,7,4.8,.5,partitionMaterial,0,6.4,18);
   for(const x of [-9,9]){
@@ -126,11 +140,19 @@ export function createCampus(world,art,obstacles,materials){
   textPlane(partition,'01  →  LABORATÓRIO',6.6,.75,0,4.85,18.3,{color:'#dcfff1',background:'#264c46',size:68});
   // A short vestibule prevents a full view through the doorway from reception.
   for(const x of [-3.5,3.5]){box(partition,.18,4,2.4,partitionMaterial,x,2,17);obstacles.push({x,z:17,w:.18,d:2.4});}
+  // Modular chamber wall faces, leaving the visitor doorway and parcel hatches open.
+  for(const [x,w] of [[-21,22],[-5.75,4.5],[5.75,4.5],[21,22]])for(const side of [-1,1]){
+    const face=mesh(partition,new T.PlaneGeometry(w-.06,8.65),chamber.wall(w,8.65),x,4.4,18+side*.27);face.rotation.y=side<0?Math.PI:0;
+  }
+  for(const x of [-3.44,3.44])box(partition,.065,3.75,.06,glow('#92e5f5'),x,1.94,18.31);
   const metro=createMetroMap(partition,art);
   partition.traverse(o=>o.userData.dynamic=true);
   let upperOpacity=1,enteredHall=false;
-  return {walls,partition,metro,landscape,tick(dt,position,camera){
-    const interior=1-T.MathUtils.smoothstep(position.z,28,32);
+  return {walls,partition,metro,landscape,get exteriorDarkness(){return darkness;},tick(dt,position,camera){
+    const withinFootprint=Math.abs(position.x)<31.8&&position.z>-30.8;
+    const interior=withinFootprint?1-T.MathUtils.smoothstep(position.z,27,30):0;
+    darkness=T.MathUtils.damp(darkness,interior,2.4,dt);fadeExterior(darkness);
+    world.backgroundIntensity=skyIntensity*T.MathUtils.lerp(1,.055,darkness);world.fog.color.copy(fogColor).lerp(nightFog,darkness);
     if(position.z<16)enteredHall=true;else if(position.z>19)enteredHall=false;
     upperOpacity=T.MathUtils.damp(upperOpacity,1-interior,7,dt);upper.visible=upperOpacity>.01;
     upperMaterials.forEach(m=>{m.opacity=upperOpacity;m.depthWrite=upperOpacity>.98;});
