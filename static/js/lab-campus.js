@@ -2,37 +2,29 @@ import * as T from '../vendor/three.module.min.js';
 import {createExteriorFade} from './lab-chamber-materials.js';
 import {batchStatic} from './lab-batch.js';
 import {createLandscape,terrainHeight,pavementHeight} from './lab-landscape.js';
+import {ZONES,FLOOR,slotsFor,coreHeight} from './lab-layout.js';
+import {createSectorMap} from './lab-signage.js';
+export {ZONES,FLOOR,slotsFor} from './lab-layout.js';
 import {findPath} from './lab-navigation.js';
 
 export const CAMPUS_SCALE = .7;
-export const FLOOR = .06;
-export const ZONES = {
-  hermes:{x:0,z:-3,color:'#56d5c3'}, models:{x:-19,z:-16,color:'#e9ab61'},
-  mcp:{x:-3,z:-21,color:'#6ccce0'}, rag:{x:19,z:-14,color:'#83cbb3'},
-  memory:{x:-19,z:4,color:'#bab5e4'}, cron:{x:19,z:7,color:'#e3b271'},
-  vm:{x:0,z:11,color:'#80b4c6'}, gateway:{x:-7,z:24,color:'#a0dfff'},
-};
-// Equipment is behind the workstations; all four actors have separate footprints.
-export const slotsFor = id => id==='rag'?[[0,7.8],[-6.6,5.5],[6.6,5.5],[0,10.5]]:
-  id==='gateway'?[[0,-1.8],[-5,-1.8],[14,-1.8],[19,-1.8],[24,-1.8]]:
-  [[0,2],[-3.5,1.8],[3.5,1.8],[0,4.3]];
-
 export function groundHeight(x,z) {
-  return pavementHeight(x,z) ?? terrainHeight(x,z);
+  return coreHeight(x,z)>0?FLOOR+coreHeight(x,z):(pavementHeight(x,z) ?? terrainHeight(x,z));
 }
 
-export function createCampus(world,art,obstacles,materials,chamber){
+export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   const {box,mesh,mat,textPlane,glow,cylinder,rod}=art;
-  const surface=(w,d,y,material,x=0,z=0)=>{
-    const plane=mesh(world,new T.PlaneGeometry(w,d),material,x,y,z,false);
-    plane.rotation.x=-Math.PI/2;plane.receiveShadow=true;return plane;
+  const surface=(w,d,y,material,x=0,z=0,parent=world)=>{
+    const plane=mesh(parent,new T.PlaneGeometry(w,d),material,x,y,z,false);
+    plane.rotation.x=-Math.PI/2;plane.receiveShadow=true;plane.userData.walkable=true;return plane;
   };
   const exterior=new T.Group();exterior.name='campus-exterior';world.add(exterior);
   const landscape=createLandscape(exterior,art,obstacles,materials),fadeExterior=createExteriorFade(exterior);
   batchStatic(exterior);exterior.traverse(o=>o.userData.dynamic=true);
   const skyIntensity=world.backgroundIntensity,fogColor=world.fog.color.clone(),nightFog=new T.Color('#080e16');
   let darkness=0;
-  const floor=surface(63.4,59.4,FLOOR+.001,chamber.floor,0,-1);floor.name='chamber-tile-floor';
+  const floor=surface(63.2,48.6,FLOOR,chamber.floor,0,-6.3,hall);floor.name='chamber-tile-floor';
+  surface(63.2,10.7,FLOOR,chamber.floor.clone(),0,23.35);
   const walls=[],upper=new T.Group();world.add(upper);
   const facade=mat('#a9afac',.12,.75),frame=mat('#455451',.45,.42);
   const glass=new T.MeshStandardMaterial({color:'#647f82',metalness:.45,roughness:.18,envMapIntensity:1.1});
@@ -49,11 +41,12 @@ export function createCampus(world,art,obstacles,materials,chamber){
     return {group,seal};
   }
   function lining(group,w,x,z,angle=0){
-    const panel=mesh(group,new T.PlaneGeometry(w,7.75),chamber.wall(w,7.75),x,4,z);panel.rotation.y=angle;
+    const liningMaterial=chamber.wall(w,7.75);if(z<18)liningMaterial.userData.hallLighting=true;
+    const panel=mesh(group,new T.PlaneGeometry(w,7.75),liningMaterial,x,4,z);panel.rotation.y=angle;
     const trim=new T.Group();trim.position.set(x,0,z);trim.rotation.y=angle;group.add(trim);
-    box(trim,w,.22,.1,'#39464d',0,.2,0);
+    box(trim,w-.08,.18,.08,'#39464d',0,.18,.08);
     box(trim,w,.14,.15,'#293a42',0,7.65,0);
-    box(trim,w-.3,.055,.18,glow('#96e7f5'),0,7.64,.06);
+    const light=glow('#96e7f5').clone();if(z<18)light.userData.hallLighting=true;box(trim,w-.3,.055,.18,light,0,7.64,.06);
   }
   const front=wall('front-left',-18.25,29,27.5,.45),frontRight=wall('front-right',18.25,29,27.5,.45);
   const left=wall('west',-32,-1,.45,60),right=wall('east',32,-1,.45,60),back=wall('north',0,-31,64,.45);
@@ -84,7 +77,7 @@ export function createCampus(world,art,obstacles,materials,chamber){
   ribbon(back.group,0,3.5,-31.46,54,1.6,Math.PI);
   box(front.group,9,3.5,.45,facade,0,6.25,29);
   lining(front.group,27.3,-18.25,28.74,Math.PI);lining(frontRight.group,27.3,18.25,28.74,Math.PI);
-  lining(left.group,59.4,-31.74,-1,Math.PI/2);lining(right.group,59.4,31.74,-1,-Math.PI/2);lining(back.group,63.4,0,-30.74);
+  lining(left.group,59.1,-31.70,-1,Math.PI/2);lining(right.group,59.1,31.70,-1,-Math.PI/2);lining(back.group,63.2,0,-30.70);
   [front,frontRight,left,right,back].forEach(w=>w.seal());
   box(upper,64,12,60,facade,0,14,-1);
   panels(upper,'front',8,20);panels(upper,'left',8,20);panels(upper,'right',8,20);panels(upper,'back',8,20);
@@ -126,64 +119,54 @@ export function createCampus(world,art,obstacles,materials,chamber){
     g.traverse(o=>o.userData.dynamic=true);doors.push({door:g,side});
   }
   obstacles.push({x:-18.25,z:29,w:27.5,d:.6},{x:18.25,z:29,w:27.5,d:.6},{x:-32,z:-1,w:.6,d:60},{x:32,z:-1,w:.6,d:60},{x:0,z:-31,w:64,d:.6});
-  // Full-height partition with a central visitor passage and two parcel hatches.
+  // The sole conveyor hatch is at the left; the visitor door stays in the center.
   const partition=new T.Group();partition.name='gateway-partition';world.add(partition);
-  const partitionMaterial=chamber.equipment('#89949b',.2,.78).clone();partitionMaterial.transparent=true;
-  for(const [x,w]of [[-21,22],[-5.75,4.5],[5.75,4.5],[21,22]])box(partition,w,8.8,.5,partitionMaterial,x,4.4,18);
-  box(partition,7,4.8,.5,partitionMaterial,0,6.4,18);
-  for(const x of [-9,9]){
-    box(partition,2,1,.5,partitionMaterial,x,.5,18);box(partition,2,6.7,.5,partitionMaterial,x,5.45,18);
-    box(partition,2.2,.14,.65,'#345852',x,2.16,18);
-    obstacles.push({x,z:18,w:2,d:.6});
+  const partitionMaterial=chamber.equipment('#89949b',.2,.78).clone();
+  const segments=[[-30.45,3.1],[-15.3,23.6],[17.75,28.5]];
+  for(const [x,w]of segments){
+    box(partition,w,8.7,.44,partitionMaterial,x,4.4,18);
+    for(const side of [-1,1]){const face=mesh(partition,new T.PlaneGeometry(w-.09,8.5),chamber.wall(w,8.5),x,4.4,18+side*.26);face.rotation.y=side<0?Math.PI:0;}
   }
+  box(partition,7,4.6,.44,partitionMaterial,0,6.4,18);
+  box(partition,1.8,.9,.44,partitionMaterial,-28, .5,18);box(partition,1.8,6.5,.44,partitionMaterial,-28,5.5,18);
   for(const [x,w]of [[-17.75,28.5],[17.75,28.5]])obstacles.push({x,z:18,w,d:.6});
-  textPlane(partition,'01  →  LABORATÓRIO',6.6,.75,0,4.85,18.3,{color:'#dcfff1',background:'#264c46',size:68});
-  // A short vestibule prevents a full view through the doorway from reception.
-  for(const x of [-3.5,3.5]){box(partition,.18,4,2.4,partitionMaterial,x,2,17);obstacles.push({x,z:17,w:.18,d:2.4});}
-  // Modular chamber wall faces, leaving the visitor doorway and parcel hatches open.
-  for(const [x,w] of [[-21,22],[-5.75,4.5],[5.75,4.5],[21,22]])for(const side of [-1,1]){
-    const face=mesh(partition,new T.PlaneGeometry(w-.06,8.65),chamber.wall(w,8.65),x,4.4,18+side*.27);face.rotation.y=side<0?Math.PI:0;
+  textPlane(partition,'LAB / 01—07',5.8,.65,0,4.8,18.32,{color:'#b5eaff',background:'#102732',size:110});
+  for(const x of [-3.5,3.5]){box(partition,.18,4,2.4,partitionMaterial,x,2,16.9);obstacles.push({x,z:16.9,w:.18,d:2.4});}
+  const hallDoors=[];
+  for(const side of [-1,1]){
+    const door=new T.Group();door.position.set(side*1.7,0,17.72);partition.add(door);box(door,3.3,3.95,.18,'#273a47',0,2,0);box(door,.05,3.5,.025,glow('#67ceff'),-side*1.51,2,.12);hallDoors.push({door,side});
   }
-  for(const x of [-3.44,3.44])box(partition,.065,3.75,.06,glow('#92e5f5'),x,1.94,18.31);
-  const metro=createMetroMap(partition,art);
-  partition.traverse(o=>o.userData.dynamic=true);
-  let upperOpacity=1,enteredHall=false;
-  return {walls,partition,metro,landscape,get exteriorDarkness(){return darkness;},tick(dt,position,camera){
+  const metro=createSectorMap(partition,art,icons),partitionMaterials=new Set(),clones=new Map();
+  partition.traverse(o=>{o.userData.dynamic=true;if(o.isMesh){if(!clones.has(o.material))clones.set(o.material,o.material.clone());o.material=clones.get(o.material);o.material.transparent=true;partitionMaterials.add(o.material);}});
+  let partitionOpacity=1,hallLight=0,lastDoorOpen=false;
+  let upperOpacity=1,enteredHall=false,settled=false;
+  return {walls,partition,metro,landscape,get settled(){return settled;},get exteriorDarkness(){return darkness;},get hallLight(){return hallLight;},tick(dt,position,camera){
+    settled=true;
+    const settle=(value,target,rate,dt)=>{const next=T.MathUtils.damp(value,target,rate,dt);if(Math.abs(next-target)>.001){settled=false;return next;}return target;};
     const withinFootprint=Math.abs(position.x)<31.8&&position.z>-30.8;
     const interior=withinFootprint?1-T.MathUtils.smoothstep(position.z,27,30):0;
-    darkness=T.MathUtils.damp(darkness,interior,2.4,dt);fadeExterior(darkness);
+    darkness=settle(darkness,interior,2.4,dt);fadeExterior(darkness);
     world.backgroundIntensity=skyIntensity*T.MathUtils.lerp(1,.055,darkness);world.fog.color.copy(fogColor).lerp(nightFog,darkness);
     if(position.z<16)enteredHall=true;else if(position.z>19)enteredHall=false;
-    upperOpacity=T.MathUtils.damp(upperOpacity,1-interior,7,dt);upper.visible=upperOpacity>.01;
+    hallLight=settle(hallLight,withinFootprint?1-T.MathUtils.smoothstep(position.z,11,17):0,2.8,dt);
+    upperOpacity=settle(upperOpacity,1-interior,7,dt);upper.visible=upperOpacity>.01;
     upperMaterials.forEach(m=>{m.opacity=upperOpacity;m.depthWrite=upperOpacity>.98;});
     const cameraPosition=camera.position.clone().divideScalar(CAMPUS_SCALE);
     for(const wall of walls){
       const blocks=interior>.5&&(wall.name.startsWith('front')?cameraPosition.z>29:wall.name==='north'?cameraPosition.z<-31:wall.name==='west'?cameraPosition.x<-32:cameraPosition.x>32);
-      wall.opacity=T.MathUtils.damp(wall.opacity,blocks?0:1,9,dt);wall.group.visible=wall.opacity>.015;
+      wall.opacity=settle(wall.opacity,blocks?0:1,9,dt);wall.group.visible=wall.opacity>.015;
       wall.materials.forEach(m=>{m.opacity=wall.opacity;m.depthWrite=wall.opacity>.98;});
     }
     // Hide the partition only when viewing the hall through its near side.
-    partition.visible=!(enteredHall&&cameraPosition.z>18);
-    doors.forEach(({door,side})=>door.position.x=T.MathUtils.damp(door.position.x,side*(Math.hypot(position.x,position.z-29)<7?6:2),7,dt));
-    return {interior,enteredHall};
+    const cut=cameraPosition.z>18?1-T.MathUtils.smoothstep(position.z,14.7,18):0;
+    partitionOpacity=settle(partitionOpacity,1-cut,6,dt);partition.visible=partitionOpacity>.002;
+    partitionMaterials.forEach(m=>{m.opacity=partitionOpacity;m.depthWrite=partitionOpacity>.98;});
+    const innerOpen=Math.abs(position.x)<5&&Math.abs(position.z-18)<7;
+    hallDoors.forEach(({door,side})=>door.position.x=settle(door.position.x,side*(innerOpen?4.7:1.7),5,dt));
+    const doorOpen=innerOpen||Math.hypot(position.x,position.z-29)<7,doorChanged=doorOpen!==lastDoorOpen;lastDoorOpen=doorOpen;
+    doors.forEach(({door,side})=>door.position.x=settle(door.position.x,side*(Math.hypot(position.x,position.z-29)<7?6:2),7,dt));
+    return {interior,enteredHall,hallLight,doorChanged};
   }};
-}
-
-function createMetroMap(parent,{box,mesh}){
-  const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=880;const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#edf2e7';ctx.fillRect(0,0,1600,880);ctx.fillStyle='#244a45';ctx.font='800 63px Nunito';ctx.fillText('O CAMINHO DA INFORMAÇÃO',65,85);
-  ctx.font='30px Nunito';ctx.fillText('Você está na recepção • setores nas suas posições físicas',65,135);
-  const nodes={gateway:[790,765],vm:[790,625],hermes:[790,430],models:[290,265],mcp:[750,205],rag:[1260,295],memory:[290,560],cron:[1260,590]};
-  const names={gateway:'GATEWAY · VOCÊ',vm:'VM / TRIAGEM',hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON'};
-  for(const id of Object.keys(nodes)){
-    if(id==='gateway')continue;const from=id==='vm'?nodes.gateway:id==='hermes'?nodes.vm:nodes.hermes,to=nodes[id];
-    ctx.strokeStyle=ZONES[id].color;ctx.lineWidth=13;ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(...from);ctx.lineTo(to[0],from[1]);ctx.lineTo(...to);ctx.stroke();
-  }
-  for(const[id,p]of Object.entries(nodes)){ctx.beginPath();ctx.arc(...p,15,0,Math.PI*2);ctx.fillStyle='#fafff7';ctx.fill();ctx.strokeStyle='#28584c';ctx.lineWidth=5;ctx.stroke();ctx.fillStyle='#244a45';ctx.font='800 32px Nunito';ctx.textAlign='center';ctx.fillText(names[id],p[0],p[1]+48);}
-  ctx.textAlign='left';ctx.font='25px Nunito';ctx.fillText('↑ FUNDO DO LAB',65,210);ctx.fillText('Rotas conceituais · não representam tráfego ao vivo',65,847);
-  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=8;
-  box(parent,13.4,7.4,.2,'#315d52',-20,4.3,18.32);
-  return mesh(parent,new T.PlaneGeometry(13,7.15),new T.MeshBasicMaterial({map:texture}),-20,4.3,18.44,false);
 }
 
 // Ballistic fall, damped bounce and brief settling: deterministic, pooled objects.
@@ -192,58 +175,61 @@ export function parcelDrop(age){
   const t=age-.5;return {y:.45+Math.abs(Math.sin(t*12))*Math.exp(-t*8)*.23,tilt:.55*Math.exp(-t*7)};
 }
 
-export function createParcelFlow(world,art,zones,factory,obstacles,hall){
-  const {box,rod,mat,textPlane}=art,packets=[],couriers=[],deposits=[];
-  function parcel(parent,x=0,y=0,z=0){
-    const g=new T.Group();g.position.set(x,y,z);parent.add(g);
-    box(g,.58,.48,.58,'#c69a62');box(g,.11,.006,.59,'#e4c48d',0,.243,0);box(g,.26,.17,.008,'#f2ebd7',0,.025,.295);return g;
+export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()=>{}){
+  const {box,rod,mat,ring,cylinder,textPlane}=art,packets=[],couriers=[],deposits=[];
+  const prototype=new T.Group();
+  box(prototype,.5,.4,.5,'#263947');
+  for(const x of [-1,1])for(const y of [-1,1])for(const z of [-1,1])box(prototype,.18,.16,.18,'#d4e0e5',x*.2,y*.16,z*.2);
+  for(const side of [-1,1]){
+    ring(prototype,.145,.026,art.glow('#54bdff'),0,0,side*.259);
+    const plate=cylinder(prototype,.112,.018,'#9bafb9',0,0,side*.26);plate.rotation.x=Math.PI/2;
   }
-  for(const x of [-9,9]){
-    // Intake stays behind the reception counter; the belt crosses a real opening.
-    box(world,1.45,.2,8,'#294542',x,1.13,19);
-    for(const dx of [-.71,.71])box(world,.07,.26,8,'#78918c',x+dx,1.26,19);
-    for(let z=15;z<=23;z+=.42)rod(world,[x-.66,1.25,z],[x+.66,1.25,z],.055,mat('#879b94'));
-    for(const z of [15.3,18.8,22.7])for(const dx of [-.52,.52])box(world,.12,1.05,.12,'#526c62',x+dx,FLOOR+.525,z);
-    obstacles.push({x,z:19,w:1.65,d:8});
-    box(hall,3.1,.15,3.2,'#687d68',x,FLOOR+.075,13);
-    for(const dx of [-1.5,1.5])box(hall,.1,.5,3.2,'#36594e',x+dx,FLOOR+.35,13);
-    box(hall,3,.5,.1,'#36594e',x,FLOOR+.35,11.4);
-    obstacles.push({x,z:13,w:3.2,d:3.3});
-    for(let i=0;i<7;i++)parcel(hall,x+(i%3-1)*.75,FLOOR+.15+.24+(i>5?.48:0),12+(Math.floor(i/3)%2)*.75);
-    for(let i=0;i<5;i++){const p=parcel(world);p.traverse(o=>o.userData.dynamic=true);packets.push({p,x,phase:i*2.2});}
-    textPlane(hall,'TRIAGEM',2.6,.48,x,.75,14.67,{color:'#eeffe8',background:'#294d42',size:70});
+  ring(prototype,.14,.02,art.glow('#54bdff'),0,.246,0,true);
+  batchStatic(prototype);
+  function parcel(parent,x=0,y=0,z=0){const g=prototype.clone(true);g.position.set(x,y,z);g.traverse(o=>o.userData.dynamic=true);parent.add(g);return g;}
+  const speed=1.6,travel=30.3/speed;
+  // Split the belt at the partition: each segment follows its room's lighting.
+  const belt=[[-17,22.8,-28,22.8,world],[-28,22.8,-28,18,world],[-28,18,-28,3.5,hall]];
+  for(const [ax,az,bx,bz,parent]of belt){
+    const horizontal=az===bz,len=Math.hypot(bx-ax,bz-az),x=(ax+bx)/2,z=(az+bz)/2;
+    box(parent,horizontal?len:1.45,.2,horizontal?1.45:len,'#25343e',x,1.13,z);
+    for(const side of [-1,1])box(parent,horizontal?len:.07,.26,horizontal?.07:len,'#889ba6',x+(horizontal?0:side*.73),1.25,z+(horizontal?side*.73:0));
+    for(let d=.12;d<len;d+=.43){const f=d/len,xx=ax+(bx-ax)*f,zz=az+(bz-az)*f;rod(parent,[xx-(horizontal?0:.65),1.25,zz-(horizontal?.65:0)],[xx+(horizontal?0:.65),1.25,zz+(horizontal?.65:0)],.055,mat('#8899a5'));}
+    for(let d=1;d<len;d+=3.5){const f=d/len;box(parent,.14,1.06,.14,'#384957',ax+(bx-ax)*f,.59,az+(bz-az)*f);}
+    obstacles.push({x,z,w:horizontal?len+1.5:1.65,d:horizontal?1.65:len+1.5});
   }
+  const bin={x:-28,z:1.2};box(hall,3.5,.15,3.6,'#5f727e',bin.x,FLOOR+.075,bin.z);
+  for(const side of [-1,1])box(hall,.1,.55,3.6,'#253846',bin.x+side*1.7,FLOOR+.4,bin.z);
+  box(hall,3.5,.55,.1,'#253846',bin.x,FLOOR+.4,bin.z-1.8);obstacles.push({...bin,w:3.7,d:3.8});
+  for(let i=0;i<9;i++)parcel(hall,bin.x+(i%3-1)*.78,FLOOR+.15+.24+(i>=6?.48:0),bin.z-1+(Math.floor(i/3)%2)*.8);
+  textPlane(hall,'01 / TRIAGEM',3.15,.5,bin.x,.73,bin.z+1.87,{color:'#99dcff',background:'#182d38',size:120});
+  for(let i=0;i<7;i++)packets.push({p:parcel(world),phase:i*3.1,previous:-1});
   const workers=Object.entries(zones).flatMap(([id,zone])=>slotsFor(id).map(([x,z])=>({x:zone.x+x,z:zone.z+z,r:.7})));
-  for(const [index,id]of ['models','mcp','rag','memory','cron'].entries()){
-    const zone=zones[id],end={x:zone.x+(zone.x<0?5:id==='rag'?-8:-5),z:zone.z+5};
-    box(hall,1.4,.14,1.4,'#728b79',end.x,FLOOR+.07,end.z);
-    const deposited=parcel(hall,end.x,FLOOR+.14+.24,end.z);deposited.traverse(o=>o.userData.dynamic=true);deposited.visible=false;deposits.push(deposited);
-    const start={x:index%2?-6.7:6.7,z:12.5};
-    const route=findPath(start,end,obstacles,workers),curve=new T.CurvePath();let previous=new T.Vector3(start.x,FLOOR-.03,start.z);
-    for(const point of route){const next=new T.Vector3(point.x,FLOOR-.03,point.z);curve.add(new T.LineCurve3(previous,next));previous=next;}
-    const rig=factory.robot();rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);
-    const carried=parcel(rig.root,0,.82,.72);carried.traverse(o=>o.userData.dynamic=true);
-    const duration=Math.max(8,curve.getLength()/2.2);
-    couriers.push({rig,parcel:carried,deposited,curve,duration,phase:index*4,speed:0});
+  const docks={hermes:[-5,0],models:[-28,-16],mcp:[-9,-16],memory:[8,-16],rag:[30,-12],cron:[27,14],vm:[-16,13]};
+  for(const [index,[id,[x,z]]]of Object.entries(docks).entries()){
+    const end={x,z},dockY=groundHeight(x,z-.85);box(hall,1.2,.1,1.2,'#2d4658',x,dockY+.05,z-.85);
+    const deposited=parcel(hall,x,dockY+.34,z-.85);deposited.visible=false;deposits.push(deposited);
+    const start={x:-25.2,z:2},route=findPath(start,end,obstacles,workers),curve=new T.CurvePath();let previous=new T.Vector3(start.x,FLOOR-.03,start.z);
+    for(const p of route){const next=new T.Vector3(p.x,groundHeight(p.x,p.z)-.03,p.z);curve.add(new T.LineCurve3(previous,next));previous=next;}
+    const rig=factory.robot();rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);const carried=parcel(rig.root,0,.82,.72),duration=Math.max(8,curve.getLength()/2.2);
+    couriers.push({id,rig,parcel:carried,deposited,curve,duration,phase:index*4,speed:0,previousCarry:false});
   }
   hall.traverse(o=>o.userData.dynamic=true);
-  return {packets,couriers,tick(t,enteredHall){
-    for(const {p,x,phase} of packets){
-      const age=(t+phase)%11;p.visible=age<10.5;
-      if(age<8){p.position.set(x,1.49,23-age);p.rotation.set(0,0,0);}
-      else {const fall=parcelDrop(age-8);p.position.set(x,fall.y,15-Math.min(1,age-8)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);}
-      if(!enteredHall&&p.position.z<18)p.visible=false;
+  return {packets,couriers,travel,tick(t){
+    const revealTargets=[];
+    for(const item of packets){
+      const {p,phase}=item,age=(t+phase)%(travel+3);p.visible=age<travel+2.4;
+      if(age<travel){const d=age*speed;if(d<11)p.position.set(-17-d,1.49,22.8);else p.position.set(-28,1.49,22.8-(d-11));p.rotation.set(0,0,0);}
+      else {const fall=parcelDrop(age-travel);p.position.set(-28,fall.y,3.5-Math.min(1,age-travel)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);if(item.previous<travel+.5&&age>=travel+.5)onCue('drop',p.position);}
+      const parent=p.position.z<17.7?hall:world;if(p.parent!==parent){parent.add(p);if(parent===hall)revealTargets.push(p);else p.traverse(o=>{if(o.material?.hallOriginal)o.material=o.material.hallOriginal;});}item.previous=age;
     }
-    for(const item of couriers){
-      const {rig,parcel,deposited,curve,duration,phase}=item;if(!curve.curves.length){rig.root.visible=false;continue;}
-      const age=(t+phase)%(duration*2+4);let u,returning=false;
-      if(age<2){u=0;parcel.visible=age>1;item.speed=0;}
-      else if(age<duration+2){u=(age-2)/duration;parcel.visible=true;item.speed=.8;}
-      else if(age<duration+4){u=1;parcel.visible=age<duration+3;deposited.visible=!parcel.visible;item.speed=0;}
-      else {u=1-(age-duration-4)/duration;returning=true;parcel.visible=false;item.speed=.8;}
-      u=T.MathUtils.clamp(u,0,1);rig.root.position.copy(curve.getPoint(u));
+    for(const item of couriers){const {rig,parcel,deposited,curve,duration,phase}=item;if(!curve.curves.length){rig.root.visible=false;continue;}const age=(t+phase)%(duration*2+4);let u,returning=false;
+      if(age<2){u=0;parcel.visible=age>1;item.speed=0;}else if(age<duration+2){u=(age-2)/duration;parcel.visible=true;item.speed=.8;}else if(age<duration+4){u=1;parcel.visible=age<duration+3;deposited.visible=!parcel.visible;item.speed=0;}else{u=1-(age-duration-4)/duration;returning=true;parcel.visible=false;item.speed=.8;}
+      u=T.MathUtils.clamp(u,0,1);rig.root.position.copy(curve.getPoint(u));rig.root.position.y=groundHeight(rig.root.position.x,rig.root.position.z)-.03;
       const direction=curve.getTangent(u);rig.root.rotation.y=Math.atan2(direction.x,direction.z)+(returning?Math.PI:0);
+      if(parcel.visible!==item.previousCarry)onCue(parcel.visible?'pickup':'drop',rig.root.position);item.previousCarry=parcel.visible;
       for(const arm of rig.arms)if(parcel.visible){arm.upper.rotation.x=-.8;arm.lower.rotation.x=-.7;}
     }
+    return revealTargets;
   }};
 }

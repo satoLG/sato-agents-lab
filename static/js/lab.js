@@ -1,7 +1,7 @@
 // The canvas owns space and interaction. These overlays only present telemetry.
 import {createRagUI} from './lab-rag-ui.js';
 const $ = id => document.getElementById(id);
-const SECTORS = [['gateway','GATEWAYS','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','SKILLS','◈'],['cron','CRON','◷'],['vm','VM','▤']];
+const SECTORS = [['gateway','GATEWAY','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','MEMORY','◈'],['cron','CRON','◷'],['vm','VM','▤']];
 const KINDS = {gateway:'Atendente de gateway',guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',catalog:'Representação do catálogo'};
 const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'CAMPUS / EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };

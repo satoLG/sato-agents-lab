@@ -4,7 +4,7 @@ import {parcelDrop,groundHeight,FLOOR,CAMPUS_SCALE} from '../static/js/lab-campu
 
 test('walkable paving is a single level and the campus is thirty percent smaller',()=>{
   assert.equal(CAMPUS_SCALE,.7);
-  for(const [x,z]of [[0,46],[0,29],[-8,24],[0,17],[0,-3],[19,-14]])assert.equal(groundHeight(x,z),FLOOR);
+  for(const [x,z]of [[0,46],[0,29],[-8,24],[0,17],[19,-14]])assert.equal(groundHeight(x,z),FLOOR);
   assert.equal(groundHeight(40,46),.1);
 });
 test('parcel drop accelerates, bounces without penetrating the tray and settles on it',()=>{
@@ -24,4 +24,28 @@ test('forest height field is flat beneath roads and irregular outside the cleari
   const heights=[terrainHeight(-95,-85),terrainHeight(-88,-85),terrainHeight(80,100)];
   assert.ok(heights.every(h=>h>.5));assert.ok(new Set(heights).size===3);
   assert.ok(Math.abs(terrainHeight(80.001,100)-terrainHeight(80,100))<.01);
+});
+
+
+test('CORE has two flights with a wider landing and matching walking heights',async()=>{
+  const {CORE_STEPS,coreHeight}=await import('../static/js/lab-layout.js');
+  assert.equal(CORE_STEPS.length,8);
+  assert.equal(groundHeight(0,-3),FLOOR+1.92);
+  assert.equal(coreHeight(11,-3),0);
+  assert.ok(CORE_STEPS[3].w-CORE_STEPS[4].w>CORE_STEPS[2].w-CORE_STEPS[3].w);
+  for(const s of CORE_STEPS)assert.ok(Math.abs(coreHeight(s.w/2-.01,-3)-s.h)<1e-8);
+  assert.equal(coreHeight(10,-3+8.5),0); // Rounded corner is outside the step.
+});
+
+
+test('numbered pillars do not overlap worker slots and stand fully on their level',async()=>{
+  const {ZONES,slotsFor}=await import('../static/js/lab-layout.js');
+  for(const zone of Object.values(ZONES)){
+    const [x,z]=zone.sign,y=groundHeight(x,z);
+    for(const dx of [-1.375,1.375])for(const dz of [-.22,.22])assert.equal(groundHeight(x+dx,z+dz),y,zone.name);
+    for(const [id,other]of Object.entries(ZONES))for(const [dx,dz]of slotsFor(id)){
+      const awayX=Math.max(0,Math.abs(other.x+dx-x)-1.375),awayZ=Math.max(0,Math.abs(other.z+dz-z)-.3);
+      assert.ok(Math.hypot(awayX,awayZ)>.7,`${zone.name} blocks ${id}`);
+    }
+  }
 });

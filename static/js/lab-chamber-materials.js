@@ -61,3 +61,20 @@ export function createExteriorFade(group) {
   });
   return amount=>{brightness.value=T.MathUtils.lerp(1,.035,amount);};
 }
+
+// Black, depth-writing interior is prepared before entry, then revealed by light.
+export function createHallReveal(world,hall){
+  const level={value:0},seen=new WeakMap(),clones=new WeakSet();
+  function register(root=hall){
+    const apply=o=>{if(!o.material)return;const replace=m=>{
+      if(clones.has(m))return m;if(seen.has(m))return seen.get(m);
+      const copy=m.userData.hallLighting?m:m.clone(),compile=m.onBeforeCompile,key=m.customProgramCacheKey();copy.onBeforeCompile=(shader,renderer)=>{
+        compile.call(copy,shader,renderer);shader.uniforms.hallLight=level;
+        shader.fragmentShader='uniform float hallLight;\n'+shader.fragmentShader;
+        shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','outgoingLight *= hallLight;\n#include <opaque_fragment>');
+      };copy.customProgramCacheKey=()=>key+'-hall-light-v1';copy.userData.hallLight=level;copy.hallOriginal=m;seen.set(m,copy);clones.add(copy);return copy;
+    };o.material=Array.isArray(o.material)?o.material.map(replace):replace(o.material);};
+    root.traverse(apply);if(root===hall)world.traverse(o=>{if(o.material?.userData.hallLighting)apply(o);});
+  }
+  register();return {register,set(value){level.value=value;},get value(){return level.value;}};
+}
