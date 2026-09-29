@@ -6,7 +6,7 @@ export function batchStatic(scene) {
   scene.updateMatrixWorld(true);
   const buckets = new Map();
   scene.traverse(object => {
-    if (!object.isMesh || object.isInstancedMesh || object.userData.dynamic || object.userData.station || Array.isArray(object.material) || object.material.transparent) return;
+    if (!object.isMesh || object.isInstancedMesh || object.userData.dynamic || object.userData.walkable || object.userData.station || Array.isArray(object.material) || object.material.transparent) return;
     const key = `${object.material.uuid}:${object.castShadow}:${object.receiveShadow}`;
     if (!buckets.has(key)) buckets.set(key,[]);
     buckets.get(key).push(object);

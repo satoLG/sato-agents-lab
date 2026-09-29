@@ -12,14 +12,14 @@ from datetime import datetime, timezone
 from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways
 
 SECTORS = [
-    ("gateway", "Recepção de gateways", "G-00", "Recebo as entradas do Hermes. Cada atendente representa um adaptador conectado ou o endpoint de prompts do dashboard; pacotes na esteira ilustram o fluxo da arquitetura.", "gateway_state.json · dashboard"),
-    ("hermes", "Núcleo Hermes", "H-01", "Coordeno a leitura de agentes, subagentes e ferramentas. Cada robô de execução corresponde a um registro ou processo observado.", "events.db · agent_runs / subagent_runs / tool_calls"),
-    ("models", "Providers", "P-02", "Represento o roteamento de modelos: provider principal e fallbacks configurados, incluindo OpenRouter e OpenCode quando presentes.", "config.yaml · model_usage"),
-    ("mcp", "Conexões MCP", "M-03", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · tool_calls"),
-    ("rag", "Arquivo RAG", "R-04", "Represento a base vetorial: documentos recuperados para dar contexto ao agente. Só sinalizo uso recente quando há uma ferramenta de RAG identificável no log.", "LanceDB · tool_calls"),
-    ("memory", "Memória & skills", "S-05", "Represento memórias, contextos e skills persistidos em disco para orientar o Hermes.", "~/.hermes/memories · contexts · skills"),
-    ("cron", "Agendamentos", "C-06", "Represento jobs do Hermes, crontab e timers. Estar agendado é diferente de estar em execução.", "jobs.json · executions.db · crontab · systemd"),
-    ("vm", "Infraestrutura", "V-07", "Represento a máquina que sustenta o laboratório: CPU, RAM e disco, medidos no host do dashboard.", "/proc · filesystems"),
+    ("gateway", "GATEWAY", "00", "Recebo as entradas do Hermes. Um atendimento unificado reúne os adaptadores conectados e o endpoint de prompts do dashboard; pacotes na esteira ilustram o fluxo da arquitetura.", "gateway_state.json · dashboard"),
+    ("hermes", "Núcleo Hermes", "02", "Coordeno a leitura de agentes, subagentes e ferramentas. Cada robô de execução corresponde a um registro ou processo observado.", "events.db · agent_runs / subagent_runs / tool_calls"),
+    ("models", "Providers", "03", "Represento o roteamento de modelos: provider principal e fallbacks configurados, incluindo OpenRouter e OpenCode quando presentes.", "config.yaml · model_usage"),
+    ("mcp", "Conexões MCP", "04", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · tool_calls"),
+    ("rag", "Arquivo RAG", "06", "Represento a base vetorial: documentos recuperados para dar contexto ao agente. Só sinalizo uso recente quando há uma ferramenta de RAG identificável no log.", "LanceDB · tool_calls"),
+    ("memory", "Memória & skills", "05", "Represento memórias, contextos e skills persistidos em disco para orientar o Hermes.", "~/.hermes/memories · contexts · skills"),
+    ("cron", "Agendamentos", "07", "Represento jobs do Hermes, crontab e timers. Estar agendado é diferente de estar em execução.", "jobs.json · executions.db · crontab · systemd"),
+    ("vm", "Infraestrutura", "01", "Represento a máquina que sustenta o laboratório: CPU, RAM e disco, medidos no host do dashboard.", "/proc · filesystems"),
 ]
 STATUS = {"recent": "Atividade recente", "process": "Processo detectado", "running": "Execução registrada",
           "idle": "Sem atividade recente", "unknown": "Sem telemetria", "configured": "Configurado",

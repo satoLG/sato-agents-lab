@@ -28,7 +28,7 @@ test('campus cutaways, grounded actors, courier routes and parcel landing',async
     const partitionInReception=campus.partition.visible;
     const inside=campus.tick(2,new T.Vector3(0,.06,15),camera);
     const walls=campus.walls.map(w=>({name:w.name,visible:w.group.visible}));
-    parcels.tick(8.5,true);const landed=parcels.packets[0].p.position.y;
+    parcels.tick(parcels.travel+2,true);const landed=parcels.packets[0].p.position.y;
     const routes=parcels.couriers.map(c=>({length:c.curve.getLength(),clear:c.curve.curves.every(segment=>clearSegment(segment.v1,segment.v2,obstacles,[]))}));
     parcels.tick(4,true);const carrying=parcels.couriers[0].parcel.visible;
     parcels.tick(parcels.couriers[0].duration+3.5,true);const deposited=parcels.couriers[0].deposited.visible;
@@ -38,7 +38,7 @@ test('campus cutaways, grounded actors, courier routes and parcel landing',async
   expect(result.reception.enteredHall).toBe(false);expect(result.partitionInReception).toBe(true);expect(result.inside.enteredHall).toBe(true);
   expect(result.walls.filter(w=>w.visible).map(w=>w.name)).toEqual(['west','east','north']);
   expect(result.landed).toBeCloseTo(.45);expect(result.carrying).toBe(true);expect(result.deposited).toBe(true);
-  expect(result.routes).toHaveLength(5);for(const route of result.routes){expect(route.length).toBeGreaterThan(1);expect(route.clear).toBe(true);}
+  expect(result.routes).toHaveLength(7);for(const route of result.routes){expect(route.length).toBeGreaterThan(1);expect(route.clear).toBe(true);}
   expect(errors).toEqual([]);
 });
 

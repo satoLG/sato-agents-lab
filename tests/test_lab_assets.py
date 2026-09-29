@@ -11,7 +11,8 @@ def test_lab_versions_entrypoint_and_relative_dependencies(client):
     assert prefix + 'css/lab.css' in html
     for filename in ['js/lab.js', 'js/lab-scene.js', 'js/lab-avatar.js',
                      'vendor/three.module.min.js', 'vendor/GLTFLoader.js',
-                     'models/sato.glb', 'css/lab.css']:
+                     'models/sato.glb', 'css/lab.css', 'js/lab-layout.js',
+                     'js/lab-signage.js', 'icons/lucide/cpu.svg', 'audio/portal2/click.wav']:
         response = client.get(prefix + filename)
         original = client.get('/static/' + filename)
         assert response.status_code == 200

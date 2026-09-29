@@ -115,11 +115,21 @@ letreiro arredondado e enquadramento inicial responsivo. Os materiais CC0 de 1K 
 HDR da Poly Haven estão em `static/textures/polyhaven/`, com fontes e licença no README.
 Nenhum desses recursos depende de CDN em produção.
 
-A recepção tem balcões físicos, mapa de setores e uma divisória com passagem central
-para visitantes e dois vãos de esteira. O salão é revelado depois da travessia. As paredes
-laterais e de fundo permanecem; somente as paredes entre a câmera e o interior são recortadas.
-O piso contínuo, as bases dos objetos e os pés dos personagens usam uma altura compartilhada.
-Os letreiros usam pontos luminosos, atrás das bancadas, com suportes separados do aro.
+A recepção tem um atendimento GATEWAY unificado, mapa físico numerado e divisória
+com passagem central para visitantes e um vão de esteira. O salão é pré-compilado
+em preto durante o loading; piso, equipamentos e luzes aparecem gradualmente ao
+atravessar a porta, sem recriar os setores. A transição termina mesmo com movimento
+reduzido. As paredes entre a câmera e o interior são recortadas suavemente.
+
+O layout agrupa GATEWAY (00), INFRA / VM (01), CORE / HERMES (02),
+INTEGRATIONS / PROVIDERS e MCP (03–04), DATA / MEMORY e RAG (05–06) e SCHEDULE / CRON (07).
+O CORE tem duas sequências de degraus e patamar intermediário; a navegação e os robôs
+usam as mesmas alturas da geometria. Pisos e rodapés têm afastamentos explícitos para
+evitar planos coplanares. As áreas têm contornos retangulares arredondados, indicadores
+verticais claros e visores digitais. Os SVGs locais são do Lucide (licença em
+`static/icons/lucide/LICENSE`); o mapa usa a mesma numeração e posições físicas.
+Pontos azuis no piso animam o fluxo entre o CORE e as áreas. Tubos largos transportam
+pacotes ilustrativos, e o painel de atividades ocupa a parede de fundo.
 
 O exterior segue a composição da referência do Nintendo Museum: painéis modulares
 com juntas, faixas contínuas de vidro, marquise longa e painel escuro junto à quina.
@@ -136,20 +146,25 @@ sobre o céu real por alfa, eliminando a faixa sólida da fog no limite do plano
 O interior usa uma linguagem de câmara de testes inspirada nas referências de Portal 2:
 placas cinza com juntas, painéis de parede, carcaças brancas, bases grafite e luzes ciano.
 As texturas procedurais de 512 px acrescentam granulação, parafusos e desgaste leve,
-sem recursos extraídos do jogo. Ao atravessar a entrada, o exterior e o céu escurecem
+sem texturas extraídas do jogo. Ao atravessar a entrada, o exterior e o céu escurecem
 gradualmente; ao sair, recuperam a luminosidade. O multiplicador atua após a iluminação
 e a mistura do terreno, sem modificar os materiais internos. A posição lateral ao
 prédio não dispara essa transição. `tests/browser/chamber.spec.cjs` verifica entrada,
 saída, preservação da cor interna e compilação dos materiais.
 
 Pacotes reutilizáveis percorrem as esteiras, caem com aceleração, quicam e se acomodam
-em bandejas de triagem com caixas acumuladas. Cinco entregadores percorrem rotas que
+em uma bandeja de triagem com caixas acumuladas. Sete entregadores percorrem rotas que
 desviam de equipamentos e posições de trabalhadores, param para coleta/depósito e
 voltam sem carga. Isso continua sendo uma ilustração da arquitetura, não telemetria de tarefas.
 
-Validação: `npm run test:navigation` inclui piso e queda de pacotes; os testes de navegador
-em `tests/browser/campus.spec.cjs` verificam identidade, divisória, paredes, recursos locais,
-rotas de entrega e depósito. O teste de visita às oito estações verifica a navegação real.
+O áudio é ativado pelo visitante: passos, portas, chegada ao salão, painéis, conversa,
+coleta/queda de caixas e ambiente usam 14 amostras locais da biblioteca indicada.
+Fontes e créditos estão em `static/audio/portal2/README.md`. O som das caixas diminui
+com a distância; ocultar a página pausa o áudio.
+
+Validação: `npm run test:navigation` verifica colisões, degraus e queda de pacotes.
+`tests/browser/lab-layout.spec.cjs` verifica o atendimento único, rotas, entrega,
+transição reversível com movimento reduzido e decodificação das amostras de áudio.
 
 ### Atualizar a VM
 
