@@ -163,8 +163,9 @@ $('chat-login').addEventListener('submit',async e=>{
 });
 $('chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('chat-input').value); });
 document.querySelectorAll('[data-question]').forEach(el => el.addEventListener('click', () => ask(el.dataset.question)));
+$('lab-play').addEventListener('click',()=>{if(!scene)return;scene.start();document.body.dataset.started='true';$('scene').focus({preventScroll:true});});
 $('enter-lab').addEventListener('click',()=>visit('guide:gateway'));
-$('sound-toggle').addEventListener('click',async()=>{const on=await scene?.toggleAudio();$('sound-toggle').setAttribute('aria-pressed',String(!!on));$('sound-toggle').textContent=on?'♫ Som ligado':'♪ Ativar som';});
+$('sound-toggle').addEventListener('click',async()=>{const on=await scene?.toggleAudio();$('sound-toggle').setAttribute('aria-pressed',String(!!on));$('sound-toggle').setAttribute('aria-label',on?'Desativar som':'Ativar som');$('sound-toggle').title=on?'Desativar som':'Ativar som';});
 $('chat-history-toggle').addEventListener('click',()=>{const el=$('chat-messages');el.hidden=!el.hidden;$('chat-history-toggle').setAttribute('aria-expanded',String(!el.hidden));});
 $('interaction').addEventListener('click', () => scene?.interact());
 for (const mode of ['follow','room']) $('camera-' + mode).addEventListener('click', () => scene?.setCameraMode(mode));
@@ -180,6 +181,7 @@ try {
     onPosition:(x,z) => { $('campus-welcome').hidden=z<34||!!selectedRobot;  $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
+  $('lab-play').disabled=false;
   if (state) scene.update(state);
   ragUI.loadBase();
   let lastHeat=null,heatBusy=false;
@@ -190,5 +192,5 @@ try {
   refreshInstruments();setInterval(refreshInstruments,15000);setInterval(()=>{if(!document.hidden&&!ragUI.open)ragUI.loadBase();},60000);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) $('motion-toggle').click();
   $('scene').focus({preventScroll:true});
-} catch (error) { console.warn('Laboratório 3D indisponível:',error); $('scene-fallback').hidden = false; }
+} catch (error) { $('lab-play').hidden=true;console.warn('Laboratório 3D indisponível:',error); $('scene-fallback').hidden = false; }
 finally { $('loading').hidden = true; }
