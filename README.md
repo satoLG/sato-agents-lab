@@ -133,6 +133,15 @@ dos triângulos para apoiar troncos e personagens. Um shader mistura grama e sol
 Forest Floor da Poly Haven, com borda irregular. O terreno distante desvanece
 sobre o céu real por alfa, eliminando a faixa sólida da fog no limite do plano.
 
+O interior usa uma linguagem de câmara de testes inspirada nas referências de Portal 2:
+placas cinza com juntas, painéis de parede, carcaças brancas, bases grafite e luzes ciano.
+As texturas procedurais de 512 px acrescentam granulação, parafusos e desgaste leve,
+sem recursos extraídos do jogo. Ao atravessar a entrada, o exterior e o céu escurecem
+gradualmente; ao sair, recuperam a luminosidade. O multiplicador atua após a iluminação
+e a mistura do terreno, sem modificar os materiais internos. A posição lateral ao
+prédio não dispara essa transição. `tests/browser/chamber.spec.cjs` verifica entrada,
+saída, preservação da cor interna e compilação dos materiais.
+
 Pacotes reutilizáveis percorrem as esteiras, caem com aceleração, quicam e se acomodam
 em bandejas de triagem com caixas acumuladas. Cinco entregadores percorrem rotas que
 desviam de equipamentos e posições de trabalhadores, param para coleta/depósito e

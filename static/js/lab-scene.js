@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 import {createCampus,createParcelFlow,ZONES,slotsFor,CAMPUS_SCALE,FLOOR,groundHeight} from './lab-campus.js';
+import {createChamberMaterials} from './lab-chamber-materials.js';
 import {loadEnvironment} from './lab-environment.js';
 import {createLabAudio} from './lab-audio.js';
 import {createDialogue} from './lab-dialogue.js';
@@ -37,8 +38,10 @@ export async function createLabScene(container, callbacks) {
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
   let dirty = true,firstFrame=true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
+  const chamber=createChamberMaterials();let furnishing=false;
   const mats = new Map(), geometries = new Map();
   const mat = (color, metalness = .1, roughness = .65) => {
+    if(furnishing)return chamber.equipment(color,metalness,roughness);
     const key = `${color}:${metalness}:${roughness}`;
     if (!mats.has(key)) mats.set(key, new T.MeshStandardMaterial({color, metalness, roughness}));
     return mats.get(key);
@@ -101,7 +104,9 @@ export async function createLabScene(container, callbacks) {
   const fill = new T.DirectionalLight('#a3e9f0', 1.4); fill.position.set(13, 9, -10); world.add(fill);
 
   const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
-  const campus=createCampus(world,art,obstacles,environment);callbacks.onLoadProgress?.(79,'PREPARANDO CENA');
+  const campus=createCampus(world,art,obstacles,environment,chamber);
+  furnishing=true;
+  callbacks.onLoadProgress?.(79,'PREPARANDO CENA');
   // Floor conduits link the sectors to the nucleus; these are architecture, not traces.
   for (const [id, zone] of Object.entries(ZONES)) {
     if (id === 'hermes'||id==='gateway') continue;
@@ -128,7 +133,13 @@ export async function createLabScene(container, callbacks) {
   }
   function consoleDesk(group, color) {
     box(group, 2.5, .22, 1.25, '#e4eade', 0, 1, -.4);
-    box(group, 1.95, .92, .75, '#82998b', 0, .46, -.55);
+    box(group, 1.95, .92, .75, '#27323b', 0, .46, -.55);
+    for(const side of [-1,1]){
+      box(group,.16,.78,.94,'#e2e8e9',side*1.03,.5,-.49);
+      for(let i=0;i<5;i++)box(group,.018,.035,.45,'#27323b',side*1.12,.35+i*.08,-.48);
+    }
+    box(group,1.65,.48,.03,'#dce2e5',0,.5,-.155);
+    for(const x of [-.72,.72])for(const y of [.32,.68])sphere(group,.025,'#394851',x,y,-.132);
     box(group, 2.05, .07, .06, glow(color), 0, .85, .23);
     const monitor = box(group, 1.65, .92, .11, '#385b53', 0, 1.6, -.72); monitor.rotation.x = -.18;
     const screen = makeScreen(group,0,1.6,-.57);
@@ -139,7 +150,9 @@ export async function createLabScene(container, callbacks) {
   }
 
   function receptionDesk(group,color){
-    box(group,3.5,1.05,1.4,'#4d7668',0,.525,0);
+    box(group,3.5,1.05,1.4,'#27323b',0,.525,0);
+    box(group,3.3,.76,.05,'#e2e8e9',0,.55,.72);
+    for(const x of [-1.2,1.2])for(let i=0;i<4;i++)box(group,.3,.025,.02,'#394851',x,.34+i*.09,.755);
     box(group,3.8,.16,1.65,'#e2e6d4',0,1.13,0);
     box(group,3.1,.065,.04,glow(color),0,.79,.72);
     const terminal=new T.Group();terminal.position.set(.7,1.25,-.4);terminal.rotation.y=Math.PI;group.add(terminal);
@@ -150,10 +163,10 @@ export async function createLabScene(container, callbacks) {
     const group = new T.Group(); group.position.set(zone.x, FLOOR, zone.z); (id==='gateway'?world:hall).add(group);
     const r = id === 'rag' ? 8.4 : id==='gateway'? 4.1 : 4.5;
     if(id!=='gateway'){
-      cylinder(group,r,.04,'#6c8b7e',0,-.02,0);
-      cylinder(group,r-.12,.012,'#cbd9ca',0,.009,0);
+      cylinder(group,r,.025,'#27323b',0,.0175,0);
+      cylinder(group,r-.12,.012,'#afb9be',0,.036,0);
     }
-    const trim=id==='gateway'?box(group,24,.015,.06,glow(zone.color),8,.015,2):ring(group,r-.22,.025,glow(zone.color),0,.025,0,true);
+    const trim=id==='gateway'?box(group,24,.015,.06,glow(zone.color),8,.015,2):ring(group,r-.22,.025,glow(zone.color),0,.065,0,true);
     const desk = new T.Group(); desk.position.z = id==='rag'?6.75:id==='gateway'?.9:.95; group.add(desk); const display = id==='gateway'?receptionDesk(desk,zone.color):consoleDesk(desk, zone.color);
     obstacles.push({x: zone.x, z: zone.z + (id==='rag'?6.35:id==='gateway'?.9:.55), w: id==='gateway'?3.6:3.1, d: id==='gateway'?1.5:1.8});
     zones.set(id, {group, trim, display, status:'unknown',radius:r});
