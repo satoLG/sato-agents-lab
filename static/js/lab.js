@@ -10,6 +10,23 @@ let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFligh
 let webChatMode='loading',webChatCsrf=null,chatPollTimer=null;
 const histories = new Map();
 const ragUI=createRagUI(()=>scene,fetchJSON);
+const progress=$('loading-progress');
+const blocks=Array.from({length:12},()=>node('span'));
+progress.append(...blocks);
+function loadingStep(value,label){
+  const shown=Math.max(0,Math.min(100,Math.round(value)));
+  progress.setAttribute('aria-valuenow',String(shown));
+  blocks.forEach((block,i)=>block.classList.toggle('on',i<Math.round(shown/100*blocks.length)));
+  $('loading-stage').textContent=label;
+}
+function revealScene(){
+  loadingStep(100,'CENA PRONTA');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.body.dataset.loading='false';$('lab-play').disabled=false;
+    setTimeout(()=>$('loading').hidden=true,1200);
+  }));
+}
+
 function toast(text) { clearTimeout(toastTimer); $('toast').textContent = text; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 3500); }
 function closePanel(id) { $(id).hidden = true; $(id === 'map-panel' ? 'map-toggle' : 'telemetry-toggle').setAttribute('aria-expanded','false'); }
 function closePanels() { closePanel('map-panel'); closePanel('telemetry-panel'); }
@@ -172,16 +189,17 @@ for (const mode of ['follow','room']) $('camera-' + mode).addEventListener('clic
 $('motion-toggle').addEventListener('click', () => { const paused = $('motion-toggle').getAttribute('aria-pressed') !== 'true'; $('motion-toggle').setAttribute('aria-pressed',String(paused)); $('motion-toggle').textContent = paused ? 'Retomar animações' : 'Pausar animações'; scene?.setPaused(paused); });
 poll();
 try {
+  loadingStep(8,'CARREGANDO MÓDULOS');
   const {createLabScene} = await import('./lab-scene.js');
   scene = await createLabScene($('scene'),{
     onInteract:openChat, onToast:toast,onRagNode:n=>ragUI.select(n),
+    onLoadProgress:loadingStep,onReady:revealScene,
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
     onCandidate:robot => { $('interaction').hidden = !robot || !!selectedRobot; $('interaction').dataset.robot = robot?.id || ''; $('interaction-name').textContent = robot ? `${name(robot.sector)} / ${robot.name}` : ''; },
     onPosition:(x,z) => { $('campus-welcome').hidden=z<34||!!selectedRobot;  $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
-  $('lab-play').disabled=false;
   if (state) scene.update(state);
   ragUI.loadBase();
   let lastHeat=null,heatBusy=false;
@@ -192,5 +210,4 @@ try {
   refreshInstruments();setInterval(refreshInstruments,15000);setInterval(()=>{if(!document.hidden&&!ragUI.open)ragUI.loadBase();},60000);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) $('motion-toggle').click();
   $('scene').focus({preventScroll:true});
-} catch (error) { $('lab-play').hidden=true;console.warn('Laboratório 3D indisponível:',error); $('scene-fallback').hidden = false; }
-finally { $('loading').hidden = true; }
+} catch (error) { $('lab-play').hidden=true;$('loading').hidden=true;document.body.dataset.loading='false';console.warn('Laboratório 3D indisponível:',error); $('scene-fallback').hidden = false; }
