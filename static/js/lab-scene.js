@@ -30,8 +30,8 @@ export async function createLabScene(container, callbacks) {
   const environment = await loadEnvironment(renderer,world);
   const hall = new T.Group(); hall.name='main-laboratory'; world.add(hall);
   const camera = new T.PerspectiveCamera(42, 1, .1, 400);
-  const aim = new T.Vector3(0, 7, 10), target = aim.clone();
-  let azimuth = -.48, elevation = .22, radius = 84, targetRadius = 84, paused = false, stale = false;
+  const aim = new T.Vector3(-23, 12.5, 29).multiplyScalar(CAMPUS_SCALE), target = aim.clone();
+  let azimuth = -.42, elevation = .13, radius = 22, targetRadius = 22, paused = false, stale = false;
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
   let dirty = true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
@@ -247,7 +247,7 @@ export async function createLabScene(container, callbacks) {
   const parcels=createParcelFlow(world,art,ZONES,factory,obstacles,hall);batchStatic(world);
   const avatar = hero.root; avatar.position.set(0,FLOOR,46); avatar.scale.setScalar(1.12);avatar.rotation.y=Math.PI; world.add(avatar);
   const destination = ring(world,.27,.023,glow('#c6f0f7'),0,.16,0,true); destination.visible=false;
-  let study=false,savedStudyCamera=null,arrivalView=true;
+  let study=false,savedStudyCamera=null,arrivalView=true,started=false;
   let cameraMode='follow', savedCamera=null, chatId=null, desiredRobot=null, route=[], location=null, candidate=null, emoteUntil=0;
   let targetAzimuth=azimuth, targetElevation=elevation, wasMoving=false, contextLost=false;
   const circles=[], zoneByRobot=new Map();
@@ -301,7 +301,10 @@ export async function createLabScene(container, callbacks) {
     if(chatId&&!robots.has(chatId))endChat();
   }
   function stopWalking(){keys.clear();route=[];movementSpeed=0;destination.visible=false;dirty=true;}
-  function leaveArrival(){if(arrivalView){arrivalView=false;targetRadius=30*CAMPUS_SCALE;}}
+  const cornerRadius=()=>Math.max(22,13/camera.aspect);
+  const outside=()=>avatar.position.z>29||Math.abs(avatar.position.x)>32||avatar.position.z<-31;
+  function start(){if(started)return;started=true;arrivalView=false;cameraMode='follow';targetRadius=30*CAMPUS_SCALE;targetElevation=.48;targetAzimuth=.55;callbacks.onCamera('follow');dirty=true;}
+  function leaveArrival(){if(started&&arrivalView){arrivalView=false;targetRadius=30*CAMPUS_SCALE;}}
   function navigate(point){leaveArrival();audio.cue('click');if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
   function approach(item){
     const center=item.rig.root.position,options=[];
@@ -338,12 +341,12 @@ export async function createLabScene(container, callbacks) {
     callbacks.onCamera(cameraMode);dirty=true;
   }
   function emote(kind){audio.cue(kind==='error'?'error':'answer');if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
-  function setCameraMode(mode){if(chatId||study)return;arrivalView=false;cameraMode=mode;targetRadius=mode==='room'?Math.max(70,60/camera.aspect)*CAMPUS_SCALE:(avatar.position.z>29?30:27)*CAMPUS_SCALE;targetElevation=mode==='room'?.77:.64;targetAzimuth=.55;callbacks.onCamera(mode);dirty=true;}
+  function setCameraMode(mode){if(!started||chatId||study)return;arrivalView=false;cameraMode=mode;const exterior=outside();targetRadius=mode==='room'?(exterior?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE):(exterior?30:27)*CAMPUS_SCALE;targetElevation=mode==='room'?(exterior?.13:.77):.64;targetAzimuth=mode==='room'&&exterior?-.42:.55;callbacks.onCamera(mode);dirty=true;}
   function setStale(value){stale=value;installations.setStale(value);dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}}
   // Rays reach actual robot meshes and actual physical signboards, not HTML labels.
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),floor=new T.Plane(new T.Vector3(0,1,0),-FLOOR*CAMPUS_SCALE);let drag=null;
   function cast(event){const r=container.getBoundingClientRect();pointer.set((event.clientX-r.left)/r.width*2-1,-(event.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);}
-  container.addEventListener('pointerdown',e=>{if(chatId||e.button!==0)return;container.focus({preventScroll:true});drag={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,moved:false};container.setPointerCapture(e.pointerId);});
+  container.addEventListener('pointerdown',e=>{if(!started||chatId||e.button!==0)return;container.focus({preventScroll:true});drag={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,moved:false};container.setPointerCapture(e.pointerId);});
   container.addEventListener('pointermove',e=>{if(!drag)return;if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7)drag.moved=true;if(drag.moved){targetAzimuth-=(e.clientX-drag.px)*.006;targetElevation=T.MathUtils.clamp(targetElevation+(e.clientY-drag.py)*.004,.35,1.18);dirty=true;}drag.px=e.clientX;drag.py=e.clientY;});
   container.addEventListener('pointerup',e=>{
     if(!drag||chatId)return;const clicked=!drag.moved;drag=null;if(!clicked)return;cast(e);
@@ -354,10 +357,10 @@ export async function createLabScene(container, callbacks) {
     const point=raycaster.ray.intersectPlane(floor,new T.Vector3());if(point)navigate(point.divideScalar(CAMPUS_SCALE));
   });
   for(const type of ['pointercancel','lostpointercapture'])container.addEventListener(type,()=>drag=null);
-  container.addEventListener('wheel',e=>{if(chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
-  container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();leaveArrival();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
+  container.addEventListener('wheel',e=>{if(!started||chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
+  container.addEventListener('keydown',e=>{if(!started||chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();leaveArrival();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
-  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView)targetRadius=Math.max(84,66/camera.aspect);else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
+  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=(camera.aspect>.85?24:33)*CAMPUS_SCALE;else if(arrivalView){targetRadius=cornerRadius();radius=targetRadius;}else if(cameraMode==='room'&&!chatId)targetRadius=outside()?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE;dirty=true;});resizeObserver.observe(container);
   const direction=new T.Vector3(),travelDirection=new T.Vector3();
   let movementSpeed=0,previousLocation='',previousCandidate='',wasInterior=false;
   function frame(ms){
@@ -394,8 +397,12 @@ export async function createLabScene(container, callbacks) {
     const candidateId=candidate?.worker.id||'';if(candidateId!==previousCandidate){callbacks.onCandidate(candidate?.worker||null);previousCandidate=candidateId;}
     if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(savedCamera.aim).divideScalar(CAMPUS_SCALE);target.y+=2.2;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
     else if(study){target.set(ZONES.rag.x,3.1,ZONES.rag.z);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
-    else if(cameraMode==='follow'){if(arrivalView)target.set(0,10,12);else{target.copy(avatar.position);target.y+=1.1;}}
-    else target.set(0,1,0);
+    else if(arrivalView||cameraMode==='room'&&outside()){
+      target.set(-23,12.5,29);targetRadius=cornerRadius();
+      const drift=paused?0:1;targetAzimuth=-.42+Math.sin(animationTime*.24)*.009*drift;targetElevation=.13+Math.sin(animationTime*.33)*.005*drift;
+    }
+    else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=1.1;}
+    else {target.set(0,1,0);targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;targetElevation=.77;}
     target.multiplyScalar(CAMPUS_SCALE);
     const changing=aim.distanceToSquared(target)>.0001||Math.abs(radius-targetRadius)>.002||Math.abs(azimuth-targetAzimuth)>.002||Math.abs(elevation-targetElevation)>.002;
     aim.lerp(target,1-Math.exp(-elapsed*5));radius=T.MathUtils.lerp(radius,targetRadius,1-Math.exp(-elapsed*5));azimuth=dampAngle(azimuth,targetAzimuth,elapsed,6);elevation=T.MathUtils.lerp(elevation,targetElevation,1-Math.exp(-elapsed*5));
@@ -433,5 +440,5 @@ export async function createLabScene(container, callbacks) {
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
   renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;dirty=true;renderer.shadowMap.needsUpdate=true;callbacks.onLostContext(false);});
-  return {setChatMessages:dialogue.setMessages,toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
+  return {start,setChatMessages:dialogue.setMessages,toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
 }
