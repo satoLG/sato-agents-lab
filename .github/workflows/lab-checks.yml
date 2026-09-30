@@ -23,6 +23,8 @@ jobs:
       - run: python tools/check_html.py
       - run: npm ci
       - run: npm run test:navigation
+      - run: npm run test:avatar
+      - run: npm run test:controls
       - run: npx playwright install --with-deps chromium
       - name: Start local dashboard
         run: |

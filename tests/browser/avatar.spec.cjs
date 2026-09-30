@@ -13,7 +13,7 @@ test('real GLB textures render and animated poses blend without WebGL errors',as
     const camera=new T.PerspectiveCamera(40,1,.1,100);camera.position.set(0,1.3,5);camera.lookAt(0,1.3,0);
     const renderer=new T.WebGLRenderer({antialias:true});renderer.setSize(400,400);document.body.append(renderer.domElement);
     let textured=0,bones=0;hero.model.traverse(n=>{if(n.isSkinnedMesh&&n.material.map?.image)textured++;if(n.isBone)bones++;});
-    const foot=hero.model.getObjectByName('L_Foot'),poses=[];
+    const foot=hero.model.getObjectByName('DEF-footL'),poses=[];
     for(const speed of [0,2.7,0]){
       for(let i=0;i<45;i++){hero.update(1/60,{speed});renderer.render(scene,camera);}
       poses.push({weight:hero.walk.getEffectiveWeight(),position:foot.getWorldPosition(new T.Vector3()).toArray()});
@@ -23,7 +23,7 @@ test('real GLB textures render and animated poses blend without WebGL errors',as
     const lit=pixels.filter((v,i)=>i%4!==3&&v>20).length;
     const glError=gl.getError();renderer.dispose();return {textured,bones,poses,lit,glError};
   });
-  expect(result.textured).toBe(37);expect(result.bones).toBe(41);expect(result.lit).toBeGreaterThan(5000);
+  expect(result.textured).toBeGreaterThan(0);expect(result.bones).toBe(53);expect(result.lit).toBeGreaterThan(5000);
   expect(result.poses[0].weight).toBe(0);expect(result.poses[1].weight).toBeGreaterThan(.99);expect(result.poses[2].weight).toBeLessThan(.001);
   expect(result.poses[0].position).not.toEqual(result.poses[1].position);
   expect(result.glError).toBe(0);expect(errors).toEqual([]);

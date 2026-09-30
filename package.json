@@ -7,7 +7,8 @@
     "test:browser": "playwright test",
     "build:three": "node tools/build-three.mjs",
     "build:sato": "node tools/build-sato.mjs",
-    "test:avatar": "node --test tests/lab-avatar.test.mjs"
+    "test:avatar": "node --test tests/lab-avatar.test.mjs",
+    "test:controls": "node --test tests/lab-controls.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
