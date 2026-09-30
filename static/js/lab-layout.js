@@ -42,5 +42,9 @@ export function createEnergyLines(hall,groundAt){
  const points=[];routes.forEach((route,routeId)=>{let distance=0;for(let i=1;i<route.length;i++){const a=route[i-1],b=route[i],length=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.ceil(length/.58);for(let j=0;j<n;j++){const f=j/n,x=T.MathUtils.lerp(a[0],b[0],f),z=T.MathUtils.lerp(a[1],b[1],f);points.push({x,z,y:groundAt(x,z)+.052,d:distance+f*length,route:routeId});}distance+=length;}});
  const material=new T.MeshBasicMaterial({color:'#ffffff',toneMapped:false});const dots=new T.InstancedMesh(new T.SphereGeometry(1,8,5),material,points.length),dummy=new T.Object3D(),color=new T.Color();
  points.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.scale.set(.12,.035,.12);dummy.updateMatrix();dots.setMatrixAt(i,dummy.matrix);dots.setColorAt(i,color.set('#1498d0'));});dots.name='blue-energy-routes';dots.userData.dynamic=true;hall.add(dots);let previous=-1;
- return {tick(t){if(t-previous<.05)return;previous=t;points.forEach((p,i)=>{const phase=((p.d-t*3.2+p.route*2)%9+9)%9;dots.setColorAt(i,color.set(phase<1.5?'#c7f7ff':phase<2.5?'#56dfff':'#1684b2'));});dots.instanceColor.needsUpdate=true;}};
+ return {nearbyPulse(position,t){
+   let nearest=null,distance=4;
+   for(const p of points){const phase=((p.d-t*3.2+p.route*2)%9+9)%9;if(phase>=1.5)continue;const d=Math.hypot(p.x-position.x,p.z-position.z);if(d<distance){nearest=p;distance=d;}}
+   return nearest;
+ },tick(t){if(t-previous<.05)return;previous=t;points.forEach((p,i)=>{const phase=((p.d-t*3.2+p.route*2)%9+9)%9;dots.setColorAt(i,color.set(phase<1.5?'#c7f7ff':phase<2.5?'#56dfff':'#1684b2'));});dots.instanceColor.needsUpdate=true;}};
 }

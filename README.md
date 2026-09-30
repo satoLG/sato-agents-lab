@@ -25,9 +25,17 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   memória/skills, cron e infraestrutura. As linhas do piso representam a
   arquitetura conceitual, não tráfego de rede capturado.
 - A cena Three.js ocupa toda a tela; mapa, telemetria e conversa são overlays.
-  Clique/toque no piso para andar ou use WASD/setas. Arraste para girar e use a
-  roda para zoom. **Seguir** acompanha o personagem; **Sala** enquadra o laboratório.
-  Não há controles de movimento na tela. Placas físicas identificam as estações.
+  WASD/setas movem; Shift ou **Correr** alterna para corrida. O mouse mira,
+  clique esquerdo/F dá um soco e Espaço/**Pular** salta. Clique direito no piso
+  escolhe um destino; arraste com o botão direito para girar e use a roda para zoom.
+  No celular há analógicos independentes de movimento e mira, botões de ação e
+  toque no piso para escolher um destino. **Seguir** acompanha o personagem;
+  **Sala** enquadra o laboratório. Placas físicas identificam as estações.
+- O som é opcional. Passos, corrida, salto e soco usam amostras locais do Portal 2;
+  robôs têm passos/servos, terminais têm teclas e feedback, equipamentos têm
+  mecanismos e as linhas iluminadas têm pulsos elétricos. O volume e o estéreo
+  seguem a distância e a câmera, com silêncio fora do alcance. Não há zumbido
+  ambiente contínuo. A origem e os recortes estão em `static/audio/portal2/`.
 - A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
   contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
   dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
