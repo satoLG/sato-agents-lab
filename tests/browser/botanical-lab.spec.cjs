@@ -2,6 +2,8 @@ const {test,expect}=require('@playwright/test');
 
 test('raised garden remains navigable, robot joints keep clearance and opt-in audio decodes',async({page})=>{
  test.setTimeout(150000);
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.setViewportSize({width:960,height:720});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
  await page.addInitScript(()=>{
   window.decodedSamples=0;window.startedLoops=0;
