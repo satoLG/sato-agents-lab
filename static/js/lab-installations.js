@@ -13,7 +13,7 @@ export function createInstallations(world,zones,art){
   const instruments=new T.Group();world.add(instruments);
   const gauges=[];
   for(const [i,label,color] of [[-1,'CPU','#63e5ff'],[1,'RAM','#a6f08a']]){
-    const g=new T.Group();g.position.set(zones.get('vm').group.position.x+i*1.65,.185,zones.get('vm').group.position.z-1.9);instruments.add(g);
+    const g=new T.Group();g.position.set(zones.get('vm').group.position.x+i*1.65,zones.get('vm').group.position.y+.125,zones.get('vm').group.position.z-1.9);instruments.add(g);
     box(g,1.25,3.95,.38,'#26474b',0,1.85,0);box(g,1.04,3.7,.06,'#10272e',0,1.9,.22);
     const segments=[];for(let j=0;j<14;j++)segments.push(box(g,.8,.135,.085,'#2e494c',0,.35+j*.165,.27));
     textPlane(g,label,1.05,.38,0,3.51,.261,{color:'#e0fffb',background:'#10272e',size:157});
@@ -63,8 +63,8 @@ export function createInstallations(world,zones,art){
   });}
   memoryLines=['Aguardando catálogo…'];paintChalk();
 
-  box(world,60.7,7.45,.16,'#182c38',0,3.95,-30.52);
-  const activity=surface(world,60.3,7.1,0,3.95,-30.40,4096,512);
+  const board=box(world,60.7,7.1,.16,'#182c38',0,12,-30.48);board.name='elevated-activity-board';
+  const activity=surface(world,60.3,6.85,0,12,-30.38,4096,512);
   function updateHeatmap(payload){
     activity.paint((ctx,w,h)=>{
       ctx.save();ctx.scale(w/2048,h/360);w=2048;h=360;

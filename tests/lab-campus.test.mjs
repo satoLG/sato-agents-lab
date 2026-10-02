@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {DECK_HEIGHT,onDeck,deckHeight,DECKS,ENERGY_ROUTES,deckEdges} from '../static/js/lab-layout.js';
+import {findPath,clearSegment,moveWithCollision} from '../static/js/lab-navigation.js';
 import {parcelDrop,groundHeight,FLOOR,CAMPUS_SCALE} from '../static/js/lab-campus.js';
 
-test('walkable paving is a single level and the campus is thirty percent smaller',()=>{
+test('reception stays level while the entry ramps onto the decks and the campus is thirty percent smaller',()=>{
   assert.equal(CAMPUS_SCALE,.7);
-  for(const [x,z]of [[0,46],[0,29],[-8,24],[0,17],[19,-14]])assert.equal(groundHeight(x,z),FLOOR);
+  for(const [x,z]of [[0,46],[0,29],[-8,24]])assert.equal(groundHeight(x,z),FLOOR);
   assert.equal(groundHeight(40,46),.1);
+  assert.equal(groundHeight(19,-14),DECK_HEIGHT);
+  assert.ok(groundHeight(0,17)>FLOOR&&groundHeight(0,17)<DECK_HEIGHT);
 });
 test('parcel drop accelerates, bounces without penetrating the tray and settles on it',()=>{
   const a=parcelDrop(0).y,b=parcelDrop(.2).y,c=parcelDrop(.4).y;
@@ -30,7 +34,7 @@ test('forest height field is flat beneath roads and irregular outside the cleari
 test('CORE has two flights with a wider landing and matching walking heights',async()=>{
   const {CORE_STEPS,coreHeight}=await import('../static/js/lab-layout.js');
   assert.equal(CORE_STEPS.length,8);
-  assert.equal(groundHeight(0,-3),FLOOR+1.92);
+  assert.equal(groundHeight(0,-3),DECK_HEIGHT+1.92);
   assert.equal(coreHeight(11,-3),0);
   assert.ok(CORE_STEPS[3].w-CORE_STEPS[4].w>CORE_STEPS[2].w-CORE_STEPS[3].w);
   for(const s of CORE_STEPS)assert.ok(Math.abs(coreHeight(s.w/2-.01,-3)-s.h)<1e-8);
@@ -48,4 +52,21 @@ test('numbered pillars do not overlap worker slots and stand fully on their leve
       assert.ok(Math.hypot(awayX,awayZ)>.7,`${zone.name} blocks ${id}`);
     }
   }
+});
+
+test('every sector is reachable from reception along the protected raised footprint',()=>{
+ const boxes=[];boxes.walkable=(x,z,r)=>z>=18||onDeck(x,z,r+.08);
+ for(const goal of [{x:-21,z:10},{x:23,z:10},{x:0,z:-3},{x:-24,z:-21},{x:-13,z:-21},{x:12,z:-22},{x:24,z:-12}]){
+  const start={x:0,z:24},path=findPath(start,goal,boxes,[]);assert.ok(path.length,JSON.stringify(goal));
+  let prev=start;for(const p of path){assert.ok(clearSegment(prev,p,boxes,[]));prev=p;}
+ }
+ const next=moveWithCollision({x:0,z:-15},9,0,boxes,[]);assert.ok(next.x<3);assert.ok(onDeck(next.x,next.z,.32));
+});
+test('energy uses only straight orthogonal spans on a deck and railings leave entry open',()=>{
+ for(const route of ENERGY_ROUTES)for(let i=1;i<route.length;i++){
+  const a=route[i-1],b=route[i];assert.ok(a[0]===b[0]||a[1]===b[1]);
+  for(let j=0;j<=50;j++)assert.ok(onDeck(a[0]+(b[0]-a[0])*j/50,a[1]+(b[1]-a[1])*j/50));
+ }
+ assert.ok(deckEdges().length>10);assert.ok(!deckEdges().some(e=>e.axis==='z'&&e.fixed===18&&e.start<3&&e.end> -3));
+ assert.equal(deckHeight(6,-14),null);
 });

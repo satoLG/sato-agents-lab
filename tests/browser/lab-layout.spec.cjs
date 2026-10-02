@@ -29,7 +29,7 @@ test('grouped hall reveals gradually, keeps routes accessible and decodes opt-in
   await expect.poll(()=>page.evaluate(()=>layoutCheck.campus.hallLight),{timeout:30000}).toBeGreaterThan(.99);
   // A stationary visitor with reduced motion still completes the reveal.
   await page.evaluate(()=>{layoutCheck.stopWalking();layoutCheck.avatar.position.set(-5,layoutCheck.groundAt(-5,0),0);});
-  expect(await page.evaluate(()=>layoutCheck.avatar.position.y)).toBeCloseTo(1.98);
+  expect(await page.evaluate(()=>layoutCheck.avatar.position.y)).toBeCloseTo(3.78);
   const deliveries=await page.evaluate(()=>layoutCheck.parcels.couriers.map(c=>{
     const t=c.duration+3.5-c.phase;layoutCheck.parcels.tick(t+10*(c.duration*2+4));
     return {id:c.id,deposited:c.deposited.visible,carried:c.parcel.visible};
@@ -37,7 +37,7 @@ test('grouped hall reveals gradually, keeps routes accessible and decodes opt-in
   expect(deliveries.every(c=>c.deposited&&!c.carried)).toBe(true);
   await page.locator('#sound-toggle').click();
   await expect(page.locator('#sound-toggle')).toHaveAttribute('aria-pressed','true',{timeout:30000});
-  expect(await page.evaluate(()=>window.decodedSamples)).toBe(14);
+  expect(await page.evaluate(async()=>{const {AUDIO_FILES}=await import('/static/js/lab-audio.js');return window.decodedSamples===AUDIO_FILES.length;})).toBe(true);
   await page.locator('#sound-toggle').click();
   await expect(page.locator('#sound-toggle')).toHaveAttribute('aria-pressed','false');
   await page.evaluate(()=>{layoutCheck.stopWalking();layoutCheck.avatar.position.set(0,.06,24);});

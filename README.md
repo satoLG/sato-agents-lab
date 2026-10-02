@@ -34,8 +34,8 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
 - O som é opcional. Passos, corrida, salto e soco usam amostras locais do Portal 2;
   robôs têm passos/servos, terminais têm teclas e feedback, equipamentos têm
   mecanismos e as linhas iluminadas têm pulsos elétricos. O volume e o estéreo
-  seguem a distância e a câmera, com silêncio fora do alcance. Não há zumbido
-  ambiente contínuo. A origem e os recortes estão em `static/audio/portal2/`.
+  seguem a distância e a câmera, com silêncio fora do alcance. Motores, ventiladores e água têm loops locais atenuados por distância;
+  até quatro fontes próximas tocam juntas. A origem e os recortes estão em `static/audio/portal2/`.
 - A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
   contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
   dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
@@ -53,7 +53,8 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   regeneração em `static/models/README.md`. Robôs mantêm poses procedurais
   de respiração, apoio, piscar e gestos; operam seus terminais
   e se voltam para quem entra na estação; a pupila central é azul emissiva.
-  Esses gestos são ambientação, não evidência de execução. O indicador e os dados
+  As pernas seguem a distância percorrida, as juntas têm limites externos à carcaça,
+  e as pálpebras mecânicas fecham sobre a óptica. Esses gestos são ambientação, não evidência de execução. O indicador e os dados
   continuam distinguindo atividade real, dados ausentes e leituras antigas.
   A cena limita a 30 fps, agrupa geometria estática, reaproveita materiais e
   atualiza as sombras reais a cada frame renderizado. Há pausa de animações no mapa e respeito
@@ -166,13 +167,31 @@ desviam de equipamentos e posições de trabalhadores, param para coleta/depósi
 voltam sem carga. Isso continua sendo uma ilustração da arquitetura, não telemetria de tarefas.
 
 O áudio é ativado pelo visitante: passos, portas, chegada ao salão, painéis, conversa,
-coleta/queda de caixas e ambiente usam 14 amostras locais da biblioteca indicada.
+coleta/queda de caixas e ambiente usam amostras locais da biblioteca indicada.
 Fontes e créditos estão em `static/audio/portal2/README.md`. O som das caixas diminui
 com a distância; ocultar a página pausa o áudio.
 
 Validação: `npm run test:navigation` verifica colisões, degraus e queda de pacotes.
 `tests/browser/lab-layout.spec.cjs` verifica o atendimento único, rotas, entrega,
 transição reversível com movimento reduzido e decodificação das amostras de áudio.
+
+### Plataformas e jardim interno
+
+Os setores internos ficam em plataformas metálicas a 1,86 m, ligados por passarelas
+retas e corrimãos. Uma rampa liga a recepção ao nível elevado; o CORE preserva seus
+degraus acima desse nível. Geometria e navegação compartilham a mesma planta: o
+personagem e os entregadores permanecem nas plataformas, e as rotas azuis seguem
+somente segmentos ortogonais. Abaixo há vegetação instanciada, rochas e um riacho
+com ondulação de superfície. As paredes internas têm 16 m; o calendário de atividade
+fica na metade superior, com centro a 12 m, acima dos equipamentos.
+
+Carcaças e equipamentos mantêm mapas de acabamento, relevos e reflexos metálicos
+após o agrupamento de geometria. Robôs têm pistões, juntas, dissipadores, trilhas
+luminosas e indicadores. Varredura do olhar, inspeção ociosa, operação de terminais,
+caminhada e respostas usam poses distintas. Os sons de personalidade e piscada,
+ventiladores, motores e água vêm da biblioteca Portal 2 indicada pelo proprietário;
+pequenos gestos de áudio procedurais complementam os samples. Os créditos e a
+revisão exata da fonte estão em `static/audio/portal2/botanical-sources.json`.
 
 ### Atualizar a VM
 
