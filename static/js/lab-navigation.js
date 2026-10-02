@@ -4,6 +4,7 @@ export const PLAYER_RADIUS = .32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export function canStand(x, z, boxes, circles, radius = PLAYER_RADIUS) {
   if (x < BOUNDS.minX + radius || x > BOUNDS.maxX - radius || z < BOUNDS.minZ + radius || z > BOUNDS.maxZ - radius) return false;
+  if (boxes.walkable && !boxes.walkable(x,z,radius)) return false;
   for (const box of boxes) {
     const dx = x - clamp(x, box.x - box.w / 2, box.x + box.w / 2);
     const dz = z - clamp(z, box.z - box.d / 2, box.z + box.d / 2);

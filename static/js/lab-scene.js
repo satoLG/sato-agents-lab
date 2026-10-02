@@ -1,6 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 import {createCampus,createParcelFlow,ZONES,slotsFor,CAMPUS_SCALE,FLOOR,groundHeight} from './lab-campus.js';
 import {createChamberMaterials,createHallReveal} from './lab-chamber-materials.js';
+import {createLabBiome} from './lab-biome.js';
 import {createAreaFloors,createEnergyLines} from './lab-layout.js';
 import {loadSectorIcons,createSectorSign} from './lab-signage.js';
 import {loadEnvironment} from './lab-environment.js';
@@ -104,13 +105,15 @@ export async function createLabScene(container, callbacks) {
   const sunlight = new T.DirectionalLight('#fff0d8', 2.2); sunlight.position.set(-25, 65, 30); sunlight.castShadow = true;
   sunlight.shadow.mapSize.set(1024, 1024); Object.assign(sunlight.shadow.camera, {left: -60, right: 60, top: 60, bottom: -60, far: 140});
   sunlight.shadow.normalBias = .045; sunlight.shadow.bias = -.0001; world.add(sunlight);
-  const fill = new T.DirectionalLight('#a3e9f0', 1.4); fill.position.set(13, 9, -10); world.add(fill);
+  const fill = new T.DirectionalLight('#b2edff', 2.0); fill.position.set(13, 9, -10); world.add(fill);
+  const rim=new T.DirectionalLight('#f9d9a7',1.1);rim.position.set(-20,12,-28);world.add(rim);
 
   const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
   const campus=createCampus(world,art,obstacles,environment,chamber,hall,sectorIcons);
   furnishing=true;
   callbacks.onLoadProgress?.(79,'PREPARANDO CENA');
-  createAreaFloors(hall,art);
+  createAreaFloors(hall,art,obstacles);
+  const biome=createLabBiome(hall,art,environment);
   const energy=createEnergyLines(hall,groundHeight);
   function makeScreen(parent, x, y, z, width = 1.44, height = .76) {
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 384;
@@ -142,6 +145,15 @@ export async function createLabScene(container, callbacks) {
     const screen = makeScreen(group,0,1.6,-.57);
     box(group, 1.08, .07, .55, '#b7cbbb', 0, 1.07, .27);
     box(group, .88, .04, .3, '#708c7b', 0, 1.15, .34);
+    for(let row=0;row<3;row++)for(let col=0;col<8;col++)box(group,.073,.018,.054,mat('#263943',.65,.28),-.35+col*.1,1.178,.24+row*.075);
+    // Service panel, readable circuitry and individual status diodes.
+    box(group,.62,.29,.033,mat('#163934',.25,.6),.45,.5,-.117);
+    for(let i=0;i<4;i++){
+      box(group,.24,.008,.014,glow('#398a80'),.44,.4+i*.056,-.09);
+      box(group,.045,.024,.034,mat('#b8c3cc',.8,.22),.25+i*.11,.52,-.075);
+    }
+    for(let i=0;i<3;i++)sphere(group,.022,glow(i===2?'#edb85c':'#72e8e7'),-.52+i*.16,.5,-.11);
+
     for (let k = 0; k < 3; k++) sphere(group, .04, glow(k === 0 ? color : '#b1bc9b'), .79 + k * .15, 1.15, .02);
     return screen;
   }
@@ -218,7 +230,7 @@ export async function createLabScene(container, callbacks) {
       box(g,1.2,.14,.62,'#bccdc4',0,.86,0); box(g,.85,.84,.39,'#59756b',0,.42,-.07);
       box(g,.83,.5,.08,'#294d4b',0,1.22,-.2);
       const display = makeScreen(g,0,1.22,-.145,.75,.4); display.update(['BANCADA AUXILIAR','Aguardando agente','']);
-      box(g,.56,.04,.21,'#506e64',-.14,.96,.05);
+      box(g,.56,.04,.21,'#506e64',-.14,.96,.24);
       const tool = new T.Group(); tool.position.set(.42,1.02,.09); g.add(tool);
       cylinder(tool,.08,.15,'#d7e3d6'); ring(tool,.08,.018,glow('#54b9f1'),0,.05,.07);
       tool.traverse(o => o.userData.dynamic=true); machineParts.push({object:tool,sector:id,slot:i,position:tool.getWorldPosition(new T.Vector3())});
@@ -327,7 +339,7 @@ export async function createLabScene(container, callbacks) {
     nucleus.visible = false;renderer.shadowMap.needsUpdate=true;
     const robot=robots.get(id).rig;
     savedCamera.aim=aim.clone();targetAzimuth=azimuth;targetElevation=elevation;targetRadius=radius;
-    dialogue.setOpen(true);audio.cue('chat');
+    dialogue.setOpen(true);audio.cue('robotVoice',robot.root.position,`voice:${id}`);
     hero.greeting=animationTime+1.5;robot.greeting=animationTime+1.8;showBubble(hero,'✦');showBubble(robot,'…');emoteUntil=performance.now()+2500;
     callbacks.onCamera('chat');dirty=true;return true;
   }
@@ -337,7 +349,7 @@ export async function createLabScene(container, callbacks) {
     if(savedCamera){cameraMode=savedCamera.mode;targetAzimuth=savedCamera.azimuth;targetElevation=savedCamera.elevation;targetRadius=savedCamera.radius;savedCamera=null;}
     callbacks.onCamera(cameraMode);dirty=true;
   }
-  function emote(kind){audio.cue(kind==='error'?'error':'answer');if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
+  function emote(kind){if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;audio.cue(kind==='error'?'error':kind==='question'?'chat':'robotVoice',rig.root.position,`voice:${chatId}`);rig.speakingUntil=kind==='question'?0:animationTime+2.4;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
   function setCameraMode(mode){if(!started||chatId||study)return;audio.cue('click');arrivalView=false;cameraMode=mode;const exterior=outside();targetRadius=mode==='room'?(exterior?cornerRadius():Math.max(70,60/camera.aspect)*CAMPUS_SCALE):(exterior?30:27)*CAMPUS_SCALE;targetElevation=mode==='room'?(exterior?.26:.77):.64;targetAzimuth=mode==='room'&&exterior?openingAzimuth():.55;callbacks.onCamera(mode);dirty=true;}
   function setStale(value){stale=value;installations.setStale(value);dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}hallReveal.register();}
   const playable=()=>started&&!chatId&&!study&&!contextLost;
@@ -440,7 +452,7 @@ export async function createLabScene(container, callbacks) {
       targetAzimuth=openingAzimuth();targetElevation=.26;
     }
     else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=1.1;}
-    else {target.set(0,1,0);targetRadius=Math.max(70,60/camera.aspect)*CAMPUS_SCALE;targetElevation=.77;}
+    else {target.set(0,4,-5);targetRadius=Math.max(78,68/camera.aspect)*CAMPUS_SCALE;targetElevation=.77;}
     target.multiplyScalar(CAMPUS_SCALE);
     const changing=aim.distanceToSquared(target)>.0001||Math.abs(radius-targetRadius)>.002||Math.abs(azimuth-targetAzimuth)>.002||Math.abs(elevation-targetElevation)>.002;
     aim.lerp(target,1-Math.exp(-elapsed*5));radius=T.MathUtils.lerp(radius,targetRadius,1-Math.exp(-elapsed*5));azimuth=dampAngle(azimuth,targetAzimuth,elapsed,6);elevation=T.MathUtils.lerp(elevation,targetElevation,1-Math.exp(-elapsed*5));
@@ -464,17 +476,18 @@ export async function createLabScene(container, callbacks) {
       const beforeTurn=rig.root.rotation.y;
       rig.root.rotation.y=dampAngle(beforeTurn,attention?look:Math.PI,dt,attention?4:2);
       // Ambient inspection/tapping remains subtle while real work increases its pace.
-      poseRig(rig,animationTime,dt,{speed:Math.min(.3,Math.abs(rig.root.rotation.y-beforeTurn)/dt*.2),attention,work:stale?.7:item.worker.status==='running'||item.worker.kind==='catalog'&&installations.memoryActive()?1:.8,talk:chatId===item.worker.id,lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
+      poseRig(rig,animationTime,dt,{speed:0,attention,work:stale?.7:item.worker.status==='running'||item.worker.kind==='catalog'&&installations.memoryActive()?1:.8,talk:chatId===item.worker.id&&animationTime<(rig.speakingUntil||0),lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
     }
     if(!paused&&started){
       for(const [id,item] of robots){
         if(chatId===id||dist(avatar.position,item.rig.root.position)>6)continue;
         const active=item.worker.status==='running'||item.worker.kind==='catalog';
         if(active&&Math.sin(animationTime*2.2+item.rig.phase)>.6)audio.cue('typing',item.rig.root.position,`typing:${id}`);
+        if(item.rig.blinked)audio.cue('robotBlink',item.rig.root.position,`blink:${id}`);
         if(active&&Math.cos(animationTime*.4+item.rig.phase)>.85)audio.cue('computer',item.rig.root.position,`computer:${id}`);
       }
       for(const [id,zone] of zones){
-        if(!inside(id)||zone.status==='unknown')continue;
+        if(dist(avatar.position,zone.group.position)>10)continue;
         const p=zone.group.position;
         if(Math.sin(animationTime*.8+phaseFor(id))>.7)audio.cue('equipment',p,`equipment:${id}`);
       }
@@ -487,12 +500,14 @@ export async function createLabScene(container, callbacks) {
     container.dataset.environment=interior>.5?'interior':'exterior';
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
     // Shadow maps update on every rendered frame, including idle and turns.
-    energy.tick(animationTime);if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
-    for(const {id,rig,speed} of parcels.couriers){
-      poseRig(rig,animationTime,dt,{speed,work:0,reduced:paused});
-      if(started&&!paused&&rig.root.visible&&speed>.1){audio.cue('robotStep',rig.root.position,`step:${id}`);audio.cue('robotServo',rig.root.position,`servo:${id}`);}
-    }
+    energy.tick(animationTime);biome.tick(animationTime);
+    audio.ambient([...Array.from(zones,([id,zone])=>({id:`machine:${id}`,kind:['vm','mcp','rag'].includes(id)?'machineFan':'machineMotor',position:zone.group.position,volume:.045,range:11})),{id:'stream',kind:'stream',position:biome.streamAt(avatar.position),volume:.075,range:7}],started&&!paused&&hallLight>.5);
+    if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
     for(const packet of parcels.tick(animationTime,enteredHall))hallReveal.register(packet);
+    for(const {id,rig,speed,parcel} of parcels.couriers){
+      poseRig(rig,animationTime,dt,{speed,work:0,carrying:parcel.visible,reduced:paused});
+      if(started&&!paused&&rig.root.visible&&speed>.1){if(rig.steps)audio.cue('robotStep',rig.root.position,`step:${id}`);audio.cue('robotServo',rig.root.position,`servo:${id}`);}
+    }
     renderer.render(world,camera);if(firstFrame){firstFrame=false;callbacks.onReady?.();}dialogue.render(camera,avatar,robots.get(chatId)?.rig.root);
   }
   function setRagOpen(value){

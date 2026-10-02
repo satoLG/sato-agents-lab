@@ -1,0 +1,58 @@
+[
+  {
+    "name": "robotVoice1",
+    "source": "sound/npc/sphere/sphere_blips_sm_03.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 0.134785,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "robotVoice2",
+    "source": "sound/npc/sphere/sphere_blips_sm_11.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 0.070658,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "robotVoice3",
+    "source": "sound/npc/sphere/sphere_blips_md_07.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 0.401814,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "robotBlink",
+    "source": "sound/npc/sphere/personality_sphere_blink_02.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 0.14898,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "machineFan",
+    "source": "sound/ambient/machines/fan4.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 0.769297,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "machineMotor",
+    "source": "sound/ambient/machines/portalgun_rotate_loop1.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 1.330612,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  },
+  {
+    "name": "stream",
+    "source": "sound/ambient/nature/water/amb_light_waterlap_lp_01.wav",
+    "source_commit": "36edc8b85c4b5718289f56d8c3652a6dc0e58a1b",
+    "excerpt_start": 0,
+    "duration": 5.98517,
+    "normalization": "mono PCM16 22050 Hz; loudnorm I=-26 TP=-5 LRA=7"
+  }
+]

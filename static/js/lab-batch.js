@@ -29,25 +29,15 @@ export function batchStatic(scene) {
   }
 }
 
-const shellMaterial = new T.MeshStandardMaterial({vertexColors:true,roughness:.7,metalness:.18});
-// Merge only rigid pieces that share a joint. The bone hierarchy remains intact.
+// Batch by original material at each rigid joint; retain finish maps and metalness.
 export function batchRobot(rig) {
-  const parents=[];rig.root.traverse(o=>{if(o.children.length)parents.push(o);});
-  const owned=[];
-  for(const parent of parents){
-    const pieces=parent.children.filter(o=>o.isMesh&&!o.userData.dynamic&&o.material.isMeshStandardMaterial&&o.material.emissive.getHex()===0);
-    if(pieces.length<2)continue;
-    const temporary=new T.Group();
-    for(const piece of pieces){
-      const geometry=piece.geometry.index?piece.geometry.toNonIndexed():piece.geometry.clone();
-      const colors=new Float32Array(geometry.getAttribute('position').count*3),color=piece.material.color;
-      for(let i=0;i<colors.length;i+=3){colors[i]=color.r;colors[i+1]=color.g;colors[i+2]=color.b;}
-      geometry.setAttribute('color',new T.BufferAttribute(colors,3));
-      piece.removeFromParent();piece.geometry=geometry;piece.material=shellMaterial;temporary.add(piece);
-    }
-    batchStatic(temporary);
-    for(const child of [...temporary.children]){parent.add(child);owned.push(child.geometry);}
-    for(const piece of pieces)piece.geometry.dispose();
-  }
-  rig.ownedGeometry=owned;
+ const parents=[];rig.root.traverse(o=>{if(o.children.length)parents.push(o);});
+ rig.ownedGeometry=[];
+ for(const parent of parents){
+  const pieces=parent.children.filter(o=>o.isMesh&&!o.userData.dynamic&&!o.material.transparent);
+  if(pieces.length<2)continue;
+  const temporary=new T.Group();pieces.forEach(piece=>temporary.add(piece));
+  batchStatic(temporary);
+  for(const child of [...temporary.children]){parent.add(child);if(!pieces.includes(child))rig.ownedGeometry.push(child.geometry);}
+ }
 }

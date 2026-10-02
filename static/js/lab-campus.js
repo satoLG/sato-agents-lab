@@ -2,14 +2,14 @@ import * as T from '../vendor/three.module.min.js';
 import {createExteriorFade} from './lab-chamber-materials.js';
 import {batchStatic} from './lab-batch.js';
 import {createLandscape,terrainHeight,pavementHeight} from './lab-landscape.js';
-import {ZONES,FLOOR,slotsFor,coreHeight} from './lab-layout.js';
+import {ZONES,FLOOR,slotsFor,deckHeight,WALL_HEIGHT} from './lab-layout.js';
 import {createSectorMap} from './lab-signage.js';
 export {ZONES,FLOOR,slotsFor} from './lab-layout.js';
 import {findPath} from './lab-navigation.js';
 
 export const CAMPUS_SCALE = .7;
 export function groundHeight(x,z) {
-  return coreHeight(x,z)>0?FLOOR+coreHeight(x,z):(pavementHeight(x,z) ?? terrainHeight(x,z));
+  return deckHeight(x,z) ?? (pavementHeight(x,z) ?? terrainHeight(x,z));
 }
 
 export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
@@ -23,14 +23,14 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   batchStatic(exterior);exterior.traverse(o=>o.userData.dynamic=true);
   const skyIntensity=world.backgroundIntensity,fogColor=world.fog.color.clone(),nightFog=new T.Color('#080e16');
   let darkness=0;
-  const floor=surface(63.2,48.6,FLOOR,chamber.floor,0,-6.3,hall);floor.name='chamber-tile-floor';
+  // Nature occupies the lower level; walkable decks are built by lab-layout.
   surface(63.2,10.7,FLOOR,chamber.floor.clone(),0,23.35);
   const walls=[],upper=new T.Group();world.add(upper);
   const facade=mat('#a9afac',.12,.75),frame=mat('#455451',.45,.42);
   const glass=new T.MeshStandardMaterial({color:'#647f82',metalness:.45,roughness:.18,envMapIntensity:1.1});
   function wall(name,x,z,w,d){
     const group=new T.Group();group.name=name;world.add(group);
-    box(group,w,8,d,facade,x,4,z);box(group,w,.18,d+.06,'#68877e',x,.16,z);
+    box(group,w,WALL_HEIGHT,d,facade,x,WALL_HEIGHT/2,z);box(group,w,.18,d+.06,'#68877e',x,.16,z);
     // Give each wall its own materials so camera cutaways don't affect other walls.
     const materials=new Set();
     const seal=()=>{
@@ -41,12 +41,12 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
     return {group,seal};
   }
   function lining(group,w,x,z,angle=0){
-    const liningMaterial=chamber.wall(w,7.75);if(z<18)liningMaterial.userData.hallLighting=true;
-    const panel=mesh(group,new T.PlaneGeometry(w,7.75),liningMaterial,x,4,z);panel.rotation.y=angle;
+    const liningMaterial=chamber.wall(w,WALL_HEIGHT-.25);if(z<18)liningMaterial.userData.hallLighting=true;
+    const panel=mesh(group,new T.PlaneGeometry(w,WALL_HEIGHT-.25),liningMaterial,x,WALL_HEIGHT/2,z);panel.rotation.y=angle;
     const trim=new T.Group();trim.position.set(x,0,z);trim.rotation.y=angle;group.add(trim);
-    box(trim,w-.08,.18,.08,'#39464d',0,.18,.08);
-    box(trim,w,.14,.15,'#293a42',0,7.65,0);
-    const light=glow('#96e7f5').clone();if(z<18)light.userData.hallLighting=true;box(trim,w-.3,.055,.18,light,0,7.64,.06);
+    box(trim,w-.08,.18,.08,'#39464d',0,.24,.08);
+    box(trim,w,.14,.15,'#293a42',0,WALL_HEIGHT-.35,0);
+    const light=glow('#96e7f5').clone();if(z<18)light.userData.hallLighting=true;box(trim,w-.3,.055,.18,light,0,WALL_HEIGHT-.36,.06);
   }
   const front=wall('front-left',-18.25,29,27.5,.45),frontRight=wall('front-right',18.25,29,27.5,.45);
   const left=wall('west',-32,-1,.45,60),right=wall('east',32,-1,.45,60),back=wall('north',0,-31,64,.45);
@@ -63,7 +63,7 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
       }
     }
   }
-  panels(front.group,'front',0,8);panels(left.group,'left',0,8);panels(right.group,'right',0,8);panels(back.group,'back',0,8);
+  panels(front.group,'front',0,16);panels(left.group,'left',0,16);panels(right.group,'right',0,16);panels(back.group,'back',0,16);
   // Ground-level panel geometry belongs to the matching wall for camera cutaways.
   for(const child of [...front.group.children])if(child.position.x>4.5)frontRight.group.attach(child);
   function ribbon(parent,x,y,z,width,height=2.6,angle=0){
@@ -79,20 +79,20 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   lining(front.group,27.3,-18.25,28.74,Math.PI);lining(frontRight.group,27.3,18.25,28.74,Math.PI);
   lining(left.group,59.1,-31.70,-1,Math.PI/2);lining(right.group,59.1,31.70,-1,-Math.PI/2);lining(back.group,63.2,0,-30.70);
   [front,frontRight,left,right,back].forEach(w=>w.seal());
-  box(upper,64,12,60,facade,0,14,-1);
-  panels(upper,'front',8,20);panels(upper,'left',8,20);panels(upper,'right',8,20);panels(upper,'back',8,20);
-  ribbon(upper,7.5,12,29.46,46,2.8);
-  ribbon(upper,-32.46,12,-5,48,2.8,-Math.PI/2);ribbon(upper,32.46,12,-5,48,2.8,Math.PI/2);
-  ribbon(upper,0,12,-31.46,54,2.8,Math.PI);
+  box(upper,64,12,60,facade,0,22,-1);
+  panels(upper,'front',16,28);panels(upper,'left',16,28);panels(upper,'right',16,28);panels(upper,'back',16,28);
+  ribbon(upper,7.5,20,29.46,46,2.8);
+  ribbon(upper,-32.46,20,-5,48,2.8,-Math.PI/2);ribbon(upper,32.46,20,-5,48,2.8,Math.PI/2);
+  ribbon(upper,0,20,-31.46,54,2.8,Math.PI);
   for(const x of [-10,0,10,20,28]){
-    box(upper,1.25,.62,.12,'#53615c',x,16.7,29.45);
-    for(let j=0;j<4;j++)box(upper,1.16,.045,.04,'#c1c9c0',x,16.5+j*.13,29.53);
+    box(upper,1.25,.62,.12,'#53615c',x,24.7,29.45);
+    for(let j=0;j<4;j++)box(upper,1.16,.045,.04,'#c1c9c0',x,24.5+j*.13,29.53);
   }
-  box(upper,64.5,.23,60.5,'#89948c',0,20,-1);
-  box(upper,63.8,.12,59.8,'#b3bcb3',0,19.86,-1);
+  box(upper,64.5,.23,60.5,'#89948c',0,28,-1);
+  box(upper,63.8,.12,59.8,'#b3bcb3',0,27.86,-1);
   // Raised corner sign: only the brand sits inside the capsule; LAB is below.
-  box(upper,16,12.05,.25,'#4c525d',-24,14,29.55);
-  const plaque=new T.Group();plaque.name='sato-agents-corner-sign';plaque.position.set(-24,16,29.73);upper.add(plaque);
+  box(upper,16,12.05,.25,'#4c525d',-24,22,29.55);
+  const plaque=new T.Group();plaque.name='sato-agents-corner-sign';plaque.position.set(-24,24,29.73);upper.add(plaque);
   function capsule(w,h){const r=h/2,shape=new T.Shape();shape.moveTo(-w/2+r,-r);shape.lineTo(w/2-r,-r);shape.absarc(w/2-r,0,r,-Math.PI/2,Math.PI/2,false);shape.lineTo(-w/2+r,r);shape.absarc(-w/2+r,0,r,Math.PI/2,Math.PI*1.5,false);return shape;}
   const outline=capsule(13.1,2.7);outline.holes.push(new T.Path(capsule(12.78,2.38).getPoints(32)));
   mesh(plaque,new T.ExtrudeGeometry(outline,{depth:.14,bevelEnabled:true,bevelThickness:.02,bevelSize:.02,bevelSegments:1,steps:1}),mat('#f6f5ed',.2,.35),0,0,.02);
@@ -124,11 +124,11 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   const partitionMaterial=chamber.equipment('#89949b',.2,.78).clone();
   const segments=[[-30.45,3.1],[-15.3,23.6],[17.75,28.5]];
   for(const [x,w]of segments){
-    box(partition,w,8.7,.44,partitionMaterial,x,4.4,18);
-    for(const side of [-1,1]){const face=mesh(partition,new T.PlaneGeometry(w-.09,8.5),chamber.wall(w,8.5),x,4.4,18+side*.26);face.rotation.y=side<0?Math.PI:0;}
+    box(partition,w,16.7,.44,partitionMaterial,x,8.4,18);
+    for(const side of [-1,1]){const face=mesh(partition,new T.PlaneGeometry(w-.09,16.5),chamber.wall(w,16.5),x,8.4,18+side*.26);face.rotation.y=side<0?Math.PI:0;}
   }
-  box(partition,7,4.6,.44,partitionMaterial,0,6.4,18);
-  box(partition,1.8,.9,.44,partitionMaterial,-28, .5,18);box(partition,1.8,6.5,.44,partitionMaterial,-28,5.5,18);
+  box(partition,7,12.6,.44,partitionMaterial,0,10.4,18);
+  box(partition,1.8,.9,.44,partitionMaterial,-28, .5,18);box(partition,1.8,13.5,.44,partitionMaterial,-28,10,18);
   for(const [x,w]of [[-17.75,28.5],[17.75,28.5]])obstacles.push({x,z:18,w,d:.6});
   textPlane(partition,'LAB / 01—07',5.8,.65,0,4.8,18.32,{color:'#b5eaff',background:'#102732',size:110});
   for(const x of [-3.5,3.5]){box(partition,.18,4,2.4,partitionMaterial,x,2,16.9);obstacles.push({x,z:16.9,w:.18,d:2.4});}
@@ -190,28 +190,34 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
   const speed=1.6,travel=30.3/speed;
   // Split the belt at the partition: each segment follows its room's lighting.
   const belt=[[-17,22.8,-28,22.8,world],[-28,22.8,-28,18,world],[-28,18,-28,3.5,hall]];
+  const beltY=z=>1.13+(1-T.MathUtils.smoothstep(z,16,20))*1.8;
   for(const [ax,az,bx,bz,parent]of belt){
     const horizontal=az===bz,len=Math.hypot(bx-ax,bz-az),x=(ax+bx)/2,z=(az+bz)/2;
-    box(parent,horizontal?len:1.45,.2,horizontal?1.45:len,'#25343e',x,1.13,z);
-    for(const side of [-1,1])box(parent,horizontal?len:.07,.26,horizontal?.07:len,'#889ba6',x+(horizontal?0:side*.73),1.25,z+(horizontal?side*.73:0));
-    for(let d=.12;d<len;d+=.43){const f=d/len,xx=ax+(bx-ax)*f,zz=az+(bz-az)*f;rod(parent,[xx-(horizontal?0:.65),1.25,zz-(horizontal?.65:0)],[xx+(horizontal?0:.65),1.25,zz+(horizontal?.65:0)],.055,mat('#8899a5'));}
-    for(let d=1;d<len;d+=3.5){const f=d/len;box(parent,.14,1.06,.14,'#384957',ax+(bx-ax)*f,.59,az+(bz-az)*f);}
+    const sections=Math.max(1,Math.ceil(len/.8));
+    for(let i=0;i<sections;i++){
+      const a=i/sections,b=(i+1)/sections,za=az+(bz-az)*a,zb=az+(bz-az)*b,xa=ax+(bx-ax)*a,xb=ax+(bx-ax)*b;
+      const segmentLength=len/sections,ya=beltY(za),yb=beltY(zb),tilt=horizontal?0:-Math.atan((yb-ya)/(zb-za));
+      const track=box(parent,horizontal?segmentLength:1.45,.2,horizontal?1.45:segmentLength/Math.cos(tilt),'#25343e',(xa+xb)/2,(ya+yb)/2,(za+zb)/2);track.rotation.x=tilt;
+      for(const side of [-1,1])rod(parent,[xa+(horizontal?0:side*.73),ya+.12,za+(horizontal?side*.73:0)],[xb+(horizontal?0:side*.73),yb+.12,zb+(horizontal?side*.73:0)],.07,mat('#889ba6'));
+    }
+    for(let d=.12;d<len;d+=.43){const f=d/len,xx=ax+(bx-ax)*f,zz=az+(bz-az)*f;rod(parent,[xx-(horizontal?0:.65),beltY(zz)+.12,zz-(horizontal?.65:0)],[xx+(horizontal?0:.65),beltY(zz)+.12,zz+(horizontal?.65:0)],.055,mat('#8899a5'));}
+    for(let d=1;d<len;d+=3.5){const f=d/len;box(parent,.14,beltY(az+(bz-az)*f)-.1,.14,'#384957',ax+(bx-ax)*f,beltY(az+(bz-az)*f)/2,az+(bz-az)*f);}
     obstacles.push({x,z,w:horizontal?len+1.5:1.65,d:horizontal?1.65:len+1.5});
   }
-  const bin={x:-28,z:1.2};box(hall,3.5,.15,3.6,'#5f727e',bin.x,FLOOR+.075,bin.z);
-  for(const side of [-1,1])box(hall,.1,.55,3.6,'#253846',bin.x+side*1.7,FLOOR+.4,bin.z);
-  box(hall,3.5,.55,.1,'#253846',bin.x,FLOOR+.4,bin.z-1.8);obstacles.push({...bin,w:3.7,d:3.8});
-  for(let i=0;i<9;i++)parcel(hall,bin.x+(i%3-1)*.78,FLOOR+.15+.24+(i>=6?.48:0),bin.z-1+(Math.floor(i/3)%2)*.8);
-  textPlane(hall,'01 / TRIAGEM',3.15,.5,bin.x,.73,bin.z+1.87,{color:'#99dcff',background:'#182d38',size:120});
+  const bin={x:-28,z:1.2},binY=groundHeight(bin.x,bin.z);box(hall,3.5,.15,3.6,'#5f727e',bin.x,binY+.075,bin.z);
+  for(const side of [-1,1])box(hall,.1,.55,3.6,'#253846',bin.x+side*1.7,binY+.4,bin.z);
+  box(hall,3.5,.55,.1,'#253846',bin.x,binY+.4,bin.z-1.8);obstacles.push({...bin,w:3.7,d:3.8});
+  for(let i=0;i<9;i++)parcel(hall,bin.x+(i%3-1)*.78,binY+.15+.24+(i>=6?.48:0),bin.z-1+(Math.floor(i/3)%2)*.8);
+  textPlane(hall,'01 / TRIAGEM',3.15,.5,bin.x,binY+.67,bin.z+1.87,{color:'#99dcff',background:'#182d38',size:120});
   for(let i=0;i<7;i++)packets.push({p:parcel(world),phase:i*3.1,previous:-1});
   const workers=Object.entries(zones).flatMap(([id,zone])=>slotsFor(id).map(([x,z])=>({x:zone.x+x,z:zone.z+z,r:.7})));
   const docks={hermes:[-5,0],models:[-28,-16],mcp:[-9,-16],memory:[8,-16],rag:[30,-12],cron:[27,14],vm:[-16,13]};
   for(const [index,[id,[x,z]]]of Object.entries(docks).entries()){
     const end={x,z},dockY=groundHeight(x,z-.85);box(hall,1.2,.1,1.2,'#2d4658',x,dockY+.05,z-.85);
     const deposited=parcel(hall,x,dockY+.34,z-.85);deposited.visible=false;deposits.push(deposited);
-    const start={x:-25.2,z:2},route=findPath(start,end,obstacles,workers),curve=new T.CurvePath();let previous=new T.Vector3(start.x,FLOOR-.03,start.z);
+    const start={x:-25.2,z:2},route=findPath(start,end,obstacles,workers),curve=new T.CurvePath();let previous=new T.Vector3(start.x,groundHeight(start.x,start.z)-.03,start.z);
     for(const p of route){const next=new T.Vector3(p.x,groundHeight(p.x,p.z)-.03,p.z);curve.add(new T.LineCurve3(previous,next));previous=next;}
-    const rig=factory.robot();rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);const carried=parcel(rig.root,0,.82,.72),duration=Math.max(8,curve.getLength()/2.2);
+    const rig=factory.robot();rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);const carried=parcel(rig.root,0,.82,.72);rod(carried,[-.88,.05,-.1],[.88,.05,-.1],.025,mat('#a1b4bc',.8,.28));const duration=Math.max(8,curve.getLength()/2.2);
     couriers.push({id,rig,parcel:carried,deposited,curve,duration,phase:index*4,speed:0,previousCarry:false});
   }
   hall.traverse(o=>o.userData.dynamic=true);
@@ -219,12 +225,12 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
     const revealTargets=[];
     for(const item of packets){
       const {p,phase}=item,age=(t+phase)%(travel+3);p.visible=age<travel+2.4;
-      if(age<travel){const d=age*speed;if(d<11)p.position.set(-17-d,1.49,22.8);else p.position.set(-28,1.49,22.8-(d-11));p.rotation.set(0,0,0);}
-      else {const fall=parcelDrop(age-travel);p.position.set(-28,fall.y,3.5-Math.min(1,age-travel)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);if(item.previous<travel+.5&&age>=travel+.5)onCue('drop',p.position);}
+      if(age<travel){const d=age*speed;if(d<11)p.position.set(-17-d,1.49,22.8);else {const z=22.8-(d-11);p.position.set(-28,1.49+(1-T.MathUtils.smoothstep(z,16,20))*1.8,z);}p.rotation.set(0,0,0);}
+      else {const fall=parcelDrop(age-travel);p.position.set(-28,fall.y+binY-FLOOR,3.5-Math.min(1,age-travel)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);if(item.previous<travel+.5&&age>=travel+.5)onCue('drop',p.position);}
       const parent=p.position.z<17.7?hall:world;if(p.parent!==parent){parent.add(p);if(parent===hall)revealTargets.push(p);else p.traverse(o=>{if(o.material?.hallOriginal)o.material=o.material.hallOriginal;});}item.previous=age;
     }
     for(const item of couriers){const {rig,parcel,deposited,curve,duration,phase}=item;if(!curve.curves.length){rig.root.visible=false;continue;}const age=(t+phase)%(duration*2+4);let u,returning=false;
-      if(age<2){u=0;parcel.visible=age>1;item.speed=0;}else if(age<duration+2){u=(age-2)/duration;parcel.visible=true;item.speed=.8;}else if(age<duration+4){u=1;parcel.visible=age<duration+3;deposited.visible=!parcel.visible;item.speed=0;}else{u=1-(age-duration-4)/duration;returning=true;parcel.visible=false;item.speed=.8;}
+      if(age<2){u=0;parcel.visible=age>1;item.speed=0;}else if(age<duration+2){u=(age-2)/duration;parcel.visible=true;item.speed=curve.getLength()/duration;}else if(age<duration+4){u=1;parcel.visible=age<duration+3;deposited.visible=!parcel.visible;item.speed=0;}else{u=1-(age-duration-4)/duration;returning=true;parcel.visible=false;item.speed=curve.getLength()/duration;}
       u=T.MathUtils.clamp(u,0,1);rig.root.position.copy(curve.getPoint(u));rig.root.position.y=groundHeight(rig.root.position.x,rig.root.position.z)-.03;
       const direction=curve.getTangent(u);rig.root.rotation.y=Math.atan2(direction.x,direction.z)+(returning?Math.PI:0);
       if(parcel.visible!==item.previousCarry)onCue(parcel.visible?'pickup':'drop',rig.root.position);item.previousCarry=parcel.visible;

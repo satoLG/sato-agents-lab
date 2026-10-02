@@ -45,4 +45,18 @@ The following original Portal 2 samples are stored locally. Running, landing, ro
 - `energy1.wav`: `sound/player/coop_electric/coop_bot_spark_01.wav` (2.184 s).
 - `energy2.wav`: `sound/player/coop_electric/coop_bot_spark_02.wav` (2.555 s).
 
-New samples are converted to mono PCM 16-bit / 22.05 kHz, loudness balanced, with short fade-in/out. Longer mechanisms, computer blips, electric sparks and foley use short excerpts (0.24–0.75 s). `movement-sources.json` records the source URL, excerpt start/duration and gain. No continuous ambient hum or procedural oscillator is used.
+New samples are converted to mono PCM 16-bit / 22.05 kHz, loudness balanced, with short fade-in/out. Longer mechanisms, computer blips, electric sparks and foley use short excerpts (0.24–0.75 s). `movement-sources.json` records the source URL, excerpt start/duration and gain. The movement samples remain short spatial cues; sustained machinery and robot personality are described below.
+
+## Botanical laboratory: machinery and robot personality
+
+Seven additional local samples come from the same `sourcesounds/portal2` repository, pinned to commit `36edc8b85c4b5718289f56d8c3652a6dc0e58a1b`:
+
+- `robotVoice1.wav`: `sound/npc/sphere/sphere_blips_sm_03.wav`.
+- `robotVoice2.wav`: `sound/npc/sphere/sphere_blips_sm_11.wav`.
+- `robotVoice3.wav`: `sound/npc/sphere/sphere_blips_md_07.wav`.
+- `robotBlink.wav`: `sound/npc/sphere/personality_sphere_blink_02.wav`.
+- `machineFan.wav`: `sound/ambient/machines/fan4.wav`.
+- `machineMotor.wav`: `sound/ambient/machines/portalgun_rotate_loop1.wav`.
+- `stream.wav`: `sound/ambient/nature/water/amb_light_waterlap_lp_01.wav`.
+
+`botanical-sources.json` records the source, commit, actual duration and conversion settings. Mono PCM16 at 22.05 kHz, normalized to -26 LUFS with a -5 dB true peak ceiling. Machine and water loops are spatial sources with a maximum of four nearest sources, never a global soundtrack. Robot responses use alternating sphere samples with a short, quiet procedural pitch gesture; servo samples also receive this small mechanical layer. Steps are triggered by each robot's distance-based footfall, and eyelid cues by its blink. Sound remains opt-in and is suspended when the page is hidden or animation is paused. These ambient effects illustrate the scene; they do not assert that a real agent is executing work.

@@ -1,5 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 export const FLOOR=.06;
+export const DECK_HEIGHT=1.86;
+export const WALL_HEIGHT=16;
 export const ZONES={
  gateway:{x:-18,z:25,color:'#64cfff',number:'00',name:'GATEWAY',area:'GATEWAY',icon:'log-in',sign:[-24.5,26.6]},
  vm:{x:-21,z:10,color:'#64cfff',number:'01',name:'VM',area:'INFRA',icon:'server',sign:[-25,5]},
@@ -12,7 +14,7 @@ export const ZONES={
 };
 export const AREAS=[
  {name:'INTEGRATIONS',x:-19,z:-21,w:24,d:16},
- {name:'DATA',x:19.5,z:-21,w:24,d:18},
+ {name:'DATA',x:19,z:-20,w:25,d:20},
  {name:'INFRA',x:-21,z:10,w:14,d:12},
  {name:'SCHEDULE',x:23,z:10,w:15,d:12},
 ];
@@ -24,21 +26,95 @@ export function coreHeight(x,z){let height=0;for(const s of CORE_STEPS)if(inRoun
 export function roundedShape(w,d,r){
  const s=new T.Shape(),x=-w/2,y=-d/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+d-r);s.quadraticCurveTo(x+w,y+d,x+w-r,y+d);s.lineTo(x+r,y+d);s.quadraticCurveTo(x,y+d,x,y+d-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s;
 }
-export function createAreaFloors(hall,{mesh,mat,textPlane}){
+// The same orthogonal footprint drives deck meshes, railings and navigation.
+export const DECKS=[
+ ...AREAS,
+ {name:'CORE',x:0,z:-3,w:22,d:19},
+ {name:'SPINE',x:0,z:-5,w:6,d:34},
+ {name:'NORTH LINK',x:0,z:-21,w:39,d:5},
+ {name:'SOUTH LINK',x:1,z:10,w:44,d:5},
+ {name:'WEST LINK',x:-21,z:-5.5,w:5,d:31},
+ {name:'EAST LINK',x:23,z:-5.5,w:5,d:31},
+ {name:'TRIAGE',x:-27,z:2,w:8,d:8},
+ {name:'TRIAGE LINK',x:-22,z:2,w:8,d:4},
+ {name:'ENTRY',x:0,z:14,w:6,d:8},
+];
+export const ENERGY_ROUTES=[
+ [[0,-3],[0,-21],[-24,-21]],[[0,-3],[0,-21],[24,-21]],
+ [[0,-3],[0,10],[-21,10]],[[0,-3],[0,10],[23,10]],
+ [[-21,10],[-21,-21]],[[23,10],[23,-21]],
+ [[0,10],[0,17]],
+];
+const contains=(a,x,z)=>Math.abs(x-a.x)<=a.w/2+1e-7&&Math.abs(z-a.z)<=a.d/2+1e-7;
+export function onDeck(x,z,radius=0){
+ const samples=radius?[[0,0],[-radius,0],[radius,0],[0,-radius],[0,radius],[-radius*.71,-radius*.71],[radius*.71,-radius*.71],[-radius*.71,radius*.71],[radius*.71,radius*.71]]:[[0,0]];
+ return samples.every(([dx,dz])=>(radius>0&&z<=18&&z+dz>=18&&Math.abs(x+dx)<=3)||DECKS.some(a=>contains(a,x+dx,z+dz)));
+}
+export function deckHeight(x,z){
+ if(!onDeck(x,z))return null;
+ if(Math.abs(x)<=3&&z>12)return FLOOR+(DECK_HEIGHT-FLOOR)*Math.max(0,(18-z)/6);
+ return DECK_HEIGHT+coreHeight(x,z);
+}
+// Split union boundaries into straight spans; shared edges never get a railing.
+export function deckEdges(){
+ const result=[],seen=new Set();
+ for(const a of DECKS)for(const side of [-1,1])for(const axis of ['x','z']){
+  const horizontal=axis==='z',length=horizontal?a.w:a.d,fixed=(horizontal?a.z:a.x)+side*(horizontal?a.d:a.w)/2,start=(horizontal?a.x:a.z)-length/2;
+  const n=Math.ceil(length/.25);let run=null;
+  for(let i=0;i<=n;i++){
+   const u=start+i*length/n,mid=u+length/n/2;
+   const outside=i<n&&!DECKS.some(b=>contains(b,horizontal?mid:fixed+side*.02,horizontal?fixed+side*.02:mid));
+   // Entry meets the reception at z=18: keep the doorway open.
+   const open=horizontal&&fixed===18&&Math.abs(mid)<3.01;
+   if(outside&&!open&&run===null)run=u;
+   if((!outside||open||i===n)&&run!==null){const key=[axis,fixed,run,u].join(':');if(!seen.has(key)){result.push({axis,fixed,start:run,end:u,side});seen.add(key);}run=null;}
+  }
+ }
+ return result;
+}
+export function createAreaFloors(hall,{mesh,mat,textPlane,box,rod,glow},obstacles=[]){
+ const steel=mat('#455963',.65,.38),deck=mat('#a7b6bc',.6,.44),rail=mat('#b4c3c7',.78,.27),edge=glow('#63cfe3');
+ // A grid of disjoint cells eliminates overlapping platform planes at junctions.
+ const xs=[...new Set(DECKS.flatMap(a=>[a.x-a.w/2,a.x+a.w/2]))].sort((a,b)=>a-b);
+ const zs=[...new Set(DECKS.flatMap(a=>[a.z-a.d/2,a.z+a.d/2]).concat([12,18]))].sort((a,b)=>a-b);
+ for(let i=1;i<xs.length;i++)for(let j=1;j<zs.length;j++){
+  const x=(xs[i-1]+xs[i])/2,z=(zs[j-1]+zs[j])/2,w=xs[i]-xs[i-1],d=zs[j]-zs[j-1];if(!onDeck(x,z))continue;
+  const h0=deckHeight(x,zs[j-1]),h1=deckHeight(x,zs[j]);
+  // CORE steps have their own geometry, resting on the common base deck.
+  const top=z>=12&&Math.abs(x)<3?(h0+h1)/2:DECK_HEIGHT;
+  const tile=box(hall,w,.24,d,deck,x,top-.12,z);tile.name='raised-platform';
+  if(z>12&&Math.abs(x)<3){tile.rotation.x=-Math.atan((h1-h0)/d);tile.scale.z=d/Math.cos(tile.rotation.x);}
+  tile.userData.walkable=true;
+ }
+ for(const {axis,fixed,start,end}of deckEdges()){
+  const horizontal=axis==='z',length=end-start,x=horizontal?(start+end)/2:fixed,z=horizontal?fixed:(start+end)/2;
+  box(hall,horizontal?length:.14,.23,horizontal?.14:length,steel,x,DECK_HEIGHT-.12,z);
+  const count=Math.max(1,Math.ceil(length/2.4));
+  for(let i=0;i<=count;i++){
+   const u=start+length*i/count,px=horizontal?u:fixed,pz=horizontal?fixed:u,y=deckHeight(px,pz)??DECK_HEIGHT;
+   box(hall,.09,1.02,.09,rail,px,y+.51,pz);
+   if(i<count){const v=start+length*(i+1)/count,qx=horizontal?v:fixed,qz=horizontal?fixed:v,qy=deckHeight(qx,qz)??DECK_HEIGHT;
+    for(const height of [.48,1.02])rod(hall,[px,y+height,pz],[qx,qy+height,qz],.043,rail);
+    rod(hall,[px,y+.1,pz],[qx,qy+.1,qz],.026,edge);
+   }
+  }
+  // Footprint filtering also protects small edges without hundreds of colliders.
+ }
  for(const a of AREAS){
-  const border=roundedShape(a.w,a.d,1.25);border.holes.push(new T.Path(roundedShape(a.w-.2,a.d-.2,1.15).getPoints(12)));
-  const g=new T.ShapeGeometry(border,12);g.rotateX(-Math.PI/2);mesh(hall,g,mat('#457c96'),a.x,FLOOR+.025,a.z,false);
-  // The interior remains the tiled room floor; no overlapping second floor plane.
-  textPlane(hall,a.name,a.w*.48,.6,a.x,FLOOR+.035,a.z+a.d/2-.6,{color:'#76cfff',background:'#23323c',floor:true,size:115});
+  textPlane(hall,a.name,a.w*.48,.6,a.x,DECK_HEIGHT+.028,a.z+a.d/2-.6,{color:'#76cfff',background:'#23323c',floor:true,size:115});
+  for(const dx of [-a.w/2+1,a.w/2-1])for(const dz of [-a.d/2+1,a.d/2-1]){
+   box(hall,.2,DECK_HEIGHT+.25,.2,steel,a.x+dx,(DECK_HEIGHT-.25)/2,a.z+dz);
+   box(hall,.55,.18,.55,steel,a.x+dx,-.17,a.z+dz);
+  }
  }
  for(const [i,s]of CORE_STEPS.entries()){
   const g=new T.ExtrudeGeometry(roundedShape(s.w,s.d,s.r),{depth:.24,bevelEnabled:false,curveSegments:12});g.rotateX(-Math.PI/2);
-  const slab=mesh(hall,g,mat(i===7?'#d1dce1':'#87959c'),0,FLOOR+s.h-.24,ZONES.hermes.z);slab.name=`core-step-${i+1}`;slab.userData.walkable=true;
-  // Full risers below the next nested slab; the landing is wider after step four.
+  const slab=mesh(hall,g,mat(i===7?'#d1dce1':'#87959c',.45,.4),0,DECK_HEIGHT+s.h-.24,ZONES.hermes.z);slab.name=`core-step-${i+1}`;slab.userData.walkable=true;
  }
+ obstacles.walkable=(x,z,r)=>z>=18||onDeck(x,z,r+.08);
 }
 export function createEnergyLines(hall,groundAt){
- const routes=[[[0,-3],[-8,-3],[-19,-12],[-19,-17]],[[0,-3],[8,-3],[19.5,-12],[19.5,-17]],[[0,-3],[-10,6],[-16,7]],[[0,-3],[10,6],[18,7]],[[0,-3],[-12,2],[-22,2]]];
+ const routes=ENERGY_ROUTES;
  const points=[];routes.forEach((route,routeId)=>{let distance=0;for(let i=1;i<route.length;i++){const a=route[i-1],b=route[i],length=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.ceil(length/.58);for(let j=0;j<n;j++){const f=j/n,x=T.MathUtils.lerp(a[0],b[0],f),z=T.MathUtils.lerp(a[1],b[1],f);points.push({x,z,y:groundAt(x,z)+.052,d:distance+f*length,route:routeId});}distance+=length;}});
  const material=new T.MeshBasicMaterial({color:'#ffffff',toneMapped:false});const dots=new T.InstancedMesh(new T.SphereGeometry(1,8,5),material,points.length),dummy=new T.Object3D(),color=new T.Color();
  points.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.scale.set(.12,.035,.12);dummy.updateMatrix();dots.setMatrixAt(i,dummy.matrix);dots.setColorAt(i,color.set('#1498d0'));});dots.name='blue-energy-routes';dots.userData.dynamic=true;hall.add(dots);let previous=-1;

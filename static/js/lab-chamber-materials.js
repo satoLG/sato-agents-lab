@@ -12,6 +12,10 @@ export function createChamberMaterials() {
       const v=random()>.5?255:30;ctx.fillStyle=`rgba(${v},${v},${v},${kind==='shell'?.018:.035})`;
       ctx.fillRect(random()*512,random()*512,1+random()*3,1+random()*3);
     }
+    if(kind==='shell'){
+      for(let i=0;i<18;i++){const y=12+i*28;ctx.strokeStyle=i%3?'#87909528':'#313f4550';ctx.lineWidth=i%3?1:2;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(512,y);ctx.stroke();}
+      for(let i=0;i<30;i++){ctx.fillStyle='#67747a35';ctx.fillRect(random()*512,random()*512,2,8);}
+    }
     if(kind!=='shell')for(let y=0;y<512;y+=256)for(let x=0;x<512;x+=256){
       ctx.strokeStyle='#3e484c';ctx.lineWidth=5;ctx.strokeRect(x+2,y+2,252,252);
       ctx.strokeStyle='#dde0de';ctx.lineWidth=2;ctx.strokeRect(x+6,y+6,245,245);
@@ -31,7 +35,8 @@ export function createChamberMaterials() {
     // Retain parcels and colored signal parts; replace the old sage-green housings.
     const neutral=hsl.s<.23||(hsl.h>.18&&hsl.h<.55&&hsl.s<.48);
     if(neutral){const brightness=Math.max(tint.r,tint.g,tint.b);tint.set(brightness>.56?'#e2e8e9':brightness>.3?'#717e86':'#27323b');}
-    const material=new T.MeshStandardMaterial({color:tint,metalness:neutral?Math.max(.22,metalness):metalness,roughness:neutral?(hsl.l>.65?.36:.58):roughness,map:neutral?shellMap:null});
+    const bump=shellMap.clone();bump.colorSpace=T.NoColorSpace;
+    const material=new T.MeshStandardMaterial({bumpMap:neutral?bump:null,bumpScale:.012,envMapIntensity:1.25,color:tint,metalness:neutral?Math.max(.22,metalness):metalness,roughness:neutral?(hsl.l>.65?.36:.58):roughness,map:neutral?shellMap:null});
     cache.set(key,material);return material;
   }
   return {floor,wall,equipment};
