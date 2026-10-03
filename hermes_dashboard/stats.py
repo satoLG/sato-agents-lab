@@ -1,7 +1,7 @@
 """Numeros do mes usados na pagina publica e no topo do dashboard."""
-from datetime import datetime
+from datetime import datetime, timezone
 
-from . import db
+from . import db, state
 
 
 def empty(error=None):
@@ -17,6 +17,20 @@ def empty(error=None):
 
 
 def public_stats():
+    if state.available():
+        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0,
+                                                second=0, microsecond=0)
+        usage = state.model_usage(since=month_start.replace(tzinfo=timezone.utc).timestamp())
+        calls = sum(row['calls'] or 0 for row in usage)
+        cost = sum(row['cost'] or 0 for row in usage)
+        return {'month': month_start.strftime('%Y-%m'), 'total_cost': round(cost, 4),
+                'total_calls': calls, 'fallback_count': None, 'fallback_rate': None,
+                'models': [{'model': row['model'], 'calls': row['calls'],
+                            'cost': round(row['cost'] or 0, 4),
+                            'percentage': round((row['calls'] or 0) / calls * 100, 1)
+                            if calls else 0} for row in usage],
+                'tools': [], 'daily': [], 'source': 'Hermes state.db',
+                'note': 'Uso agregado por sessão; a data de cada chamada não está disponível.'}
     try:
         return _collect()
     except db.DatabaseUnavailable as e:

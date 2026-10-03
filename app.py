@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request
 
-from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat
+from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
 from hermes_dashboard import config
 
@@ -255,6 +255,11 @@ def api_events():
 @app.route("/api/cronjobs")
 def api_cronjobs():
     return jsonify(cron.overview())
+
+
+@app.route('/api/webhooks')
+def api_webhooks():
+    return jsonify(webhooks.overview())
 
 
 # --- compatibilidade com a versao anterior da API ---

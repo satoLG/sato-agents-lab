@@ -9,13 +9,13 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
-from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways, events as event_catalog
+from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways, events as event_catalog, state as hermes_state
 
 SECTORS = [
     ("gateway", "GATEWAY", "00", "Recebo as entradas do Hermes. Um atendimento unificado reúne os adaptadores conectados e o endpoint de prompts do dashboard; pacotes na esteira ilustram o fluxo da arquitetura.", "gateway_state.json · dashboard"),
-    ("hermes", "Núcleo Hermes", "02", "Coordeno a leitura de agentes, subagentes e ferramentas. Cada robô de execução corresponde a um registro ou processo observado.", "events.db · agent_runs / subagent_runs / tool_calls"),
+    ("hermes", "Núcleo Hermes", "02", "Coordeno a leitura de agentes, subagentes e ferramentas. Cada robô de execução corresponde a um registro ou processo observado.", "state.db · sessions / messages"),
     ("models", "Providers", "03", "Represento o roteamento de modelos: provider principal e fallbacks configurados, incluindo OpenRouter e OpenCode quando presentes.", "config.yaml · model_usage"),
-    ("mcp", "Conexões MCP", "04", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · tool_calls"),
+    ("mcp", "Conexões MCP", "04", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · state.db / messages"),
     ("rag", "Arquivo RAG", "06", "Represento a base vetorial: documentos recuperados para dar contexto ao agente. Só sinalizo uso recente quando há uma ferramenta de RAG identificável no log.", "LanceDB · tool_calls"),
     ("memory", "Memória & skills", "05", "Represento memórias, contextos e skills persistidos em disco para orientar o Hermes.", "~/.hermes/memories · contexts · skills"),
     ("cron", "EVENTS", "07", "Represento cron jobs, timers e rotas de webhooks do Hermes. Estar agendado é diferente de estar em execução.", "jobs.json · executions.db · webhook_subscriptions.json · config.yaml"),
@@ -73,7 +73,7 @@ def _age(value):
 
 def event_sector(event):
     name = str(event.get("name") or "").lower()
-    if event.get("kind") == "model":
+    if event.get("kind") in ("model", "response"):
         return "models"
     if name.startswith("mcp__"):
         return "mcp"
@@ -93,6 +93,25 @@ def _worker(key, name, sector, kind, state, detail, source, **extra):
 
 def _runs():
     workers, errors = [], []
+    if hermes_state.available():
+        try:
+            with hermes_state.connect() as conn:
+                rows = conn.execute('''SELECT id, source, started_at, ended_at,
+                                              last_activity_at, model FROM sessions
+                                       ORDER BY COALESCE(last_activity_at, started_at) DESC
+                                       LIMIT 48''').fetchall()
+            for row in rows:
+                source = row['source'] or 'agente'
+                stamp = row['last_activity_at'] or row['started_at']
+                status = 'completed' if row['ended_at'] else 'observed' if _age(stamp) <= 180 else 'stale'
+                sector = 'cron' if source == 'cron' else 'hermes'
+                workers.append(_worker(_id('session', row['id']),
+                                       f"Hermes · {source}", sector, 'session', status,
+                                       f"Sessão {source} · {row['model'] or 'modelo não informado'}",
+                                       'state.db · sessions', observed_at=stamp))
+        except Exception as exc:
+            errors.append(f'state.db · sessions: {type(exc).__name__}: {exc}')
+        return workers, errors
     for table, kind in (("agent_runs", "agent"), ("subagent_runs", "subagent")):
         cols = db.columns(table)
         if not cols:
@@ -151,12 +170,14 @@ def snapshot():
             facts = [f"{len(entrances)} entradas observadas"] + [e["name"] for e in entrances]
             state = "observed" if entrances else "unknown"
         elif sector == "hermes":
-            facts = [f"{len(live.get('processes', []))} processos detectados", f"{len(workers)} registros de agentes/subagentes (até 48 por tabela)"]
+            facts = [f"{len(live.get('processes', []))} processos detectados", f"{len(workers)} sessões recentes (até 48)"]
         elif sector == "models":
             facts = [f"Principal: {data.get('primary', 'desconhecido')}"]
             facts += [f"Fallback: {f.get('provider')}/{f.get('model')}" for f in data.get("fallbacks", [])]
         elif sector == "mcp":
             facts = [f"{len(data.get('servers', []))} servidores", f"{data.get('total_calls', 0)} chamadas nos últimos 30 dias"]
+            if data.get('detail_available') is False:
+                facts.append('Resultado por chamada indisponível')
         elif sector == "rag":
             facts = [f"{data.get('total', 0)} documentos catalogados"]
         elif sector == "memory":
@@ -164,7 +185,7 @@ def snapshot():
             if not data.get("exists"):
                 errors.append("Diretório Hermes não encontrado")
         elif sector == "cron":
-            facts = [f"{len(data.get('jobs', []))} agendamentos", f"{len(data.get('webhooks', {}).get('routes', []))} webhooks configurados" if data.get("webhooks", {}).get("available") else "Fonte de webhooks indisponível", f"{data.get('failed_runs', 0)} falhas no histórico (até 60 execuções)"]
+            facts = [f"{len(data.get('jobs', []))} agendamentos", f"{len(data.get('webhooks', {}).get('routes', []))} webhooks configurados" if data.get("webhooks", {}).get("available") else "Fonte de webhooks indisponível", f"{data.get('failed_runs', 0)} falhas no histórico (até 1000 execuções)"]
         elif sector == "vm":
             cpu = machine.get("cpu", {}).get("total")
             mem = machine.get("memory", {})
@@ -207,7 +228,8 @@ def snapshot():
         state = "disabled" if server.get("enabled") is False else "recent" if matching else "configured" if server.get("configured") else "observed"
         workers.append(_worker(_id("mcp", name), name, "mcp", "service", state,
                                f"Última chamada: {matching[0]['name']}" if matching else "Sem chamada recente observada; conexão não verificada.",
-                               "config.yaml · tool_calls", facts=[f"{server.get('action_count', 0)} ações", f"{server.get('calls', 0)} chamadas / 30 dias", f"{server.get('failures', 0)} falhas / 30 dias"]))
+                               "config.yaml · state.db / messages", facts=[f"{server.get('action_count', 0)} ações", f"{server.get('calls', 0)} chamadas / 30 dias",
+                               f"{server.get('failures', 0)} falhas / 30 dias" if server.get('detail_available') else 'Resultado por chamada indisponível']))
     for job in catalogs["cron"].get("jobs", []):
         runs = [r for r in catalogs["cron"].get("executions", []) if str(r.get("job_id")) == str(job["id"])]
         latest = runs[0] if runs else {}

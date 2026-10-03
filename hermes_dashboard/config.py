@@ -17,6 +17,7 @@ def _path(env, default):
 HOME = Path.home()
 HERMES_HOME = _path("HERMES_HOME", HOME / ".hermes")
 DB_PATH = _path("HERMES_DB_PATH", HOME / "hermes-observability" / "events.db")
+STATE_DB_PATH = _path("HERMES_STATE_DB_PATH", HERMES_HOME / "state.db")
 RAG_PATH = _path("HERMES_RAG_PATH", HOME / "rag-db")
 CONFIG_PATH = _path("HERMES_CONFIG_PATH", HERMES_HOME / "config.yaml")
 CRON_DIR = _path("HERMES_CRON_DIR", HERMES_HOME / "cron")

@@ -7,6 +7,7 @@ import * as mcps from "./tab-mcps.js";
 import * as memory from "./tab-memory.js";
 import * as rag from "./tab-rag.js";
 import * as cron from "./tab-cron.js";
+import * as webhooks from "./tab-webhooks.js";
 
 const TABS = {
   atividade: activity,
@@ -16,6 +17,7 @@ const TABS = {
   memoria: memory,
   rag: rag,
   cron: cron,
+  webhooks: webhooks,
 };
 
 const started = new Set();
@@ -38,6 +40,8 @@ function show(name) {
     TABS[name].init(panelOf(name));
   } else if (name === "vm") {
     TABS.vm.init(panelOf("vm"));
+  } else if (TABS[name].refresh) {
+    TABS[name].refresh();
   }
   const active = document.querySelector(`[data-tab="${name}"]`);
   if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -59,3 +63,11 @@ window.hermesActivityVisible = () => {
 };
 
 show(currentTab());
+
+// Keep the selected history current while the page is visible. The activity
+// live fragment is refreshed separately by HTMX every three seconds.
+setInterval(() => {
+  if (document.hidden) return;
+  const name = currentTab();
+  if (started.has(name) && TABS[name]?.refresh) TABS[name].refresh();
+}, 15000);

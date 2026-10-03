@@ -7,7 +7,7 @@ do log: tool_name no formato mcp__<servidor>__<acao>.
 import re
 from datetime import datetime, timedelta
 
-from . import db
+from . import db, state
 from . import config
 
 CONFIG_KEYS = ["mcp_servers", "mcpServers", "mcp", "servers"]
@@ -52,6 +52,19 @@ def _describe(name, cfg):
 
 def _usage(days=30):
     """{servidor: {acao: {calls, failures, avg_ms, last}}} vindo do tool_calls."""
+    if state.available():
+        per = {}
+        for row in state.tool_rows(days):
+            match = TOOL_RE.match(row['tool_name'] or '')
+            if not match:
+                continue
+            server, action = match.groups()
+            entry = per.setdefault(server, {}).setdefault(action, {
+                'action': action, 'calls': 0, 'failures': 0,
+                'avg_ms': None, 'last': None})
+            entry['calls'] += 1
+            entry['last'] = max(entry['last'] or '', row['timestamp'] or '')
+        return per
     if "tool_calls" not in db.tables():
         return {}
     ts = db.pick_column("tool_calls", ["timestamp", "ts", "created_at", "time"])
@@ -111,6 +124,7 @@ def servers(days=30):
                 actions.append({"action": declared, "calls": 0, "failures": 0,
                                 "avg_ms": None, "last": None})
         info["actions"] = actions
+        info['detail_available'] = not state.available()
         info["calls"] = sum(a["calls"] for a in actions)
         info["failures"] = sum(a["failures"] for a in actions)
         info["action_count"] = len(actions)
@@ -122,4 +136,8 @@ def servers(days=30):
         "days": days,
         "config_error": config_error,
         "usage_error": usage_error,
+        "detail_available": not state.available(),
+        "history": [{'tool': r['tool_name'], 'when': r['timestamp']}
+                    for r in state.tool_rows(days) if TOOL_RE.match(r['tool_name'] or '')][:100]
+                    if state.available() else [],
     }

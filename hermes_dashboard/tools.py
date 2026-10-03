@@ -1,7 +1,7 @@
 """Catalogo de tools e estatisticas de tool calling."""
 from datetime import datetime, timedelta
 
-from . import db
+from . import db, state
 
 CORE_TOOLS = [
     "web_search", "web_extract", "read_file", "write_file", "patch", "search_files",
@@ -32,6 +32,22 @@ def group_of(name):
 
 def stats(days=30):
     """Uso por tool: chamadas, falhas, duracao media e p95, ultimo uso."""
+    if state.available():
+        per = {}
+        for row in state.tool_rows(days):
+            name = row['tool_name']
+            item = per.setdefault(name, {'tool': name, 'calls': 0, 'failures': 0,
+                                         'avg_ms': None, 'p95_ms': None, 'max_ms': None,
+                                         'success_rate': None, 'last': None,
+                                         'group': group_of(name)})
+            item['calls'] += 1
+            item['last'] = max(item['last'] or '', row['timestamp'] or '')
+        out = sorted(per.values(), key=lambda item: -item['calls'])
+        return {'tools': out, 'total_calls': sum(x['calls'] for x in out),
+                'days': days, 'source': 'Hermes state.db',
+                'detail_available': False,
+                'history': [{'tool': r['tool_name'], 'when': r['timestamp']}
+                            for r in state.tool_rows(days)[:100]]}
     if "tool_calls" not in db.tables():
         return {"tools": [], "total_calls": 0, "days": days,
                 "error": "tabela tool_calls nao existe no events.db"}
@@ -108,4 +124,6 @@ def catalog(days=30):
         "days": days,
         "groups": sorted({t["group"] for t in catalogue}),
         "error": usage.get("error"),
+        "history": usage.get("history", []),
+        "detail_available": usage.get("detail_available", True),
     }

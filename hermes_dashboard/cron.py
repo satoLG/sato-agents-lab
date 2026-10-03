@@ -27,8 +27,10 @@ def _hermes_jobs():
     except (OSError, ValueError) as e:
         return [], str(e)
     if isinstance(data, dict):
+        if isinstance(data.get('jobs'), list):
+            jobs = [j for j in data['jobs'] if isinstance(j, dict)]
         # aceita tanto {id: job} quanto um job solto
-        if all(isinstance(v, dict) for v in data.values()) and data:
+        elif all(isinstance(v, dict) for v in data.values()) and data:
             jobs = [dict(v, id=v.get("id", k)) for k, v in data.items()]
         else:
             jobs = [data]
@@ -38,14 +40,17 @@ def _hermes_jobs():
         return [], f"formato inesperado em {_jobs_path()}"
     out = []
     for job in jobs:
+        schedule = job.get('schedule') or job.get('cron') or job.get('expression') or '?'
+        if isinstance(schedule, dict):
+            schedule = schedule.get('display') or schedule.get('expr') or schedule.get('kind') or '?'
         out.append({
             "id": str(job.get("id") or job.get("name") or "?"),
             "name": job.get("name") or job.get("id") or "?",
-            "schedule": job.get("schedule") or job.get("cron") or job.get("expression") or "?",
-            "command": job.get("command") or job.get("prompt") or job.get("task") or "",
+            "schedule": str(schedule),
+            "command": job.get("command") or job.get("task") or ("Prompt do Hermes (conteúdo oculto)" if job.get("prompt") else ""),
             "enabled": job.get("enabled", True),
-            "last_run": job.get("last_run"),
-            "next_run": job.get("next_run"),
+            "last_run": job.get("last_run_at") or job.get("last_run"),
+            "next_run": job.get("next_run_at") or job.get("next_run"),
             "source": "hermes",
         })
     return out, None
@@ -102,7 +107,7 @@ def _systemd_timers():
     return timers
 
 
-def _executions(limit=60):
+def _executions(limit=1000):
     if not _exec_db().exists():
         return [], None
     try:
@@ -111,8 +116,14 @@ def _executions(limit=60):
         return [], str(e)
     try:
         c = conn.cursor()
-        c.execute("""SELECT job_id, start_time, end_time, exit_code, output_bytes
-                     FROM executions ORDER BY start_time DESC LIMIT ?""", (limit,))
+        cols_present = {r[1] for r in c.execute('PRAGMA table_info(executions)')}
+        if 'started_at' in cols_present:
+            c.execute("""SELECT job_id, started_at AS start_time,
+                         finished_at AS end_time, status
+                         FROM executions ORDER BY started_at DESC LIMIT ?""", (limit,))
+        else:
+            c.execute("""SELECT job_id, start_time, end_time, exit_code, output_bytes
+                         FROM executions ORDER BY start_time DESC LIMIT ?""", (limit,))
         cols = [d[0] for d in c.description]
         rows = [dict(zip(cols, row)) for row in c.fetchall()]
     except sqlite3.OperationalError as e:
@@ -120,12 +131,22 @@ def _executions(limit=60):
     finally:
         conn.close()
     for row in rows:
+        if 'status' in row:
+            status = str(row['status'] or '').lower()
+            row['exit_code'] = 0 if status in ('completed', 'success', 'done') else (1 if status in ('failed', 'error') else None)
+            row['output_bytes'] = None
         row["duration_s"] = _duration(row.get("start_time"), row.get("end_time"))
         row["ok"] = row.get("exit_code") == 0
     return rows, None
 
 
 def _duration(start, end):
+    try:
+        if start and end:
+            return round((datetime.fromisoformat(end.replace('Z', '+00:00')) -
+                          datetime.fromisoformat(start.replace('Z', '+00:00'))).total_seconds(), 1)
+    except (TypeError, ValueError):
+        pass
     for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
             return round((datetime.strptime(end, fmt) - datetime.strptime(start, fmt))
