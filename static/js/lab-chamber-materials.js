@@ -44,12 +44,13 @@ export function createChamberMaterials() {
 
 // Isolate outdoor materials before batching so indoor finishes keep their lighting.
 export function createExteriorFade(group) {
-  const materials=new Map(),brightness={value:1};
-  group.traverse(o=>{
+  const materials=new Map(),copies=new WeakSet(),brightness={value:1};
+  function register(root=group){root.traverse(o=>{
     if(!o.isMesh)return;
     const clone=source=>{
+      if(copies.has(source))return source;
       if(!materials.has(source)){
-        const m=source.clone();
+        const m=source.clone(),key=source.customProgramCacheKey();
         m.onBeforeCompile=(shader,renderer)=>{
           source.onBeforeCompile.call(m,shader,renderer);
           shader.uniforms.exteriorBrightness=brightness;
@@ -57,14 +58,14 @@ export function createExteriorFade(group) {
           // Apply after terrain splat blending and lighting, so soil and reflections fade too.
           shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','outgoingLight *= exteriorBrightness;\n#include <opaque_fragment>');
         };
-        m.customProgramCacheKey=()=>source.customProgramCacheKey()+'-exterior-fade-v1';
-        m.userData.exteriorBrightness=brightness;materials.set(source,m);
+        m.customProgramCacheKey=()=>key+'-room-fade-v2';
+        m.userData.exteriorBrightness=brightness;m.roomOriginal=source;materials.set(source,m);copies.add(m);
       }
       return materials.get(source);
     };
     o.material=Array.isArray(o.material)?o.material.map(clone):clone(o.material);
-  });
-  return amount=>{brightness.value=T.MathUtils.lerp(1,.035,amount);};
+  });}
+  register();const fade=amount=>{brightness.value=1-amount;group.visible=amount<.998;};fade.register=register;return fade;
 }
 
 // Black, depth-writing interior is prepared before entry, then revealed by light.

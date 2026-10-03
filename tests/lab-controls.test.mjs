@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {stickVector,movementIntent,WALK_SPEED,RUN_SPEED} from '../static/js/lab-controls.js';
-import {distanceGain,spatialMix} from '../static/js/lab-audio.js';
+import {distanceGain,spatialMix,ambienceLevels} from '../static/js/lab-audio.js';
 test('analog dead zone, partial movement and diagonal keyboard speeds',()=>{
  assert.deepEqual(stickVector(.03,.02),{x:0,y:0});const half=stickVector(.55,0);assert.ok(half.x>.4&&half.x<.6);
  const diagonal=movementIntent(new Set(['w','d']),{x:0,y:0},0);assert.ok(Math.abs(Math.hypot(diagonal.x,diagonal.z)-1)<1e-8);assert.equal(diagonal.running,false);
@@ -18,4 +18,10 @@ test('audio is silent beyond the source radius and fades continuously',()=>{
 test('stereo panning follows camera orientation around the player',()=>{
  const p={x:4,z:0};assert.equal(spatialMix({x:0,z:0,yaw:0},p).pan,1);assert.ok(spatialMix({x:0,z:0,yaw:Math.PI},p).pan<-.99);
  assert.equal(spatialMix({x:0,z:0}, {x:20,z:0},6).gain,0);
+});
+test('nature fades at the entrance and equipment starts past the quiet reception',()=>{
+ assert.equal(ambienceLevels(0,0).nature,.24);assert.equal(ambienceLevels(0,0).equipment,0);
+ assert.deepEqual(ambienceLevels(1,0),{nature:0,equipment:0,stream:0});
+ assert.ok(ambienceLevels(1,1).equipment>0);assert.equal(ambienceLevels(1,1).nature,0);
+ assert.ok(ambienceLevels(.5,.5).nature>0&&ambienceLevels(.5,.5).equipment>0);
 });

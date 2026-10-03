@@ -21,8 +21,12 @@ test('jump lifts the character, lands once and excludes footsteps and repeated j
   const r=createSatoAvatar(await load());assert.equal(r.jump(),true);assert.equal(r.jump(),false);assert.equal(r.attack(),false);
   let height=0;const states=new Set(),events=[];
   for(let i=0;i<120;i++){r.update(1/60,{speed:0});height=Math.max(height,r.jumpHeight);states.add(r.actionState);events.push(...r.drainEvents());}
-  assert.ok(height>.8);assert.deepEqual([...states],['takeoff','air','landing','ground']);assert.equal(r.jumpHeight,0);
+  assert.ok(height>1.6);assert.deepEqual([...states],['takeoff','air','landing','ground']);assert.equal(r.jumpHeight,0);
   assert.equal(events.filter(e=>e==='jump').length,1);assert.equal(events.filter(e=>e==='land').length,1);assert.ok(!events.includes('walk'));assert.ok(r.idle.getEffectiveWeight()>.99);
+});
+test('jump starts moving and emits its cue on the first frame',async()=>{
+  const r=createSatoAvatar(await load());r.jump();assert.deepEqual(r.drainEvents(),['jump']);
+  r.update(1/60);assert.ok(r.jumpHeight>.1);assert.equal(r.actionState,'takeoff');
 });
 test('punch is one shot, cannot interrupt a jump, and actions work with ambient motion paused',async()=>{
   const r=createSatoAvatar(await load());assert.equal(r.attack(),true);assert.equal(r.attack(),false);assert.equal(r.jump(),false);

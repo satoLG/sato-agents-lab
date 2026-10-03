@@ -18,7 +18,7 @@ export const AREAS=[
  {name:'INFRA',x:-21,z:10,w:14,d:12},
  {name:'EVENTS',x:23,z:10,w:15,d:12},
 ];
-export const slotsFor=id=>id==='gateway'?[[0,-.9]]:id==='rag'?[[0,7.8],[-5.8,5.5],[5.8,5.5],[0,10]]:[[0,2],[-3.5,1.8],[3.5,1.8],[0,4.3]];
+export const slotsFor=id=>id==='gateway'?[[0,-.9]]:id==='rag'?[[0,8.5],[-2.8,8.5],[2.8,8.5],[0,10.6]]:[[0,1.3],[-2.8,1.3],[2.8,1.3],[0,3.5]];
 // Two flights of four risers with a generous intermediate landing.
 export const CORE_STEPS=Array.from({length:8},(_,i)=>({w:20-i*.8-(i>=4?.8:0),d:17-i*.8-(i>=4?.8:0),h:(i+1)*.24,r:1.2}));
 export function inRounded(x,z,w,d,r){return Math.hypot(Math.max(0,Math.abs(x)-(w/2-r)),Math.max(0,Math.abs(z)-(d/2-r)))<=r;}

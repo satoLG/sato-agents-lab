@@ -199,6 +199,7 @@ try {
     onLoadProgress:loadingStep,onReady:revealScene,
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
+    onPromptPosition:(x,y)=>{const action=$('interaction'),half=action.offsetWidth/2+12;action.style.left=`${Math.max(half,Math.min(innerWidth-half,x))}px`;action.style.top=`${Math.max(112,Math.min(innerHeight-205,y))}px`;},
     onContext:(robot,id)=>{const action=$('interaction'),hidden=!!selectedRobot||ragUI.open||(!robot&&!id),key=`${robot?.id||''}:${id||''}:${hidden}`;if(action.dataset.context===key)return;action.dataset.context=key;action.hidden=hidden;document.body.dataset.context=String(!action.hidden);action.dataset.robot=robot?.id||'';$('interaction-name').textContent=robot?`${name(robot.sector)} / ${robot.name}`:name(id);action.querySelector('strong').textContent=robot?'Conversar':id==='rag'?'Explorar vetores':'Ver indicadores';},
     onCandidate:()=>{},
     onPosition:(x,z) => { $('campus-welcome').hidden=z<34||!!selectedRobot;  $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },

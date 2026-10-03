@@ -21,10 +21,12 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   const exterior=new T.Group();exterior.name='campus-exterior';world.add(exterior);
   const landscape=createLandscape(exterior,art,obstacles,materials),fadeExterior=createExteriorFade(exterior);
   batchStatic(exterior);exterior.traverse(o=>o.userData.dynamic=true);
-  const skyIntensity=world.backgroundIntensity,fogColor=world.fog.color.clone(),nightFog=new T.Color('#080e16');
+  const sky=world.background,black=new T.Color('#000000'),skyIntensity=world.backgroundIntensity,fogColor=world.fog.color.clone(),nightFog=black;
   let darkness=0;
+  const reception=new T.Group();reception.name='gateway-reception';world.add(reception);
+  const fadeReception=createExteriorFade(reception);
   // Nature occupies the lower level; walkable decks are built by lab-layout.
-  surface(63.2,10.7,FLOOR,chamber.floor.clone(),0,23.35);
+  surface(63.2,10.7,FLOOR,chamber.floor.clone(),0,23.35,reception).name='chamber-tile-floor';
   const walls=[],upper=new T.Group();world.add(upper);
   const facade=mat('#a9afac',.12,.75),frame=mat('#455451',.45,.42);
   const glass=new T.MeshStandardMaterial({color:'#647f82',metalness:.45,roughness:.18,envMapIntensity:1.1});
@@ -35,7 +37,7 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
     const materials=new Set();
     const seal=()=>{
       const clones=new Map();group.traverse(o=>{if(o.isMesh){if(!clones.has(o.material))clones.set(o.material,o.material.clone());o.material=clones.get(o.material);materials.add(o.material);}});
-      batchStatic(group);group.traverse(o=>o.userData.dynamic=true);materials.forEach(m=>{m.transparent=true;m.forceSinglePass=true;});
+      batchStatic(group);group.traverse(o=>o.userData.dynamic=true);materials.forEach(m=>{m.userData.cutawayOpacity=m.opacity;m.transparent=true;m.forceSinglePass=true;});
       walls.push({group,materials,x,z,name,opacity:1});
     };
     return {group,seal};
@@ -78,7 +80,6 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   box(front.group,9,3.5,.45,facade,0,6.25,29);
   lining(front.group,27.3,-18.25,28.74,Math.PI);lining(frontRight.group,27.3,18.25,28.74,Math.PI);
   lining(left.group,59.1,-31.70,-1,Math.PI/2);lining(right.group,59.1,31.70,-1,-Math.PI/2);lining(back.group,63.2,0,-30.70);
-  [front,frontRight,left,right,back].forEach(w=>w.seal());
   box(upper,64,12,60,facade,0,22,-1);
   panels(upper,'front',16,28);panels(upper,'left',16,28);panels(upper,'right',16,28);panels(upper,'back',16,28);
   ribbon(upper,7.5,20,29.46,46,2.8);
@@ -112,12 +113,13 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   batchStatic(upper);upper.traverse(o=>o.userData.dynamic=true);upperMaterials.forEach(m=>{m.transparent=true;m.forceSinglePass=true;});
   const doors=[];
   for(const side of [-1,1]){
-    const g=new T.Group();world.add(g);g.userData.dynamic=true;
+    const g=new T.Group();front.group.add(g);g.userData.dynamic=true;
     box(g,3.9,3.5,.12,new T.MeshStandardMaterial({color:'#a8d8d7',transparent:true,opacity:.28,roughness:.16}),0,1.8,29);
     for(const x of [-1.95,1.95])box(g,.07,3.6,.16,frame,x,1.8,29);
     box(g,.08,.65,.14,'#e0e9db',side*1.45,1.6,29.12);
     g.traverse(o=>o.userData.dynamic=true);doors.push({door:g,side});
   }
+  [front,frontRight,left,right,back].forEach(w=>w.seal());
   obstacles.push({x:-18.25,z:29,w:27.5,d:.6},{x:18.25,z:29,w:27.5,d:.6},{x:-32,z:-1,w:.6,d:60},{x:32,z:-1,w:.6,d:60},{x:0,z:-31,w:64,d:.6});
   // The sole conveyor hatch is at the left; the visitor door stays in the center.
   const partition=new T.Group();partition.name='gateway-partition';world.add(partition);
@@ -140,22 +142,31 @@ export function createCampus(world,art,obstacles,materials,chamber,hall,icons){
   partition.traverse(o=>{o.userData.dynamic=true;if(o.isMesh){if(!clones.has(o.material))clones.set(o.material,o.material.clone());o.material=clones.get(o.material);o.material.transparent=true;partitionMaterials.add(o.material);}});
   let partitionOpacity=1,hallLight=0,lastDoorOpen=false;
   let upperOpacity=1,enteredHall=false,settled=false;
-  return {walls,partition,metro,landscape,get settled(){return settled;},get exteriorDarkness(){return darkness;},get hallLight(){return hallLight;},tick(dt,position,camera){
+  function registerReception(root=reception){fadeReception.register(root);root.traverse(o=>o.userData.dynamic=true);}
+  function attachToWall(name,root){
+    const wall=walls.find(w=>w.name===name);wall.group.attach(root);
+    root.traverse(o=>{o.userData.dynamic=true;if(o.material){
+      const material=o.material.clone();material.onBeforeCompile=o.material.onBeforeCompile;material.customProgramCacheKey=o.material.customProgramCacheKey;
+      material.userData.cutawayOpacity=material.opacity;material.transparent=true;o.material=material;wall.materials.add(material);
+    }});
+  }
+  return {walls,partition,metro,landscape,reception,registerReception,attachToWall,get settled(){return settled;},get exteriorDarkness(){return darkness;},get hallLight(){return hallLight;},tick(dt,position,camera){
     settled=true;
     const settle=(value,target,rate,dt)=>{const next=T.MathUtils.damp(value,target,rate,dt);if(Math.abs(next-target)>.001){settled=false;return next;}return target;};
     const withinFootprint=Math.abs(position.x)<31.8&&position.z>-30.8;
     const interior=withinFootprint?1-T.MathUtils.smoothstep(position.z,27,30):0;
     darkness=settle(darkness,interior,2.4,dt);fadeExterior(darkness);
-    world.backgroundIntensity=skyIntensity*T.MathUtils.lerp(1,.055,darkness);world.fog.color.copy(fogColor).lerp(nightFog,darkness);
+    world.background=darkness>.998?black:sky;world.backgroundIntensity=skyIntensity*(1-darkness);world.fog.color.copy(fogColor).lerp(nightFog,darkness);
     if(position.z<16)enteredHall=true;else if(position.z>19)enteredHall=false;
     hallLight=settle(hallLight,withinFootprint?1-T.MathUtils.smoothstep(position.z,11,17):0,2.8,dt);
+    fadeReception(hallLight);
     upperOpacity=settle(upperOpacity,1-interior,7,dt);upper.visible=upperOpacity>.01;
     upperMaterials.forEach(m=>{m.opacity=upperOpacity;m.depthWrite=upperOpacity>.98;});
     const cameraPosition=camera.position.clone().divideScalar(CAMPUS_SCALE);
     for(const wall of walls){
-      const blocks=interior>.5&&(wall.name.startsWith('front')?cameraPosition.z>29:wall.name==='north'?cameraPosition.z<-31:wall.name==='west'?cameraPosition.x<-32:cameraPosition.x>32);
+      const blocks=wall.name.startsWith('front')&&hallLight>.998||interior>.5&&(wall.name.startsWith('front')?cameraPosition.z>29:wall.name==='north'?cameraPosition.z<-31:wall.name==='west'?cameraPosition.x<-32:cameraPosition.x>32);
       wall.opacity=settle(wall.opacity,blocks?0:1,9,dt);wall.group.visible=wall.opacity>.015;
-      wall.materials.forEach(m=>{m.opacity=wall.opacity;m.depthWrite=wall.opacity>.98;});
+      wall.materials.forEach(m=>{m.opacity=wall.opacity*(m.userData.cutawayOpacity??1);m.depthWrite=wall.opacity>.98;});
     }
     // Hide the partition only when viewing the hall through its near side.
     const cut=cameraPosition.z>18?1-T.MathUtils.smoothstep(position.z,14.7,18):0;
@@ -175,7 +186,7 @@ export function parcelDrop(age){
   const t=age-.5;return {y:.45+Math.abs(Math.sin(t*12))*Math.exp(-t*8)*.23,tilt:.55*Math.exp(-t*7)};
 }
 
-export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()=>{}){
+export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()=>{},reception=world,onReception=()=>{}){
   const {box,rod,mat,ring,cylinder,textPlane}=art,packets=[],couriers=[],deposits=[];
   const prototype=new T.Group();
   box(prototype,.5,.4,.5,'#263947');
@@ -189,7 +200,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
   function parcel(parent,x=0,y=0,z=0){const g=prototype.clone(true);g.position.set(x,y,z);g.traverse(o=>o.userData.dynamic=true);parent.add(g);return g;}
   const speed=1.6,travel=31.9/speed;
   // Split the belt at the partition: each segment follows its room's lighting.
-  const belt=[[-13.4,20.8,-28,20.8,world],[-28,20.8,-28,18,world],[-28,18,-28,3.5,hall]];
+  const belt=[[-13.4,20.8,-28,20.8,reception],[-28,20.8,-28,18,reception],[-28,18,-28,3.5,hall]];
   const beltY=z=>1.13+(1-T.MathUtils.smoothstep(z,16,20))*1.8;
   for(const [ax,az,bx,bz,parent]of belt){
     const horizontal=az===bz,len=Math.hypot(bx-ax,bz-az),x=(ax+bx)/2,z=(az+bz)/2;
@@ -209,7 +220,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
   box(hall,3.5,.55,.1,'#253846',bin.x,binY+.4,bin.z-1.8);obstacles.push({...bin,w:3.7,d:3.8});
   for(let i=0;i<9;i++)parcel(hall,bin.x+(i%3-1)*.78,binY+.15+.24+(i>=6?.48:0),bin.z-1+(Math.floor(i/3)%2)*.8);
   textPlane(hall,'01 / TRIAGEM',3.15,.5,bin.x,binY+.67,bin.z+1.87,{color:'#99dcff',background:'#182d38',size:120});
-  for(let i=0;i<7;i++)packets.push({p:parcel(world),phase:i*3.1,previous:-1});
+  for(let i=0;i<7;i++)packets.push({p:parcel(reception),phase:i*3.1,previous:-1});
   const workers=Object.entries(zones).flatMap(([id,zone])=>slotsFor(id).map(([x,z])=>({x:zone.x+x,z:zone.z+z,r:.7})));
   const docks={hermes:[-5,0],models:[-28,-16],mcp:[-9,-16],memory:[8,-16],rag:[30,-12],cron:[27,14],vm:[-16,13]};
   for(const [index,[id,[x,z]]]of Object.entries(docks).entries()){
@@ -227,7 +238,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
       const {p,phase}=item,age=(t+phase)%(travel+3);p.visible=age<travel+2.4;
       if(age<travel){const d=age*speed;if(d<14.6)p.position.set(-13.4-d,1.49,20.8);else {const z=20.8-(d-14.6);p.position.set(-28,1.49+(1-T.MathUtils.smoothstep(z,16,20))*1.8,z);}p.rotation.set(0,0,0);}
       else {const fall=parcelDrop(age-travel);p.position.set(-28,fall.y+binY-FLOOR,3.5-Math.min(1,age-travel)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);if(item.previous<travel+.5&&age>=travel+.5)onCue('drop',p.position);}
-      const parent=p.position.z<17.7?hall:world;if(p.parent!==parent){parent.add(p);if(parent===hall)revealTargets.push(p);else p.traverse(o=>{if(o.material?.hallOriginal)o.material=o.material.hallOriginal;});}item.previous=age;
+      const parent=p.position.z<17.7?hall:reception;if(p.parent!==parent){p.traverse(o=>{while(o.material?.hallOriginal||o.material?.roomOriginal)o.material=o.material.hallOriginal||o.material.roomOriginal;});parent.add(p);if(parent===hall)revealTargets.push(p);else onReception(p);}item.previous=age;
     }
     for(const item of couriers){const {rig,parcel,deposited,curve,duration,phase}=item;if(!curve.curves.length){rig.root.visible=false;continue;}const age=(t+phase)%(duration*2+4);let u,returning=false;
       if(age<2){u=0;parcel.visible=age>1;item.speed=0;}else if(age<duration+2){u=(age-2)/duration;parcel.visible=true;item.speed=curve.getLength()/duration;}else if(age<duration+4){u=1;parcel.visible=age<duration+3;deposited.visible=!parcel.visible;item.speed=0;}else{u=1-(age-duration-4)/duration;returning=true;parcel.visible=false;item.speed=curve.getLength()/duration;}

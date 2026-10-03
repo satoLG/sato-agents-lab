@@ -1,4 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
+import {createFoliageMaterial,createBarkMaterial} from './lab-nature.js';
 
 const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 const hash=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
@@ -84,15 +85,8 @@ export function createLandscape(world,art,obstacles,materials){
     box(world,.65,.018,.9,'#4f5d56',x,.075,z);
     for(let k=0;k<5;k++)box(world,.51,.008,.035,'#a7b2a6',x,.087,z-.32+k*.16);
   }
-  const leafCanvas=document.createElement('canvas');leafCanvas.width=leafCanvas.height=128;const ctx=leafCanvas.getContext('2d');
   let seed=761;const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  for(let i=0;i<200;i++){
-    const angle=random()*Math.PI*2,r=Math.sqrt(random())*57,x=64+Math.cos(angle)*r,y=64+Math.sin(angle)*r;
-    ctx.fillStyle=['#59763e','#829452','#426339','#a0ab6d'][i%4];ctx.beginPath();ctx.ellipse(x,y,5+random()*5,3+random()*3,angle,0,Math.PI*2);ctx.fill();
-  }
-  const leafMap=new T.CanvasTexture(leafCanvas);leafMap.colorSpace=T.SRGBColorSpace;
-  const leafMaterial=new T.MeshStandardMaterial({map:leafMap,alphaTest:.45,side:T.DoubleSide,roughness:.95,color:'#b3c295'});
-  leafMaterial.alphaToCoverage=true;leafMaterial.fog=false;
+  const leafMaterial=createFoliageMaterial().clone();leafMaterial.fog=false;
   const trees=[],shrubs=[];
   function island(x,z,w,d){
     const curbShape=rounded(w,d,Math.min(w,d)/2-.1),geometry=new T.ExtrudeGeometry(curbShape,{depth:.22,bevelEnabled:false,curveSegments:12});geometry.rotateX(-Math.PI/2);
@@ -116,7 +110,7 @@ export function createLandscape(world,art,obstacles,materials){
     if(random()<.12)continue;
     trees.push({x:px,z:pz,y:terrainHeight(px,pz),h:8+random()*8,r:2.5+random()*2});
   }
-  const trunks=new T.InstancedMesh(new T.CylinderGeometry(.12,.24,1,6),mat('#71634e',0,1),trees.length*4);
+  const trunks=new T.InstancedMesh(new T.CylinderGeometry(.12,.24,1,12),createBarkMaterial(),trees.length*4);
   const foliage=new T.InstancedMesh(new T.PlaneGeometry(1,1),leafMaterial,trees.length*24+shrubs.length*3);
   const dummy=new T.Object3D(),up=new T.Vector3(0,1,0);let ti=0,li=0;
   const segment=(a,b,r)=>{const delta=b.clone().sub(a);dummy.position.copy(a).add(b).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(up,delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();trunks.setMatrixAt(ti++,dummy.matrix);};

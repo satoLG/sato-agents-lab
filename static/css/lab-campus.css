@@ -41,7 +41,10 @@ body[data-loading=false] #lab .lab-loading{opacity:0;pointer-events:none}
 @media(prefers-reduced-motion:reduce){#scene,#lab .lab-loading,.loading-segments span{transition:none}}
 
 /* Keep prompts and dialogue inside the available viewport, including short phones. */
-#interaction{z-index:7;bottom:max(82px,env(safe-area-inset-bottom));color:#ecfaff}#interaction kbd{display:block}
+#interaction{z-index:7;top:40%;bottom:auto;min-width:0;width:max-content;max-width:calc(100% - 24px);padding:5px;gap:9px;background:none;border:0;border-radius:0;box-shadow:none;backdrop-filter:none;color:#f5fcff;text-shadow:0 2px 4px #000,0 0 14px #000b;transform:translate(-50%,-100%)}
+#interaction:hover{background:none;color:#b8f3ff}#interaction small{font-size:8px;letter-spacing:.9px;max-width:180px;color:#d6edf3;margin-bottom:3px}#interaction strong{font-size:13px;font-weight:800}
+.input-button{width:38px;height:38px;flex-shrink:0;filter:drop-shadow(0 2px 3px #000a)}.input-button svg{width:100%;height:100%;fill:#10242b55;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:700px){#interaction small{max-width:155px;font-size:7px}#interaction strong{font-size:12px}.input-button{width:34px;height:34px}}
 #rag-action{z-index:7}body[data-started=false] #interaction,body[data-started=false] #rag-action{display:none}
 .dialogue-layer{inset:max(70px,env(safe-area-inset-top)) 18px auto;bottom:240px;display:flex;align-items:flex-end;justify-content:center;gap:18px;overflow:visible;min-height:0}
 .speech-anchor{width:min(340px,48%);min-width:0;max-height:100%;display:flex;flex-direction:column}.speech-card{max-height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box}.speech-text,.speech-anchor.user .speech-text{min-height:0;max-height:200px;overflow:auto}
