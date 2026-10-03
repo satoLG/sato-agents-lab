@@ -1,0 +1,22 @@
+const {test,expect}=require('@playwright/test');
+test('one large bank per sector, real readings, history zoom and button-only chats',async({page,request})=>{
+ test.setTimeout(240000);await page.setViewportSize({width:960,height:720});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const state=await(await request.get('/api/lab/state')).json();
+ const board={upcoming:[{when:'2026-10-04T12:00:00Z',name:'Agenda de teste',status:'AGENDADO',kind:'cron'}],rows:[{when:'2026-10-03T12:00:00Z',name:'Execução de teste',status:'REGISTRADO',kind:'cron',source:'fixture'}]};
+ const channels={vm:{data:{cpu:{total:42},memory:{total:1024,used_percent:61},uptime_seconds:3600}},events:{data:{jobs:[{}],failed_runs:0,webhooks:{available:false,routes:[]}}}};
+ await page.route('**/api/lab/stream',route=>route.fulfill({contentType:'text/event-stream',body:`event: telemetry\ndata: ${JSON.stringify({state,channels,boards:{cron:board}})}\n\n`}));
+ await page.route('**/js/lab-scene.js*',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.liveQA={world,camera,zones,robots,avatar,groundAt,stopWalking,callbacks};renderer.render(world,camera);')});});
+ await page.goto('/lab');await expect(page.locator('#loading')).toBeHidden({timeout:30000});await page.locator('#lab-play').click();
+ const geometry=await page.evaluate(()=>{const banks=[],screens=[];liveQA.world.traverse(o=>{if(o.name==='dashboard-monitor-bank')banks.push(o);if(o.name==='dashboard-indicator-screen')screens.push(o);});return {banks:banks.length,screens:screens.length,large:screens.every(o=>o.geometry.parameters.width===2.5),ragBoard:liveQA.zones.get('rag').history.root.visible,cronBoard:liveQA.zones.get('cron').history.root.visible};});
+ expect(geometry).toEqual({banks:8,screens:48,large:true,ragBoard:false,cronBoard:true});
+ await page.evaluate(()=>liveQA.callbacks.onEquipment('vm'));await expect(page.locator('#equipment-panel')).toContainText('42%');await expect(page.locator('#equipment-panel')).toContainText('61%');await page.getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.evaluate(()=>liveQA.callbacks.onEquipment('cron',true));await expect(page.locator('.execution-history h3')).toHaveText(['Próximos agendamentos','Histórico de execuções']);await page.locator('.execution-history summary').last().click();await expect(page.locator('.execution-history details[open]')).toContainText('fixture');await page.screenshot({path:'test-results/execution-board.png'});await page.getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.evaluate(()=>{const q=liveQA,robot=q.robots.get('guide:vm').rig.root.position;q.stopWalking();q.avatar.position.set(robot.x+1.4,q.groundAt(robot.x+1.4,robot.z),robot.z);});
+ await expect(page.locator('#interaction')).toHaveAttribute('data-robot','guide:vm');await page.locator('#interaction').click();await expect(page.locator('#chat-form')).toBeHidden();await expect(page.locator('#chat-free-toggle')).toBeHidden();await expect(page.locator('.chat-suggestions button')).toHaveCount(4);await page.locator('#chat-close').click();
+ await page.evaluate(()=>{const q=liveQA,robot=q.robots.get('guide:hermes').rig.root.position;q.stopWalking();q.avatar.position.set(robot.x+1.4,q.groundAt(robot.x+1.4,robot.z),robot.z);});
+ await expect(page.locator('#interaction')).toHaveAttribute('data-robot','guide:hermes');await page.locator('#interaction').click();await expect(page.locator('#chat-free-toggle')).toBeVisible();await expect(page.locator('#chat-form')).toBeHidden();await page.locator('#chat-close').click();
+ await page.locator('#camera-room').click();await page.screenshot({path:'test-results/large-monitors.png'});
+ expect(errors).toEqual([]);
+ await page.goto('/dashboard');await page.locator('[data-live-indicators] select').selectOption('vm');await expect(page.locator('[data-live-indicators] .stat-grid')).toContainText('42%');
+});

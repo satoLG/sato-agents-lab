@@ -29,6 +29,13 @@
 
 {% block content %}
 
+<section class="panel" data-live-indicators aria-label="Indicadores dos setores">
+  <div class="panel-head"><h2>Indicadores dos setores</h2><p>As mesmas leituras nos monitores do laboratório.</p></div>
+  <label>Setor <select aria-label="Setor dos indicadores"><option value="hermes">Núcleo</option><option value="models">Providers</option><option value="gateway">Gateway</option><option value="mcp">MCP</option><option value="rag">RAG</option><option value="memory">Memória</option><option value="cron">EVENTS</option><option value="vm">VM</option></select></label>
+  <p role="status">Conectando aos indicadores…</p><div class="stat-grid"></div>
+</section>
+<script type="module" src="{{ url_for('static', filename='js/dashboard-live.js') }}"></script>
+
 <section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade">
   <div class="panel-head">
     <h1>Atividade</h1>

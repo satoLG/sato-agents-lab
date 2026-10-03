@@ -51,3 +51,16 @@ def test_native_history_drives_activity_tools_mcp_and_cron(client, vm):
     assert cron['total_runs'] == 1
     assert cron['jobs'][0]['schedule'] == 'every day'
     assert 'private job' not in json.dumps(cron)
+
+
+def test_running_or_unknown_cron_status_does_not_count_as_failure(client, vm):
+    vm.cron(jobs_text='[{"id":"j1"}]', executions_ddl=[
+        'CREATE TABLE executions (job_id TEXT, started_at TEXT, finished_at TEXT, status TEXT)',
+        "INSERT INTO executions VALUES ('j1', '2026-10-03T10:00:00Z', NULL, 'running')",
+        "INSERT INTO executions VALUES ('j1', '2026-10-03T09:00:00Z', '2026-10-03T09:01:00Z', 'unknown')",
+        "INSERT INTO executions VALUES ('j1', '2026-10-03T08:00:00Z', '2026-10-03T08:01:00Z', 'failed')",
+    ])
+    data = client.get('/api/cronjobs').json
+    assert data['failed_runs'] == 1
+    assert data['jobs'][0]['history']['failures'] == 1
+    assert [run['ok'] for run in data['executions']] == [None, None, False]

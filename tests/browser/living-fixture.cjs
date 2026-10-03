@@ -11,6 +11,7 @@ async function livingFixture(page,request){
   const heat={days:Array.from({length:365},(_,i)=>({date:new Date(Date.UTC(2025,8,23+i)).toISOString().slice(0,10),total:i%8===0?0:(i*13)%33})),max:32,total:5460};
   const queries=[];
   await page.route('**/api/lab/state',route=>route.fulfill({json:state}));
+  await page.route('**/api/lab/stream',route=>route.fulfill({contentType:'text/event-stream',body:`event: telemetry\ndata: ${JSON.stringify({state,channels:{},boards:{}})}\n\n`}));
   await page.route('**/api/activity/heatmap?**',route=>route.fulfill({json:heat}));
   await page.route('**/api/rag/graph*',route=>{const parent=new URL(route.request().url()).searchParams.get('parent');return route.fulfill({json:!parent?root:parent.startsWith('repo:')?category:{nodes:docs,edges:docs.map(d=>({source:category.nodes[0].id,target:d.id}))}});});
   await page.route('**/api/rag/search?**',route=>{
