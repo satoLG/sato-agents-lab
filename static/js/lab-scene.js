@@ -1,3 +1,4 @@
+import {createMonitorBank,indicatorCards} from './lab-monitors.js';
 import * as T from '../vendor/three.module.min.js';
 import {createCampus,createParcelFlow,ZONES,slotsFor,CAMPUS_SCALE,FLOOR,groundHeight} from './lab-campus.js';
 import {createChamberMaterials,createHallReveal} from './lab-chamber-materials.js';
@@ -115,22 +116,6 @@ export async function createLabScene(container, callbacks) {
   createAreaFloors(hall,art,obstacles);
   const biome=createLabBiome(hall,art,environment);
   const energy=createEnergyLines(hall,groundHeight);
-  function makeScreen(parent, x, y, z, width = 1.44, height = .76) {
-    const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 384;
-    const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
-    const plane = mesh(parent, new T.PlaneGeometry(width,height), new T.MeshBasicMaterial({map:texture}), x,y,z,false);
-    plane.rotation.x = -.18;
-    let previous = '';
-    function update(lines) {
-      const key = lines.join('|'); if (key === previous) return; previous = key;
-      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#102e34'; ctx.fillRect(0,0,768,384);
-      ctx.fillStyle = '#52a6c0'; ctx.fillRect(32,28,5,38);
-      for (let i=0;i<lines.length;i++) { ctx.font = `${i===0 ? 600 : 400} ${i===0 ? 42 : 29}px Nunito`; ctx.fillStyle = i===0 ? '#a4e7ff' : i===1 ? '#e7f8ed' : '#94ada9'; let text=String(lines[i]); while(ctx.measureText(text).width>690 && text.length>2) text=text.slice(0,-2)+'…'; ctx.fillText(text,55,59+i*72); }
-      texture.needsUpdate = true;
-    }
-    update(['AGUARDANDO DADOS','Sem telemetria','']);
-    return {update,texture,plane};
-  }
   function consoleDesk(group, color) {
     box(group, 2.5, .22, 1.25, '#e4eade', 0, 1, -.4);
     box(group, 1.95, .92, .75, '#27323b', 0, .46, -.55);
@@ -141,8 +126,7 @@ export async function createLabScene(container, callbacks) {
     box(group,1.65,.48,.03,'#dce2e5',0,.5,-.155);
     for(const x of [-.72,.72])for(const y of [.32,.68])sphere(group,.025,'#394851',x,y,-.132);
     box(group, 2.05, .07, .06, glow(color), 0, .85, .23);
-    const monitor = box(group, 1.65, .92, .11, '#385b53', 0, 1.6, -.72); monitor.rotation.x = -.18;
-    const screen = makeScreen(group,0,1.6,-.57);
+    const screen=createMonitorBank(group,art,{z:-.62});
     box(group, 1.08, .07, .55, '#b7cbbb', 0, 1.07, .27);
     box(group, .88, .04, .3, '#708c7b', 0, 1.15, .34);
     for(let row=0;row<3;row++)for(let col=0;col<8;col++)box(group,.073,.018,.054,mat('#263943',.65,.28),-.35+col*.1,1.178,.24+row*.075);
@@ -159,21 +143,19 @@ export async function createLabScene(container, callbacks) {
   }
 
   function receptionDesk(group,color){
-    box(group,7.5,1.05,1.4,'#27323b',0,.525,0);
-    box(group,7.3,.76,.05,'#e2e8e9',0,.55,.72);
+    box(group,6.3,1.05,1.4,'#27323b',0,.525,0);
+    box(group,6.1,.76,.05,'#e2e8e9',0,.55,.72);
     for(const x of [-1.2,1.2])for(let i=0;i<4;i++)box(group,.3,.025,.02,'#394851',x,.34+i*.09,.755);
-    box(group,7.8,.16,1.65,'#e2e6d4',0,1.13,0);
+    box(group,6.6,.16,1.65,'#e2e6d4',0,1.13,0);
     box(group,3.1,.065,.04,glow(color),0,.79,.72);
-    const terminal=new T.Group();terminal.position.set(.7,1.25,-.4);terminal.rotation.y=Math.PI;group.add(terminal);
-    box(terminal,.95,.62,.12,'#294d43',0,.25,0);
-    return makeScreen(terminal,0,.25,.075,.84,.5);
+    return createMonitorBank(group,art,{x:-1.65,y:.1,z:-.28});
   }
   for (const [id, zone] of Object.entries(ZONES)) {
     const group = new T.Group(); group.position.set(zone.x, groundHeight(zone.x,zone.z), zone.z); (id==='gateway'?world:hall).add(group);
     const r = id === 'rag' ? 8.4 : id==='gateway'? 4.1 : 4.5;
     const trim=box(group,3,.04,.035,glow(zone.color),0,.055,3.7);
     const desk = new T.Group(); desk.position.z = id==='rag'?6.75:id==='gateway'?.9:.95; group.add(desk); const display = id==='gateway'?receptionDesk(desk,zone.color):consoleDesk(desk, zone.color);
-    obstacles.push({x: zone.x, z: zone.z + (id==='rag'?6.35:id==='gateway'?.9:.55), w: id==='gateway'?7.8:3.1, d: id==='gateway'?1.5:1.8});
+    obstacles.push({x: zone.x, z: zone.z + (id==='rag'?6.35:id==='gateway'?.9:.55), w: id==='gateway'?6.6:3.1, d: id==='gateway'?1.5:1.8});
     zones.set(id, {group, trim, display, status:'unknown',radius:r});
     createSectorSign(id==='gateway'?world:hall,id,art,sectorIcons,obstacles);
   }
@@ -189,16 +171,16 @@ export async function createLabScene(container, callbacks) {
   // Provider portals: two gateways, configuration is shown by the UI, never invented.
   const providers = zones.get('models').group;
   for (const side of [-1, 1]) {
-    box(providers,.9,.45,.7,'#91a998',side*1.35,.225,-1.3);
-    ring(providers, .9, .17, '#dce3d3', side * 1.35, 1.5, -1.3);
-    ring(providers, .71, .065, glow(side === -1 ? '#70d9f5' : '#ffb76b'), side * 1.35, 1.5, -1.17);
-    const inner = cylinder(providers, .65, .07, '#376768', side * 1.35, 1.5, -1.2); inner.rotation.x = Math.PI / 2;
+    box(providers,.9,.45,.7,'#91a998',side*2.7,.225,-1.3);
+    ring(providers, .9, .17, '#dce3d3', side * 2.7, 1.5, -1.3);
+    ring(providers, .71, .065, glow(side === -1 ? '#70d9f5' : '#ffb76b'), side * 2.7, 1.5, -1.17);
+    const inner = cylinder(providers, .65, .07, '#376768', side * 2.7, 1.5, -1.2); inner.rotation.x = Math.PI / 2;
   }
   // MCP patch bay: cabling plugs into a central spine.
   const patch = zones.get('mcp').group;
-  box(patch, 3.35, 3.1, .35, '#365851', 0, 1.55, -1.7);
+  box(patch, 3.35, 3.1, .35, '#365851', 0, 3.45, -1.7);
   for (let i = 0; i < 6; i++) {
-    const x = -.99 + (i % 3) * .99, y = 1.05 + Math.floor(i / 3) * .95;
+    const x = -.99 + (i % 3) * .99, y = 2.95 + Math.floor(i / 3) * .95;
     box(patch, .76, .58, .18, '#b3c7b4', x, y, -1.42);
     sphere(patch, .08, glow('#80d3d8'), x - .17, y, -1.28);
     rod(patch, [x + .1, y, -1.24], [x + .2, .44, -1.1], .035, mat('#456f65'));
@@ -212,14 +194,14 @@ export async function createLabScene(container, callbacks) {
   }
   // Cron clock, with a static dial; robot activity is driven only by evidence.
   const scheduler = zones.get('cron').group;
-  rod(scheduler, [0, 0, -1.65], [0, 2.8, -1.65], .16, mat('#66816d'));
-  ring(scheduler, 1.05, .17, '#e1e6d2', 0, 2.85, -1.6);
-  const dial = cylinder(scheduler, .94, .1, '#426e62', 0, 2.85, -1.6); dial.rotation.x = Math.PI / 2;
+  rod(scheduler, [0, 0, -1.65], [0, 4.05, -1.65], .16, mat('#66816d'));
+  ring(scheduler, 1.05, .17, '#e1e6d2', 0, 4.1, -1.6);
+  const dial = cylinder(scheduler, .94, .1, '#426e62', 0, 4.1, -1.6); dial.rotation.x = Math.PI / 2;
   for (let i = 0; i < 12; i++) {
-    const tick = box(scheduler, .05, .14, .035, '#d6dcbc', Math.sin(i * Math.PI / 6) * .78, 2.85 + Math.cos(i * Math.PI / 6) * .78, -1.49); tick.rotation.z = -i * Math.PI / 6;
+    const tick = box(scheduler, .05, .14, .035, '#d6dcbc', Math.sin(i * Math.PI / 6) * .78, 4.1 + Math.cos(i * Math.PI / 6) * .78, -1.49); tick.rotation.z = -i * Math.PI / 6;
   }
-  rod(scheduler, [0, 2.85, -1.45], [.52, 3.15, -1.45], .045, glow('#ebc786'));
-  rod(scheduler, [0, 2.85, -1.44], [0, 3.44, -1.44], .03, '#e9e3c5');
+  rod(scheduler, [0, 4.1, -1.45], [.52, 4.4, -1.45], .045, glow('#ebc786'));
+  rod(scheduler, [0, 4.1, -1.44], [0, 4.69, -1.44], .03, '#e9e3c5');
   // Each extra worker has its own bench, terminal and tool to operate.
   const benches = new Map(), machineParts = [];
   for (const [id,zone] of Object.entries(ZONES)) {
@@ -228,8 +210,7 @@ export async function createLabScene(container, callbacks) {
       g.position.set(zone.x+sx,groundHeight(zone.x+sx,zone.z+sz),zone.z+(id==='gateway'?.9:sz-.95));(id==='gateway'?world:hall).add(g);
       if(id==='gateway'){const display=receptionDesk(g,zone.color);benches.set(`${id}:${i}`,{group:g,display});obstacles.push({x:g.position.x,z:g.position.z,w:3.8,d:1.65});continue;}
       box(g,1.2,.14,.62,'#bccdc4',0,.86,0); box(g,.85,.84,.39,'#59756b',0,.42,-.07);
-      box(g,.83,.5,.08,'#294d4b',0,1.22,-.2);
-      const display = makeScreen(g,0,1.22,-.145,.75,.4); display.update(['BANCADA AUXILIAR','Aguardando agente','']);
+      const display=createMonitorBank(g,art,{compact:true,z:-.18}); display.update(['BANCADA AUXILIAR','Aguardando agente','']);
       box(g,.56,.04,.21,'#506e64',-.14,.96,.24);
       const tool = new T.Group(); tool.position.set(.42,1.02,.09); g.add(tool);
       cylinder(tool,.08,.15,'#d7e3d6'); ring(tool,.08,.018,glow('#54b9f1'),0,.05,.07);
@@ -262,7 +243,7 @@ export async function createLabScene(container, callbacks) {
   const circles=[], zoneByRobot=new Map();
   const phaseFor=id => [...id].reduce((n,c) => (n*31+c.charCodeAt(0))%997,0)/71;
   const dist=(a,b) => Math.hypot(a.x-b.x,a.z-b.z);
-  function inside(id,p=avatar.position) {const z=ZONES[id];if(id==='gateway')return p.z>19&&p.z<29&&Math.abs(p.x)<30;if(id==='rag')return p.x>17&&p.x<31&&p.z>-30&&p.z<-10;return p.z<18&&Math.abs(p.x-z.x)<(id==='hermes'?6.8:5.1)&&Math.abs(p.z-z.z)<6;}
+  function inside(id,p=avatar.position) {const z=ZONES[id];if(id==='gateway')return p.z>18.6&&p.z<25&&Math.abs(p.x-ZONES.gateway.x)<8;if(id==='rag')return p.x>17&&p.x<31&&p.z>-30&&p.z<-10;return p.z<18&&Math.abs(p.x-z.x)<(id==='hermes'?6.8:5.1)&&Math.abs(p.z-z.z)<6;}
   function groundAt(x,z) { return groundHeight(x,z); }
   const emoticons=new Map();
   for (const text of ['…','?','!','✓','✦']) {
@@ -317,7 +298,7 @@ export async function createLabScene(container, callbacks) {
   function navigate(point){leaveArrival();audio.cue('click');if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
   function approach(item){
     const center=item.rig.root.position,options=[];
-    for(let i=0;i<16;i++){const angle=i*Math.PI/8,p={x:center.x+Math.sin(angle)*1.5,z:center.z+Math.cos(angle)*1.5};if(inside(item.worker.sector,p)&&canStand(p.x,p.z,obstacles,circles))options.push(p);}
+    for(let i=0;i<16;i++){const angle=i*Math.PI/8,p={x:center.x+Math.sin(angle)*(item.worker.sector==='gateway'?3.05:1.5),z:center.z+Math.cos(angle)*(item.worker.sector==='gateway'?3.05:1.5)};if(inside(item.worker.sector,p)&&canStand(p.x,p.z,obstacles,circles))options.push(p);}
     options.sort((a,b)=>dist(a,avatar.position)-dist(b,avatar.position));
     for(const p of options){const path=findPath(avatar.position,p,obstacles,circles);if(path.length)return path;}
     return [];
@@ -331,8 +312,8 @@ export async function createLabScene(container, callbacks) {
     if(cameraMode==='room')setCameraMode('follow');
     destination.position.set(route.at(-1).x,groundAt(route.at(-1).x,route.at(-1).z)+.025,route.at(-1).z);destination.visible=true;dirty=true;
   }
-  function canInteract(id){const item=robots.get(id);return !contextLost&&!!item&&inside(item.worker.sector)&&dist(avatar.position,item.rig.root.position)<2.05;}
-  function interact(){if(!chatId&&candidate&&canInteract(candidate.worker.id))callbacks.onInteract(candidate.worker.id);}
+  function canInteract(id){const item=robots.get(id);return !contextLost&&!!item&&inside(item.worker.sector)&&dist(avatar.position,item.rig.root.position)<(item.worker.sector==='gateway'?3.4:2.05);}
+  function interact(){if(chatId||study)return;if(candidate&&canInteract(candidate.worker.id))callbacks.onInteract(candidate.worker.id);else if(location==='rag')callbacks.onRagInteract?.();else if(location)callbacks.onEquipment?.(location);}
   function beginChat(id){
     if(!canInteract(id)||chatId||study)return false;
     stopWalking();chatId=id;savedCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};
@@ -440,13 +421,13 @@ export async function createLabScene(container, callbacks) {
     if(aiming){const p=aimPoint||{x:avatar.position.x+Math.sin(aimHeading)*3,z:avatar.position.z+Math.cos(aimHeading)*3};reticle.position.set(p.x,groundAt(p.x,p.z)+.035,p.z);}
     avatar.position.y=groundAt(avatar.position.x,avatar.position.z)+hero.jumpHeight;
     destination.visible=route.length>0&&!chatId;
-    location=Object.keys(ZONES).find(id=>inside(id))||null;candidate=null;let nearest=2.05;
+    location=Object.keys(ZONES).find(id=>inside(id))||null;candidate=null;let nearest=location==='gateway'?3.4:2.05;
     for(const item of robots.values()){const distance=dist(avatar.position,item.rig.root.position);if(inside(item.worker.sector)&&distance<nearest){candidate=item;nearest=distance;}}
     if(desiredRobot&&canInteract(desiredRobot))candidate=robots.get(desiredRobot);
     if(location!==previousLocation){callbacks.onLocation(location);previousLocation=location;if(location){for(const item of robots.values())if(item.worker.sector===location){item.rig.greeting=animationTime+1.3;showBubble(item.rig,'✦');}emoteUntil=ms+1700;}}
-    const candidateId=candidate?.worker.id||'';if(candidateId!==previousCandidate){callbacks.onCandidate(candidate?.worker||null);previousCandidate=candidateId;}
+    const candidateId=candidate?.worker.id||'';callbacks.onContext?.(candidate?.worker||null,location);if(candidateId!==previousCandidate){callbacks.onCandidate(candidate?.worker||null);previousCandidate=candidateId;}
     if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(savedCamera.aim).divideScalar(CAMPUS_SCALE);target.y+=2.2;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
-    else if(study){target.set(ZONES.rag.x,3.1,ZONES.rag.z);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
+    else if(study){target.set(ZONES.rag.x,groundAt(ZONES.rag.x,ZONES.rag.z)+3.1,ZONES.rag.z);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=groundAt(ZONES.rag.x,ZONES.rag.z)+2;}
     else if(arrivalView||cameraMode==='room'&&outside()){
       target.copy(openingTarget());targetRadius=cornerRadius();
       targetAzimuth=openingAzimuth();targetElevation=.26;
@@ -474,7 +455,7 @@ export async function createLabScene(container, callbacks) {
       const rig=item.rig,attention=inside(item.worker.sector)&&(item.worker.kind!=='catalog'||chatId===item.worker.id||animationTime<rig.greeting)?1:0;
       const look=Math.atan2(avatar.position.x-rig.root.position.x,avatar.position.z-rig.root.position.z);
       const beforeTurn=rig.root.rotation.y;
-      rig.root.rotation.y=dampAngle(beforeTurn,attention?look:Math.PI,dt,attention?4:2);
+      rig.root.rotation.y=dampAngle(beforeTurn,attention?look:item.worker.sector==='gateway'?0:Math.PI,dt,attention?4:2);
       // Ambient inspection/tapping remains subtle while real work increases its pace.
       poseRig(rig,animationTime,dt,{speed:0,attention,work:stale?.7:item.worker.status==='running'||item.worker.kind==='catalog'&&installations.memoryActive()?1:.8,talk:chatId===item.worker.id&&animationTime<(rig.speakingUntil||0),lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
     }
@@ -502,7 +483,7 @@ export async function createLabScene(container, callbacks) {
     // Shadow maps update on every rendered frame, including idle and turns.
     energy.tick(animationTime);biome.tick(animationTime);
     audio.ambient([...Array.from(zones,([id,zone])=>({id:`machine:${id}`,kind:['vm','mcp','rag'].includes(id)?'machineFan':'machineMotor',position:zone.group.position,volume:.045,range:11})),{id:'stream',kind:'stream',position:biome.streamAt(avatar.position),volume:.075,range:7}],started&&!paused&&hallLight>.5);
-    if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
+    if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera,dt,paused);
     for(const packet of parcels.tick(animationTime,enteredHall))hallReveal.register(packet);
     for(const {id,rig,speed,parcel} of parcels.couriers){
       poseRig(rig,animationTime,dt,{speed,work:0,carrying:parcel.visible,reduced:paused});
@@ -522,5 +503,5 @@ export async function createLabScene(container, callbacks) {
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
   renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;dirty=true;renderer.shadowMap.needsUpdate=true;callbacks.onLostContext(false);});
-  return {start,setChatMessages:dialogue.setMessages,toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
+  return {start,setChatMessages(entries,name){dialogue.setMessages(entries,name);dirty=true;},setDashboardIndicators(channels){for(const[id,zone]of zones)zone.display.indicators(indicatorCards(id,channels));for(const[key,bench]of benches)bench.display.indicators(indicatorCards(key.split(':')[0],channels));dirty=true;},toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
 }

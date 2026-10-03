@@ -22,7 +22,7 @@
   <button class="tab" type="button" role="tab" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
   <button class="tab" type="button" role="tab" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
   <button class="tab" type="button" role="tab" data-tab="rag" aria-selected="false" aria-controls="panel-rag">RAG</button>
-  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Cron</button>
+  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Events</button>
 </nav>
 {% endblock %}
 
@@ -148,8 +148,8 @@
 
 <section class="panel" id="panel-cron" role="tabpanel" hidden>
   <div class="panel-head">
-    <h1>Cron jobs</h1>
-    <p>Agendamentos do Hermes, do crontab e dos timers do systemd na VM.</p>
+    <h1>Events</h1>
+    <p>Cron jobs, timers e webhooks do Hermes na VM.</p>
   </div>
   <div data-role="cron"><p class="skeleton">carregando...</p></div>
 </section>

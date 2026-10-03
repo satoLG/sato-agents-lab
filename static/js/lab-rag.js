@@ -14,25 +14,25 @@ export function createRagDome(world,art,zone){
   const network=new T.Group();root.add(network);network.userData.dynamic=true;
   const nodeObjects=new Map(),nodes=new Map(),edges=new Map(),positions=new Map(),pulses=[];
   const sphere=new T.SphereGeometry(1,12,8),materials=new Map(Object.entries(COLORS).map(([kind,color])=>[kind,new T.MeshBasicMaterial({color,toneMapped:false})]));
-  const edgeMaterial=new T.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.8,blending:T.AdditiveBlending,depthWrite:false});
+  const edgeMaterial=new T.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.38,blending:T.AdditiveBlending,depthWrite:false});
   const c=document.createElement('canvas');c.width=c.height=64;const ctx=c.getContext('2d'),gradient=ctx.createRadialGradient(32,32,0,32,32,32);gradient.addColorStop(0,'#ffffff');gradient.addColorStop(.18,'#80eaffbb');gradient.addColorStop(1,'#20bcff00');ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
-  const haloMaterial=new T.SpriteMaterial({map:new T.CanvasTexture(c),transparent:true,blending:T.AdditiveBlending,depthWrite:false});
+  const haloMaterial=new T.SpriteMaterial({map:new T.CanvasTexture(c),opacity:.3,transparent:true,blending:T.AdditiveBlending,depthWrite:false});
   let lines=null,selected=null,isSearch=false,busy=false,label=null;
-  function disposeNetwork(){
-    for(const object of nodeObjects.values())network.remove(object);nodeObjects.clear();
+  function rebuild(){
     for(const p of pulses)network.remove(p.object);pulses.length=0;
     if(lines){network.remove(lines);lines.geometry.dispose();lines=null;}
-    if(label){network.remove(label);label.material.map.dispose();label.material.dispose();label.geometry.dispose();label=null;}
-  }
-  function rebuild(){
-    disposeNetwork();positions.clear();const list=[...nodes.values()].slice(0,180);
+    for(const[id,object]of nodeObjects)if(!nodes.has(id)){network.remove(object);nodeObjects.delete(id);positions.delete(id);}
+    if(label&&(!selected||!nodes.has(selected))){network.remove(label);label.material.map.dispose();label.material.dispose();label.geometry.dispose();label=null;}
+    const list=[...nodes.values()].slice(0,180);
     const roots=list.filter(n=>n.kind==='root'||n.kind==='query'),others=list.filter(n=>!roots.includes(n));
     for(const n of roots)positions.set(n.id,new T.Vector3(0,1.32,0));
     // Deterministic positions preserve a readable spatial map as branches expand.
-    const major=others.filter(n=>n.kind==='repo'),minor=others.filter(n=>n.kind!=='repo');
-    major.forEach((n,i)=>{const angle=i/Math.max(1,major.length)*Math.PI*2+.3;positions.set(n.id,new T.Vector3(Math.sin(angle)*1.38,1.55+Math.cos(angle*2)*.34,Math.cos(angle)*1.38));});
-    minor.forEach((n,i)=>{const a=i*2.3999632,r=1.7+(i%3)*.22;positions.set(n.id,new T.Vector3(Math.sin(a)*r,.38+(i%5)*.35,Math.cos(a)*r));});
-    for(const n of list){const object=new T.Mesh(sphere,materials.get(n.kind)||materials.get('doc'));const r=n.kind==='root'||n.kind==='query'?.22:n.kind==='repo'?.15:n.kind==='category'?.11:.095+(n.score||0)*.055;object.userData.radius=r;object.scale.setScalar(r);object.position.copy(positions.get(n.id));object.userData.ragNode=n.id;object.userData.dynamic=true;const halo=new T.Sprite(haloMaterial);halo.scale.setScalar(5);object.add(halo);network.add(object);nodeObjects.set(n.id,object);}
+    const hash=id=>{let value=2166136261;for(const c of id)value=Math.imul(value^c.charCodeAt(0),16777619);return (value>>>0)/4294967296;};
+    for(const n of others){const h=hash(n.id),angle=h*Math.PI*2,r=n.kind==='repo'?1.38:1.75+hash(n.id+'r')*.45;positions.set(n.id,new T.Vector3(Math.sin(angle)*r,n.kind==='repo'?1.6:.45+hash(n.id+'y')*1.5,Math.cos(angle)*r));}
+    for(const n of list){let object=nodeObjects.get(n.id);const r=n.kind==='root'||n.kind==='query'?.22:n.kind==='repo'?.15:n.kind==='category'?.11:.095+(n.score||0)*.055;
+      if(!object){object=new T.Mesh(sphere,materials.get(n.kind)||materials.get('doc'));const halo=new T.Sprite(haloMaterial);halo.scale.setScalar(2.8);object.add(halo);network.add(object);nodeObjects.set(n.id,object);object.scale.setScalar(r);}
+      object.userData.radius=r;object.position.copy(positions.get(n.id));object.userData.ragNode=n.id;object.userData.dynamic=true;
+    }
     const vertices=[],colors=[];
     for(const e of edges.values()){
       const a=positions.get(e.source),b=positions.get(e.target);if(!a||!b)continue;vertices.push(...a.toArray(),...b.toArray());
@@ -49,16 +49,15 @@ export function createRagDome(world,art,zone){
     rebuild();return [...nodes.values()];
   }
   function select(id){
-    for(const object of nodeObjects.values())object.scale.setScalar(object.userData.radius);
     selected=id;if(label){network.remove(label);label.material.map.dispose();label.material.dispose();label.geometry.dispose();}
     const n=nodes.get(id),p=positions.get(id);if(!n||!p)return;
     label=textPlane(network,String(n.label),2.8,.42,p.x,p.y+.4,p.z,{color:'#effaff',background:'#102b42',size:100});label.userData.dynamic=true;label.renderOrder=3;
   }
-  function tick(t,camera){
-    scan.position.y=.15+(t*.25%2.65);scan.scale.setScalar(Math.sqrt(Math.max(.01,1-(scan.position.y/2.95)**2)));
-    for(const p of pulses){const fraction=(t*(isSearch?.35:.12)+p.offset)%1;p.object.position.lerpVectors(p.a,p.b,fraction);p.object.visible=!busy;}
+  function tick(t,camera,dt=1/30,reduced=false){
+    scan.position.y=.15+1.3*(1+Math.sin(t*.22));scan.scale.setScalar(Math.sqrt(Math.max(.01,1-(scan.position.y/2.95)**2)));
+    for(const p of pulses){const fraction=(t*(isSearch?.35:.12)+p.offset)%1;p.object.position.lerpVectors(p.a,p.b,fraction);p.object.visible=!busy;p.object.scale.setScalar(.035*Math.sin(Math.PI*fraction));}
     if(label)label.quaternion.copy(camera.quaternion);
-    for(const[id,object]of nodeObjects){object.material=materials.get(nodes.get(id).kind)||materials.get('doc');if(id===selected)object.scale.setScalar(object.userData.radius*(1.5+Math.sin(t*3)*.12));}
+    for(const[id,object]of nodeObjects){object.material=materials.get(nodes.get(id).kind)||materials.get('doc');const scale=object.userData.radius*(id===selected?1.3+Math.sin(t*1.5)*.035:1);object.scale.setScalar(reduced?scale:T.MathUtils.damp(object.scale.x,scale,5,dt));}
   }
   // Preserve the network and its last sample during transient fetch failures.
   return {root,network,setGraph,select,tick,pick(ray){return ray.intersectObjects([...nodeObjects.values()],false)[0]?.object.userData.ragNode;},getNode:id=>nodes.get(id),setBusy(value){busy=value;},get count(){return nodes.size;}};

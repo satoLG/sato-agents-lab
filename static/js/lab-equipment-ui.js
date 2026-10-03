@@ -1,0 +1,10 @@
+import {indicatorCards} from './lab-monitors.js';
+export function createEquipmentUI(getScene){
+ const panel=document.createElement('section');panel.id='equipment-panel';panel.className='overlay equipment-panel';panel.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','Indicadores da estação');
+ const heading=document.createElement('h2'),close=document.createElement('button'),cards=document.createElement('div'),link=document.createElement('a');close.textContent='Fechar';link.textContent='Abrir dashboard';link.href='/dashboard';cards.className='equipment-cards';panel.append(close,heading,cards,link);document.getElementById('lab').append(panel);
+ let channels={},sector='';
+ function render(){cards.replaceChildren(...indicatorCards(sector,channels).map(c=>{const el=document.createElement('article'),title=document.createElement('small'),value=document.createElement('strong'),detail=document.createElement('p');title.textContent=c.title;value.textContent=c.value;detail.textContent=`${c.detail} · ${c.source}`;el.append(title,value,detail);return el;}));}
+ function hide(){panel.hidden=true;document.body.dataset.equipment='false';document.querySelectorAll('#scene,.hud-top,.hud-bottom,.player-controls').forEach(el=>el.inert=false);document.getElementById('scene').focus({preventScroll:true});}
+ close.addEventListener('click',hide);document.addEventListener('keydown',e=>{if(panel.hidden)return;if(e.key==='Escape')hide();if(e.key==='Tab'){const first=close,last=link;if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
+ return {update(value){channels=value;if(!panel.hidden)render();},open(id){sector=id;getScene()?.stopWalking();heading.textContent=id==='cron'?'EVENTS':id.toUpperCase();render();panel.hidden=false;document.body.dataset.equipment='true';document.querySelectorAll('#scene,.hud-top,.hud-bottom,.player-controls').forEach(el=>el.inert=true);close.focus({preventScroll:true});}};
+}

@@ -9,7 +9,7 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
-from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways
+from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways, events as event_catalog
 
 SECTORS = [
     ("gateway", "GATEWAY", "00", "Recebo as entradas do Hermes. Um atendimento unificado reúne os adaptadores conectados e o endpoint de prompts do dashboard; pacotes na esteira ilustram o fluxo da arquitetura.", "gateway_state.json · dashboard"),
@@ -18,7 +18,7 @@ SECTORS = [
     ("mcp", "Conexões MCP", "04", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · tool_calls"),
     ("rag", "Arquivo RAG", "06", "Represento a base vetorial: documentos recuperados para dar contexto ao agente. Só sinalizo uso recente quando há uma ferramenta de RAG identificável no log.", "LanceDB · tool_calls"),
     ("memory", "Memória & skills", "05", "Represento memórias, contextos e skills persistidos em disco para orientar o Hermes.", "~/.hermes/memories · contexts · skills"),
-    ("cron", "Agendamentos", "07", "Represento jobs do Hermes, crontab e timers. Estar agendado é diferente de estar em execução.", "jobs.json · executions.db · crontab · systemd"),
+    ("cron", "EVENTS", "07", "Represento cron jobs, timers e rotas de webhooks do Hermes. Estar agendado é diferente de estar em execução.", "jobs.json · executions.db · webhook_subscriptions.json · config.yaml"),
     ("vm", "Infraestrutura", "01", "Represento a máquina que sustenta o laboratório: CPU, RAM e disco, medidos no host do dashboard.", "/proc · filesystems"),
 ]
 STATUS = {"recent": "Atividade recente", "process": "Processo detectado", "running": "Execução registrada",
@@ -44,7 +44,7 @@ def _catalogs():
         if hit and time.monotonic() - hit[0] < 30:
             return hit[1]
         data = {"models": _safe(stats.models_config), "mcp": _safe(mcp.servers),
-                "cron": _safe(cron.overview), "memory": _safe(memory.catalog),
+                "cron": _safe(event_catalog.overview), "memory": _safe(memory.catalog),
                 "rag": _safe(rag.catalog)}
         # Do not retain document bodies in the telemetry cache.
         data["rag"].pop("docs", None)
@@ -81,7 +81,7 @@ def event_sector(event):
         return "rag"
     if any(word in name for word in ("memory", "skill", "context")):
         return "memory"
-    if any(word in name for word in ("cron", "schedule")):
+    if any(word in name for word in ("cron", "schedule", "webhook")):
         return "cron"
     return "hermes"
 
@@ -164,7 +164,7 @@ def snapshot():
             if not data.get("exists"):
                 errors.append("Diretório Hermes não encontrado")
         elif sector == "cron":
-            facts = [f"{len(data.get('jobs', []))} agendamentos", f"{data.get('failed_runs', 0)} falhas no histórico (até 60 execuções)"]
+            facts = [f"{len(data.get('jobs', []))} agendamentos", f"{len(data.get('webhooks', {}).get('routes', []))} webhooks configurados" if data.get("webhooks", {}).get("available") else "Fonte de webhooks indisponível", f"{data.get('failed_runs', 0)} falhas no histórico (até 60 execuções)"]
         elif sector == "vm":
             cpu = machine.get("cpu", {}).get("total")
             mem = machine.get("memory", {})
@@ -221,6 +221,12 @@ def snapshot():
         workers.append(_worker(_id("cron", f"{job.get('source')}:{job['id']}"), job.get("name") or job["id"], "cron", "job", state,
                                f"Agenda: {job.get('schedule', '?')}", f"{job.get('source')} · jobs / executions",
                                facts=[f"Próxima execução: {job.get('next_run') or 'não informada'}", f"Última execução: {latest.get('start_time') or job.get('last_run') or 'não informada'}"]))
+    for hook in catalogs["cron"].get("webhooks", {}).get("routes", []):
+        workers.append(_worker(_id("webhook", hook["id"]), hook["name"], "cron", "webhook",
+                               "configured" if hook["enabled"] else "disabled",
+                               "Rota configurada; recebimento e execução não verificados.", hook["source"],
+                               facts=[f"Eventos: {', '.join(hook['events']) or 'todos'}",
+                                      f"Perfil: {hook['profile']}", f"Cron job: {hook['cron_job'] or 'não associado'}"]))
     for sector in SECTORS:
         guide = next(w for w in workers if w["id"] == f"guide:{sector[0]}")
         warnings.extend(f"{sector[1]}: {e}" for e in guide.get("errors", []))

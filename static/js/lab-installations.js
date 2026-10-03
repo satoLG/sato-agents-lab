@@ -30,19 +30,22 @@ export function createInstallations(world,zones,art){
   // Two transparent conduits cross the exterior wall. Packets replay observed calls.
   const pipes=[],packets=[],providers=zones.get('models').group;
   for(const [side,color] of [[-1,'#5bdcff'],[1,'#ffb06c']]){
-    const path=new T.CatmullRomCurve3([new T.Vector3(side*1.35,1.7,-1.3),new T.Vector3(side*1.35,5.8,-2.3),new T.Vector3(-3+side*.65,6.5,-4),new T.Vector3(-7.1,6.5,-4+side*.75)]);
+    const path=new T.CatmullRomCurve3([new T.Vector3(side*2.7,1.7,-1.3),new T.Vector3(side*2.7,5.8,-2.3),new T.Vector3(-3+side*.65,6.5,-4),new T.Vector3(-6.9,6.5,-4+side*.75),new T.Vector3(-7.62,6.5,-4+side*.75)]);
     mesh(providers,new T.TubeGeometry(path,56,.53,12,false),new T.MeshStandardMaterial({color,transparent:true,opacity:.19,roughness:.12,metalness:.25,depthWrite:false}));
     mesh(providers,new T.TubeGeometry(path,56,.055,6,false),glow(color));
     for(let j=0;j<6;j++){const cuff=ring(providers,.56,.085,'#c5d3db');cuff.position.copy(path.getPoint(j/5));cuff.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),path.getTangent(j/5));}
     for(let j=0;j<6;j++){const packet=box(providers,.32,.32,.62,glow(color));packet.visible=false;packet.userData.dynamic=true;packets.push({object:packet,path,side,index:j});}
+    const port=new T.Group();port.name='provider-wall-bulkhead';port.position.set(-7.62,6.5,-4+side*.75);port.rotation.y=Math.PI/2;providers.add(port);
+    box(port,1.5,1.5,.13,'#33444f');ring(port,.69,.12,'#bdccd2',0,0,.09);ring(port,.53,.035,glow(color),0,0,.1);
+    for(const x of [-.58,.58])for(const y of [-.58,.58]){const bolt=mesh(port,new T.SphereGeometry(.055,8,5),new T.MeshStandardMaterial({color:'#d7e4e7',metalness:.8,roughness:.3}),x,y,.11);}
     pipes.push(path);
   }
   const pipeStatus=surface(providers,3.4,.77,0,4.1,-1.3,1024,230);
 
   const skills=zones.get('memory').group;
-  box(skills,4.8,2.8,.18,'#8d7660',0,2.92,-2.15);
-  const chalk=surface(skills,4.53,2.54,0,2.92,-2.049);
-  const chalkTip=box(skills,.075,.05,.13,'#eeeedd',-1.7,3.43,-1.95);chalkTip.userData.dynamic=true;
+  box(skills,4.8,2.8,.18,'#8d7660',0,4.65,-2.15);
+  const chalk=surface(skills,4.53,2.54,0,4.65,-2.049);
+  const chalkTip=box(skills,.075,.05,.13,'#eeeedd',-1.7,5.16,-1.95);chalkTip.userData.dynamic=true;
   const pages=[];
   for(const side of [-1,1]){
     const book=new T.Group();book.position.set(side*2.85,.89,-.32);skills.add(book);
@@ -89,9 +92,9 @@ export function createInstallations(world,zones,art){
   let lastChalk=0;
   function tick(t,dt,paused){
     if(!data)return;
-    for(const packet of packets){const count=packet.side<0?data.outgoing:data.incoming;packet.object.visible=packet.index<Math.max(2,Math.min(6,count));if(packet.object.visible){let progress=(t*.13+packet.index/6)%1;if(packet.side>0)progress=1-progress;packet.object.position.copy(packet.path.getPoint(progress));packet.object.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),packet.path.getTangent(progress));}}
+    for(const packet of packets){const count=packet.side<0?data.outgoing:data.incoming;packet.object.visible=data.eventAvailable&&packet.index<Math.min(6,count);if(packet.object.visible){let progress=(t*.13+packet.index/6)%1;if(packet.side>0)progress=1-progress;packet.object.position.copy(packet.path.getPoint(progress));packet.object.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),packet.path.getTangent(progress));}}
     const writing=!paused&&performance.now()<writingUntil;chalkTip.visible=writing;
-    if(writing){writingElapsed+=dt;chalkTip.position.set(-1.9+(writingElapsed%2)*1.8,3.66-Math.floor(writingElapsed/2)%3*.33,-1.94);pages.forEach((p,i)=>{p.rotation.z=Math.sin(t*2+i)*.65;});if(t-lastChalk>.12){paintChalk(Math.min(1,writingElapsed/4));lastChalk=t;}}
+    if(writing){writingElapsed+=dt;chalkTip.position.set(-1.9+(writingElapsed%2)*1.8,5.39-Math.floor(writingElapsed/2)%3*.33,-1.94);pages.forEach((p,i)=>{p.rotation.z=Math.sin(t*2+i)*.65;});if(t-lastChalk>.12){paintChalk(Math.min(1,writingElapsed/4));lastChalk=t;}}
   }
   return {update,tick,updateHeatmap,setStale(value){if(data)for(const g of gauges)gauge(g,g.value,value);},memoryActive:()=>performance.now()<writingUntil};
 }

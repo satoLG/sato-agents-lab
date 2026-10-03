@@ -14,7 +14,7 @@
 @media(max-height:600px){.campus-welcome{padding:14px;bottom:95px}.campus-welcome h1{font-size:22px}.campus-welcome p,.campus-welcome span{display:none}.speech-text{max-height:85px;font-size:14px}.robot-chat{bottom:8px;max-height:35dvh}.chat-header{padding:5px 12px}.chat-suggestions{display:none}}
 
 /* The scene is the entry screen; only SVG controls remain during exploration. */
-#lab .brand,#lab .location,#lab .telemetry-chip,#lab .map-toggle,#campus-welcome,#interaction,#rag-action,#toast,#map-panel,#telemetry-panel{display:none!important}
+#lab .brand,#lab .location,#lab .telemetry-chip,#lab .map-toggle,#campus-welcome,#map-panel,#telemetry-panel{display:none!important}
 body[data-started=false] .hud-top,body[data-started=false] .hud-bottom{visibility:hidden;pointer-events:none}
 .lab-play{position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:64px;height:64px;border:1px solid #ffffff50;border-radius:50%;background:#14252b28;color:#fff;backdrop-filter:blur(5px);opacity:.8;transition:background .2s,opacity .2s}
 .lab-play:hover,.lab-play:focus-visible{opacity:1;background:#14252b70}.lab-play:disabled{opacity:.25;cursor:wait}body[data-started=true] .lab-play{display:none}
@@ -39,3 +39,17 @@ body[data-loading=false] #lab .lab-loading{opacity:0;pointer-events:none}
 .loading-segments span{display:block;border:1px solid #d9eeea63;border-radius:2px;background:#b9d0ce28;box-shadow:inset 0 1px #ffffff12;transition:background .18s,box-shadow .18s}
 .loading-segments span.on{background:#d2f0d0;box-shadow:0 0 12px #adf0ce80,inset 0 2px #fff9}
 @media(prefers-reduced-motion:reduce){#scene,#lab .lab-loading,.loading-segments span{transition:none}}
+
+/* Keep prompts and dialogue inside the available viewport, including short phones. */
+#interaction{z-index:7;bottom:max(82px,env(safe-area-inset-bottom));color:#ecfaff}#interaction kbd{display:block}
+#rag-action{z-index:7}body[data-started=false] #interaction,body[data-started=false] #rag-action{display:none}
+.dialogue-layer{inset:max(70px,env(safe-area-inset-top)) 18px auto;bottom:240px;display:flex;align-items:flex-end;justify-content:center;gap:18px;overflow:visible;min-height:0}
+.speech-anchor{width:min(340px,48%);min-width:0;max-height:100%;display:flex;flex-direction:column}.speech-card{max-height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box}.speech-text,.speech-anchor.user .speech-text{min-height:0;max-height:200px;overflow:auto}
+.robot-chat{max-height:48dvh;overflow:auto;bottom:max(12px,env(safe-area-inset-bottom))}.robot-chat>*{flex-shrink:0}.chat-messages{position:static;min-height:0;max-height:18dvh;flex-shrink:1;border:0;border-radius:0;box-shadow:none}.chat-header{min-width:0;flex-wrap:wrap}.chat-header h2{max-width:160px}.chat-header button{flex-shrink:0}
+@media(max-width:700px){.dialogue-layer{left:10px;right:10px;gap:8px}.speech-card{padding:10px}.speech-text,.speech-anchor.user .speech-text{font-size:12px;max-height:130px}.speech-card strong{font-size:9px}.robot-chat{max-height:48dvh}#rag-action{bottom:155px;right:14px}}
+@media(max-height:480px){.dialogue-layer{top:12px}.speech-card{padding:7px}.speech-text,.speech-anchor.user .speech-text{font-size:11px}.robot-chat{max-height:52dvh}.chat-header{padding:5px 10px}.chat-footnote{display:none}}
+
+.equipment-panel{z-index:10;left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(640px,calc(100% - 24px));max-height:calc(100dvh - 40px);overflow:auto;box-sizing:border-box;background:#112c3df5}.equipment-panel>button{float:right;padding:10px}.equipment-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.equipment-cards article{background:#28505b;padding:12px;border-radius:9px;overflow-wrap:anywhere}.equipment-cards strong{display:block;font-size:24px;margin:8px 0}.equipment-cards p{font-size:11px}.equipment-panel>a{display:block;padding:10px;color:#a2f4f6}body[data-equipment=true] #interaction,body[data-equipment=true] #rag-action{display:none}
+@media(max-width:700px){.equipment-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+body[data-context=true] .control-help{visibility:hidden}

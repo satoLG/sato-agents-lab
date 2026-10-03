@@ -3,22 +3,22 @@ export const FLOOR=.06;
 export const DECK_HEIGHT=1.86;
 export const WALL_HEIGHT=16;
 export const ZONES={
- gateway:{x:-18,z:25,color:'#64cfff',number:'00',name:'GATEWAY',area:'GATEWAY',icon:'log-in',sign:[-24.5,26.6]},
+ gateway:{x:-7,z:19.9,color:'#64cfff',number:'00',name:'GATEWAY',area:'GATEWAY',icon:'log-in',sign:[-13,19.2]},
  vm:{x:-21,z:10,color:'#64cfff',number:'01',name:'VM',area:'INFRA',icon:'server',sign:[-25,5]},
  hermes:{x:0,z:-3,color:'#64cfff',number:'02',name:'HERMES',area:'CORE',icon:'cpu',sign:[-4.8,-7]},
  models:{x:-24,z:-21,color:'#64cfff',number:'03',name:'PROVIDERS',area:'INTEGRATIONS',icon:'cloud',sign:[-29,-24]},
  mcp:{x:-13,z:-21,color:'#64cfff',number:'04',name:'MCP',area:'INTEGRATIONS',icon:'plug',sign:[-17,-27]},
  memory:{x:12,z:-22,color:'#64cfff',number:'05',name:'MEMORY',area:'DATA',icon:'database',sign:[8.5,-28]},
  rag:{x:24,z:-22,color:'#64cfff',number:'06',name:'RAG',area:'DATA',icon:'network',sign:[27,-28]},
- cron:{x:23,z:10,color:'#64cfff',number:'07',name:'CRON',area:'SCHEDULE',icon:'clock',sign:[18,5]},
+ cron:{x:23,z:10,color:'#64cfff',number:'07',name:'EVENTS',area:'EVENTS',icon:'clock',sign:[18,5]},
 };
 export const AREAS=[
  {name:'INTEGRATIONS',x:-19,z:-21,w:24,d:16},
  {name:'DATA',x:19,z:-20,w:25,d:20},
  {name:'INFRA',x:-21,z:10,w:14,d:12},
- {name:'SCHEDULE',x:23,z:10,w:15,d:12},
+ {name:'EVENTS',x:23,z:10,w:15,d:12},
 ];
-export const slotsFor=id=>id==='gateway'?[[0,-1.8]]:id==='rag'?[[0,7.8],[-5.8,5.5],[5.8,5.5],[0,10]]:[[0,2],[-3.5,1.8],[3.5,1.8],[0,4.3]];
+export const slotsFor=id=>id==='gateway'?[[0,-.9]]:id==='rag'?[[0,7.8],[-5.8,5.5],[5.8,5.5],[0,10]]:[[0,2],[-3.5,1.8],[3.5,1.8],[0,4.3]];
 // Two flights of four risers with a generous intermediate landing.
 export const CORE_STEPS=Array.from({length:8},(_,i)=>({w:20-i*.8-(i>=4?.8:0),d:17-i*.8-(i>=4?.8:0),h:(i+1)*.24,r:1.2}));
 export function inRounded(x,z,w,d,r){return Math.hypot(Math.max(0,Math.abs(x)-(w/2-r)),Math.max(0,Math.abs(z)-(d/2-r)))<=r;}

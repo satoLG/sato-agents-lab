@@ -53,5 +53,5 @@ export function createRagUI(getScene,fetchJSON){
   $('rag-reset').addEventListener('click',()=>{getScene()?.setRagBusy(false);$('rag-search-submit').disabled=false;loadBase();});
   $('rag-search').addEventListener('submit',e=>{e.preventDefault();search($('rag-query').value);});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&open)setOpen(false);});
-  return {select,loadBase,get open(){return open;}};
+  return {select,loadBase,setOpen,get open(){return open;}};
 }
