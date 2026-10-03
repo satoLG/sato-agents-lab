@@ -22,7 +22,7 @@ são locais. O avatar usa o GLB fornecido pelo dono do repositório; cenário e 
 são procedurais, sem arquivos extraídos dos jogos de referência.
 
 - Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
-  memória/skills, cron e infraestrutura. As linhas do piso representam a
+  memória/skills, EVENTS (cron jobs e webhooks) e infraestrutura. As linhas do piso representam a
   arquitetura conceitual, não tráfego de rede capturado.
 - A cena Three.js ocupa toda a tela; mapa, telemetria e conversa são overlays.
   WASD/setas movem; Shift ou **Correr** alterna para corrida. O mouse mira,
@@ -39,14 +39,15 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
 - A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
   contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
   dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
-  deixando os personagens abaixo do chat translúcido; Escape encerra a conversa.
+  mantendo balões e formulário dentro da tela; Escape encerra a conversa.
   Sem WebGL 2, o painel de telemetria e o dashboard continuam disponíveis.
 - Guias explicam cada setor. Robôs individuais representam processos detectados,
   registros em `agent_runs`/`subagent_runs`, servidores MCP e jobs. O laboratório
   lê até 48 registros por tabela de agentes. Mostra até quatro robôs por setor:
   responsável e três bancadas auxiliares. Selecionar outro robô na lista reserva
   uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
-  Os monitores mostram dados reais, nome e estado do trabalhador daquela bancada.
+  Todas as bancadas têm conjuntos de monitores com indicadores das APIs do dashboard,
+  nome e estado do trabalhador. Valores indisponíveis aparecem como “—”.
 - O avatar usa `static/models/sato.glb`, com idle ancorado (4,8 s),
   caminhada (0,92 s) e piscar independente. As poses se misturam ao iniciar/parar. A cadência
   acompanha a velocidade real, com aceleração e desaceleração. Detalhes e
@@ -192,6 +193,24 @@ caminhada e respostas usam poses distintas. Os sons de personalidade e piscada,
 ventiladores, motores e água vêm da biblioteca Portal 2 indicada pelo proprietário;
 pequenos gestos de áudio procedurais complementam os samples. Os créditos e a
 revisão exata da fonte estão em `static/audio/portal2/botanical-sources.json`.
+
+### Interações e EVENTS
+
+O botão contextual **E** aparece perto dos robôs (**Conversar**), no RAG
+(**Explorar vetores**) e nas demais estações (**Ver indicadores**). No celular,
+toque no botão. O acesso adicional **Explorar rede RAG** continua disponível
+na área RAG, inclusive perto de seu robô. Balões e histórico têm rolagem e
+reservam espaço para o formulário de conversa dentro da tela.
+
+O setor e a aba **EVENTS** reúnem cron jobs e webhooks via `/api/events`.
+Os jobs preservam as fontes de `/api/cronjobs`. Webhooks são lidos do formato
+oficial do Hermes: `platforms.webhook.extra.routes` no `HERMES_CONFIG_PATH` e
+`webhook_subscriptions.json` dentro de `HERMES_HOME`. Rotas estáticas têm
+precedência sobre subscriptions com o mesmo nome. A API publica apenas
+metadados (nome, eventos, perfil, associação a cron e estado configurado),
+sem segredos, headers de autenticação ou prompts. Essa leitura não comprova
+que a VM está recebendo eventos. Se a instalação usar outro formato, a fonte
+aparece indisponível e será necessário adaptar o leitor ao arquivo da VM.
 
 ### Atualizar a VM
 

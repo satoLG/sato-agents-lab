@@ -187,9 +187,9 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
   ring(prototype,.14,.02,art.glow('#54bdff'),0,.246,0,true);
   batchStatic(prototype);
   function parcel(parent,x=0,y=0,z=0){const g=prototype.clone(true);g.position.set(x,y,z);g.traverse(o=>o.userData.dynamic=true);parent.add(g);return g;}
-  const speed=1.6,travel=30.3/speed;
+  const speed=1.6,travel=31.9/speed;
   // Split the belt at the partition: each segment follows its room's lighting.
-  const belt=[[-17,22.8,-28,22.8,world],[-28,22.8,-28,18,world],[-28,18,-28,3.5,hall]];
+  const belt=[[-13.4,20.8,-28,20.8,world],[-28,20.8,-28,18,world],[-28,18,-28,3.5,hall]];
   const beltY=z=>1.13+(1-T.MathUtils.smoothstep(z,16,20))*1.8;
   for(const [ax,az,bx,bz,parent]of belt){
     const horizontal=az===bz,len=Math.hypot(bx-ax,bz-az),x=(ax+bx)/2,z=(az+bz)/2;
@@ -225,7 +225,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
     const revealTargets=[];
     for(const item of packets){
       const {p,phase}=item,age=(t+phase)%(travel+3);p.visible=age<travel+2.4;
-      if(age<travel){const d=age*speed;if(d<11)p.position.set(-17-d,1.49,22.8);else {const z=22.8-(d-11);p.position.set(-28,1.49+(1-T.MathUtils.smoothstep(z,16,20))*1.8,z);}p.rotation.set(0,0,0);}
+      if(age<travel){const d=age*speed;if(d<14.6)p.position.set(-13.4-d,1.49,20.8);else {const z=20.8-(d-14.6);p.position.set(-28,1.49+(1-T.MathUtils.smoothstep(z,16,20))*1.8,z);}p.rotation.set(0,0,0);}
       else {const fall=parcelDrop(age-travel);p.position.set(-28,fall.y+binY-FLOOR,3.5-Math.min(1,age-travel)*1.45);p.rotation.set(fall.tilt,fall.tilt*.4,0);if(item.previous<travel+.5&&age>=travel+.5)onCue('drop',p.position);}
       const parent=p.position.z<17.7?hall:world;if(p.parent!==parent){parent.add(p);if(parent===hall)revealTargets.push(p);else p.traverse(o=>{if(o.material?.hallOriginal)o.material=o.material.hallOriginal;});}item.previous=age;
     }

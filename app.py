@@ -228,7 +228,10 @@ def api_rag_graph():
 
 @app.route("/api/rag/list")
 def api_rag_list():
-    return jsonify(rag.catalog())
+    data = rag.catalog()
+    if request.args.get("summary") == "1":
+        data.pop("docs", None)
+    return jsonify(data)
 
 
 @app.route("/api/rag/search")
@@ -242,6 +245,12 @@ def api_rag_search():
 
 
 # --- aba: cron ---
+
+@app.route("/api/events")
+def api_events():
+    from hermes_dashboard import events
+    return jsonify(events.overview())
+
 
 @app.route("/api/cronjobs")
 def api_cronjobs():

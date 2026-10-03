@@ -1,8 +1,9 @@
+import {createEquipmentUI} from './lab-equipment-ui.js';
 // The canvas owns space and interaction. These overlays only present telemetry.
 import {createRagUI} from './lab-rag-ui.js';
 const $ = id => document.getElementById(id);
-const SECTORS = [['gateway','GATEWAY','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','MEMORY','◈'],['cron','CRON','◷'],['vm','VM','▤']];
-const KINDS = {gateway:'Atendente de gateway',guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',catalog:'Representação do catálogo'};
+const SECTORS = [['gateway','GATEWAY','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','MEMORY','◈'],['cron','EVENTS','◷'],['vm','VM','▤']];
+const KINDS = {gateway:'Atendente de gateway',guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',webhook:'Webhook',catalog:'Representação do catálogo'};
 const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'CAMPUS / EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
@@ -10,6 +11,7 @@ let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFligh
 let webChatMode='loading',webChatCsrf=null,chatPollTimer=null;
 const histories = new Map();
 const ragUI=createRagUI(()=>scene,fetchJSON);
+const equipmentUI=createEquipmentUI(()=>scene);
 const progress=$('loading-progress');
 const blocks=Array.from({length:12},()=>node('span'));
 progress.append(...blocks);
@@ -192,16 +194,20 @@ try {
   loadingStep(8,'CARREGANDO MÓDULOS');
   const {createLabScene} = await import('./lab-scene.js');
   scene = await createLabScene($('scene'),{
-    onInteract:openChat, onToast:toast,onRagNode:n=>ragUI.select(n),
+    onInteract:openChat,onRagInteract:()=>ragUI.setOpen(true),onEquipment:id=>equipmentUI.open(id), onToast:toast,onRagNode:n=>ragUI.select(n),
     onLoadProgress:loadingStep,onReady:revealScene,
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
-    onCandidate:robot => { $('interaction').hidden = !robot || !!selectedRobot; $('interaction').dataset.robot = robot?.id || ''; $('interaction-name').textContent = robot ? `${name(robot.sector)} / ${robot.name}` : ''; },
+    onContext:(robot,id)=>{const action=$('interaction'),hidden=!!selectedRobot||ragUI.open||(!robot&&!id),key=`${robot?.id||''}:${id||''}:${hidden}`;if(action.dataset.context===key)return;action.dataset.context=key;action.hidden=hidden;document.body.dataset.context=String(!action.hidden);action.dataset.robot=robot?.id||'';$('interaction-name').textContent=robot?`${name(robot.sector)} / ${robot.name}`:name(id);action.querySelector('strong').textContent=robot?'Conversar':id==='rag'?'Explorar vetores':'Ver indicadores';},
+    onCandidate:()=>{},
     onPosition:(x,z) => { $('campus-welcome').hidden=z<34||!!selectedRobot;  $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
   if (state) scene.update(state);
   ragUI.loadBase();
+  const channels={},sources={stats:'/api/stats',vm:'/api/vmstats?breakdown=0',live:'/api/live',mcp:'/api/mcps',memory:'/api/memory',rag:'/api/rag/list?summary=1',events:'/api/events'};let monitorsBusy=false;
+  async function refreshMonitors(){if(document.hidden||monitorsBusy)return;monitorsBusy=true;try{await Promise.allSettled(Object.entries(sources).map(async([key,url])=>{if(!['vm','live','stats'].includes(key)&&Date.now()-(channels[key]?.updatedAt||0)<60000)return;try{const data=await fetchJSON(url);channels[key]={data,updatedAt:Date.now()};}catch(e){channels[key]={...channels[key],error:e.message};}}));scene.setDashboardIndicators(channels);equipmentUI.update(channels);}finally{monitorsBusy=false;}}
+  refreshMonitors();setInterval(refreshMonitors,15000);
   let lastHeat=null,heatBusy=false;
   async function refreshInstruments(){
     if(document.hidden||heatBusy)return;heatBusy=true;

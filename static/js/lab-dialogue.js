@@ -1,35 +1,11 @@
-import * as T from '../vendor/three.module.min.js';
-import {CSS3DRenderer,CSS3DSprite} from '../vendor/CSS3DRenderer.js';
-
+// Screen-space cards reserve room for the chat form regardless of camera angle.
 export function createDialogue(container){
-  const renderer=new CSS3DRenderer(),scene=new T.Scene();
-  renderer.domElement.className='dialogue-layer';container.append(renderer.domElement);
-  const panels={};let history=[],name='',active=false;
-  for(const role of ['user','robot']){
-    const el=document.createElement('section');el.className=`speech-anchor ${role}`;el.setAttribute('aria-label',role==='user'?'Sua fala':'Resposta do robô');
-    const card=document.createElement('div');card.className='speech-card';
-    const title=document.createElement('strong'),body=document.createElement('div');body.className='speech-text';body.tabIndex=0;
-    card.append(title,body);el.append(card);const sprite=new CSS3DSprite(el);scene.add(sprite);panels[role]={sprite,el,card,title,body,key:''};
-  }
-  function setMessages(entries,robotName){history=entries;name=robotName;
-    for(const role of ['user','robot']){
-      const p=panels[role],entry=entries.findLast(e=>e.role===role),text=entry?.text||(role==='user'?'Sua vez! Escolha uma pergunta abaixo.':'Olá!');
-      p.title.textContent=role==='user'?'SATO / VOCÊ':name;
-      if(text!==p.key){p.key=text;p.body.textContent=text;p.body.scrollTop=0;p.card.getAnimations().forEach(a=>a.cancel());
-        if(!matchMedia('(prefers-reduced-motion: reduce)').matches)p.card.animate([{transform:'scale(.65) rotate(-4deg)',opacity:0},{transform:'scale(1.045) rotate(1deg)',opacity:1},{transform:'scale(1) rotate(0)'}],{duration:320,easing:'ease-out'});
-      }
-    }
-  }
-  return {setMessages,setOpen(value){active=value;renderer.domElement.hidden=!value;},resize(w,h){renderer.setSize(w,h);},render(camera,avatar,robot){
-    if(!active||!robot)return;
-    const right=new T.Vector3().setFromMatrixColumn(camera.matrixWorld,0),width=container.clientWidth,mobile=width<700;
-    for(const [role,actor]of [['user',avatar],['robot',robot]]){
-      const p=panels[role],actorPosition=actor.getWorldPosition(new T.Vector3()),distance=camera.position.distanceTo(actorPosition),scale=distance*2*Math.tan(T.MathUtils.degToRad(camera.fov/2))/container.clientHeight;
-      p.el.style.width=`${mobile?Math.min(225,width*.46):320}px`;
-      p.sprite.position.copy(actorPosition).add(new T.Vector3(0,role==='robot'?4.8:4.15,0));
-      p.sprite.position.addScaledVector(right,(role==='user'?-1:1)*(mobile?width*.19:170)*scale);
-      p.sprite.scale.setScalar(scale*(mobile?.85:1));
-    }
-    renderer.render(scene,camera);
-  }};
+ const layer=document.createElement('div');layer.className='dialogue-layer';layer.hidden=true;container.append(layer);const panels={};
+ for(const role of ['user','robot']){
+  const el=document.createElement('section');el.className=`speech-anchor ${role}`;el.setAttribute('aria-label',role==='user'?'Sua fala':'Resposta do robô');
+  const card=document.createElement('div');card.className='speech-card';const title=document.createElement('strong'),body=document.createElement('div');body.className='speech-text';body.tabIndex=0;card.append(title,body);el.append(card);layer.append(el);panels[role]={title,body};
+ }
+ function layout(){const chat=document.getElementById('chat'),bounds=container.getBoundingClientRect();layer.style.bottom=`${chat&&!chat.hidden?Math.max(12,bounds.bottom-chat.getBoundingClientRect().top+18):24}px`;}
+ const observer=new ResizeObserver(layout);observer.observe(container);const chat=document.getElementById('chat');if(chat)observer.observe(chat);
+ return {setMessages(entries,name){for(const role of ['user','robot']){const p=panels[role],entry=entries.findLast(e=>e.role===role);p.title.textContent=role==='user'?'SATO / VOCÊ':name;p.body.textContent=entry?.text||(role==='user'?'Escolha uma pergunta abaixo.':'Olá!');p.body.scrollTop=0;}layout();},setOpen(value){layer.hidden=!value;layout();},resize:layout,render:layout};
 }
