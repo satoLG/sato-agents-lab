@@ -7,7 +7,7 @@ realmente estao no banco. Numa VM cujo log tenha, por exemplo, uma tabela
 """
 import re
 import subprocess
-from datetime import datetime, timedelta, date as date_cls
+from datetime import datetime, timedelta, timezone, date as date_cls
 
 from . import db, state
 from . import config
@@ -269,7 +269,7 @@ def _log_tail(lines=25):
 def live_snapshot(window_seconds=180):
     """O que esta acontecendo agora: eventos recentes, processos e log."""
     if state.available():
-        since = (datetime.utcnow() - timedelta(seconds=window_seconds)).timestamp()
+        since = (datetime.now(timezone.utc) - timedelta(seconds=window_seconds)).timestamp()
         recent = state.events(start=since, limit=15)
         procs = _running_processes()
         return {'now': datetime.utcnow().isoformat() + 'Z',

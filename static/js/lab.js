@@ -8,7 +8,7 @@ const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'CAMPUS / EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
 let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFlight = false, timer = null, lastSuccess = 0, chatBusy = false, toastTimer;
-let webChatMode='loading',webChatCsrf=null,chatPollTimer=null;
+let webChatMode='local',webChatCsrf=null,chatPollTimer=null,chatStream=null,telemetryStream=null,telemetryPayload=null;
 const histories = new Map();
 const ragUI=createRagUI(()=>scene,fetchJSON);
 const equipmentUI=createEquipmentUI(()=>scene);
@@ -61,7 +61,7 @@ function renderState(data) {
   $('metric-processes').textContent = data.metrics.processes; $('metric-events').textContent = data.metrics.recent_events;
   $('metric-cpu').textContent = data.metrics.cpu === null ? '—' : `${data.metrics.cpu}%`;
   $('metric-memory').textContent = data.metrics.memory === null ? '—' : `${data.metrics.memory}%`;
-  $('sync-note').textContent = `Leitura ${clock(data.now)} · a cada 5 s`;
+  $('sync-note').textContent = `Leitura ${clock(data.now)} · conexão contínua · amostragem 2 s`;
   const events = data.events.map(e => { const row = node('div',`event-row${e.ok === false ? ' failed' : ''}`); row.append(node('i'),node('span','',e.name),node('time','',clock(e.when))); return row; });
   $('events').replaceChildren(...(events.length ? events : [node('p','empty',data.telemetry_available ? 'Nenhum evento nos últimos 3 minutos.' : 'Sem fonte de eventos conectada neste host.')]));
   $('warnings').replaceChildren(...data.warnings.map(w => node('li','',w)));
@@ -82,9 +82,12 @@ async function poll() {
   if (inFlight || document.hidden) return; clearTimeout(timer); inFlight = true;
   try { renderState(await fetchJSON('/api/lab/state')); }
   catch { $('connection').dataset.state = 'offline'; $('connection').lastElementChild.textContent = 'Sem conexão'; $('sync-note').textContent = lastSuccess ? 'Dados desatualizados · tentando reconectar' : 'VM indisponível · tentando reconectar'; scene?.setStale(true); if (selectedRobot) $('chat-status').textContent = 'Dados desatualizados'; }
-  finally { inFlight = false; if (!document.hidden) timer = setTimeout(poll,5000); }
+  finally { inFlight = false; }
 }
-document.addEventListener('visibilitychange', () => { clearTimeout(timer); scene?.stopWalking(); if (!document.hidden) { if (lastSuccess && Date.now() - lastSuccess > 15000) scene?.setStale(true); poll(); } });
+function telemetryOffline(){ $('connection').dataset.state='offline';$('connection').lastElementChild.textContent='Reconectando';$('sync-note').textContent='Dados desatualizados · tentando reconectar';scene?.setStale(true);scene?.setDashboardIndicators({});equipmentUI.update({}); }
+function applyTelemetry(payload){clearTimeout(timer);timer=null;if(!payload.state){telemetryOffline();return;}telemetryPayload={...telemetryPayload,...payload,channels:payload.channels?{...telemetryPayload?.channels,...payload.channels}:telemetryPayload?.channels};renderState(payload.state);scene?.setDashboardIndicators(telemetryPayload.channels||{});scene?.setHistoryBoards(telemetryPayload.boards||{});equipmentUI.update(telemetryPayload.channels||{},telemetryPayload.boards||{});}
+function connectTelemetry(){if(document.hidden||telemetryStream)return;telemetryStream=new EventSource('/api/lab/stream');telemetryStream.addEventListener('telemetry',e=>{try{applyTelemetry(JSON.parse(e.data));}catch{telemetryOffline();}});telemetryStream.onerror=()=>{if(!timer)timer=setTimeout(()=>{timer=null;telemetryOffline();},Math.max(0,5000-(Date.now()-lastSuccess)));};}
+document.addEventListener('visibilitychange',()=>{scene?.stopWalking();if(document.hidden){telemetryStream?.close();telemetryStream=null;chatStream?.close();chatStream=null;}else{connectTelemetry();if(lastSuccess&&Date.now()-lastSuccess>15000)telemetryOffline();if(selectedRobot&&webChatMode==='private')connectChatStream(selectedRobot);}});
 function messages() {
   scene?.setChatMessages(histories.get(selectedRobot)||[],state?.workers.find(w=>w.id===selectedRobot)?.name||'Hermes');
   $('chat-messages').replaceChildren(...(histories.get(selectedRobot) || []).map(entry => {
@@ -95,9 +98,10 @@ function messages() {
 function chatMode(mode){
   webChatMode=mode;
   $('chat-login').hidden=mode!=='locked';
-  $('chat-form').hidden=mode==='locked'||mode==='loading';
+  $('chat-form').hidden=mode!=='private'||selectedRobot!=='guide:hermes';
   document.querySelector('.chat-suggestions').hidden=mode==='locked'||mode==='loading';
-  $('chat-mode').textContent=mode==='private'?'Hermes · perguntas informativas · fila persistente':mode==='local'?'telemetria local':mode==='locked'?'acesso privado ao Hermes':'conectando ao Hermes';
+  $('chat-free-toggle').hidden=selectedRobot!=='guide:hermes';$('chat-free-toggle').textContent=mode==='local'?'Conversa livre':'Voltar aos indicadores';
+  $('chat-mode').textContent=mode==='private'?'Conversa livre · responde e analisa · sem executar ações':mode==='local'?'perguntas sobre indicadores':mode==='locked'?'acesso privado ao Hermes':'conectando ao Hermes';
   if(mode==='locked')$('chat-password').focus({preventScroll:true});
 }
 async function loadChatSession(id){
@@ -105,10 +109,10 @@ async function loadChatSession(id){
   try{
     const info=await fetchJSON('/api/lab/hermes-chat/session');
     if(selectedRobot!==id)return;
-    if(!info.available){chatMode('local');return;}
+    if(!info.available){chatMode('locked');$('chat-login-note').textContent='Chat privado indisponível neste host.';return;}
     webChatCsrf=info.csrf;
     chatMode(info.authenticated?'private':'locked');
-    if(info.authenticated)loadChatHistory(id);
+    if(info.authenticated){loadChatHistory(id);connectChatStream(id);}
   }catch{if(selectedRobot===id){chatMode('locked');$('chat-login-note').textContent='Sem conexão com o chat privado. Tente novamente.';}}
 }
 async function loadChatHistory(id){
@@ -117,19 +121,15 @@ async function loadChatHistory(id){
   try{
     const data=await fetchJSON(`/api/lab/hermes-chat/history?robot_id=${encodeURIComponent(id)}`);
     if(selectedRobot!==id)return;
-    const intro=histories.get(id)?.[0];
-    const history=intro?[intro]:[];
-    for(const job of data.jobs){
-      history.push({role:'user',text:job.question,when:new Date(job.created_at*1000).toISOString()});
-      const text=job.status==='done'?job.answer:job.status==='failed'?job.error:job.status==='running'?'Hermes está respondendo…':'Pergunta guardada na fila. Aguardando Hermes…';
-      history.push({role:'robot',text,source:job.status==='done'?'Hermes · sem ferramentas':null,when:new Date(job.updated_at*1000).toISOString()});
-    }
-    histories.set(id,history);messages();
-    const pending=data.jobs.some(j=>j.status==='queued'||j.status==='running');
-    $('chat-queue').hidden=!pending;$('chat-queue').textContent=pending?'Sua pergunta está salva. Você pode sair e voltar; a resposta aparecerá aqui.':'';
-    if(pending)chatPollTimer=setTimeout(()=>loadChatHistory(id),3000);
+    renderChatHistory(id,data);
   }catch(error){if(selectedRobot===id){$('chat-queue').hidden=false;$('chat-queue').textContent=`Não consegui ler a fila: ${error.message}`;chatPollTimer=setTimeout(()=>loadChatHistory(id),5000);}}
 }
+function renderChatHistory(id,data){
+ if(selectedRobot!==id||webChatMode!=='private')return;const intro=histories.get(id)?.[0],history=intro?[intro]:[];
+ for(const job of data.jobs){history.push({role:'user',text:job.question,when:new Date(job.created_at*1000).toISOString()});for(const event of job.progress||[])history.push({role:'progress',text:event.text,when:new Date(event.created_at*1000).toISOString()});history.push({role:'robot',text:job.status==='done'?job.answer:job.status==='failed'?job.error:job.progress?.at(-1)?.text||'Pergunta guardada na fila. Aguardando Hermes…',source:job.status==='done'?'Hermes · sem ferramentas':null,when:new Date(job.updated_at*1000).toISOString()});}
+ histories.set(id,history);messages();const pending=data.jobs.some(j=>j.status==='queued'||j.status==='running');$('chat-queue').hidden=!pending;$('chat-queue').textContent=pending?'Sua mensagem está salva. O progresso aparece durante o processamento.':'';
+}
+function connectChatStream(id){chatStream?.close();if(document.hidden||selectedRobot!==id||webChatMode!=='private')return;chatStream=new EventSource(`/api/lab/hermes-chat/stream?robot_id=${encodeURIComponent(id)}`);chatStream.addEventListener('history',e=>{clearTimeout(chatPollTimer);renderChatHistory(id,JSON.parse(e.data));});chatStream.onerror=()=>{if(selectedRobot===id){$('chat-queue').hidden=false;$('chat-queue').textContent='Reconectando ao progresso. A mensagem continua salva.';clearTimeout(chatPollTimer);chatPollTimer=setTimeout(()=>loadChatHistory(id),5000);}};}
 function openChat(id) {
   const robot = state?.workers.find(w => w.id === id);
   // There is no menu shortcut around proximity. The scene validates again here.
@@ -141,10 +141,10 @@ function openChat(id) {
   $('chat-status').textContent = $('connection').dataset.state === 'offline' ? 'Dados desatualizados' : robot.status_label;
   $('chat-kind').textContent = KINDS[robot.kind];
   if (!histories.has(id)) histories.set(id,[{role:'robot',text:`Olá! Sou ${robot.name}. ${robot.description || robot.detail}${robot.parent_id ? `\nExecução pai: ${robot.parent_id}` : ''}`,source:robot.source,when:state.now}]);
-  messages(); loadChatSession(id); $('chat-close').focus({preventScroll:true});
+  messages(); chatMode('local'); $('chat-close').focus({preventScroll:true});
 }
 function closeChat() {
-  if (!selectedRobot) return; clearTimeout(chatPollTimer);$('chat-queue').hidden=true;$('chat').hidden = true; selectedRobot = null; document.body.dataset.chat = 'false';
+  if (!selectedRobot) return; clearTimeout(chatPollTimer);chatStream?.close();chatStream=null;$('chat-queue').hidden=true;$('chat').hidden = true; selectedRobot = null; document.body.dataset.chat = 'false';
   document.querySelectorAll('.hud-top,.hud-bottom,.overlay').forEach(el => el.inert = false);
   scene?.endChat(); $('scene').focus({preventScroll:true});
 }
@@ -152,7 +152,7 @@ $('chat-close').addEventListener('click',closeChat);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeChat(); closePanels(); }
   if (e.key === 'Tab' && selectedRobot) {
-    const focusable = [...$('chat').querySelectorAll('button:not(:disabled),input:not(:disabled)')];
+    const focusable = [...$('chat').querySelectorAll('button:not(:disabled),input:not(:disabled)')].filter(el=>el.getClientRects().length);
     const first = focusable[0], last = focusable.at(-1);
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -177,10 +177,11 @@ async function ask(question) {
 }
 $('chat-login').addEventListener('submit',async e=>{
   e.preventDefault();const password=$('chat-password').value;
-  try{const info=await fetchJSON('/api/lab/hermes-chat/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});$('chat-password').value='';webChatCsrf=info.csrf;chatMode('private');if(selectedRobot)loadChatHistory(selectedRobot);}
+  try{const info=await fetchJSON('/api/lab/hermes-chat/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});$('chat-password').value='';webChatCsrf=info.csrf;chatMode('private');if(selectedRobot){loadChatHistory(selectedRobot);connectChatStream(selectedRobot);}}
   catch(error){$('chat-login-note').textContent=error.message;}
 });
 $('chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('chat-input').value); });
+$('chat-free-toggle').addEventListener('click',()=>{if(selectedRobot!=='guide:hermes')return;if(webChatMode==='local')loadChatSession(selectedRobot);else{chatStream?.close();chatStream=null;clearTimeout(chatPollTimer);$('chat-queue').hidden=true;chatMode('local');}});
 document.querySelectorAll('[data-question]').forEach(el => el.addEventListener('click', () => ask(el.dataset.question)));
 $('lab-play').addEventListener('click',()=>{if(!scene)return;scene.start();document.body.dataset.started='true';$('scene').focus({preventScroll:true});});
 $('enter-lab').addEventListener('click',()=>visit('guide:gateway'));
@@ -189,12 +190,12 @@ $('chat-history-toggle').addEventListener('click',()=>{const el=$('chat-messages
 $('interaction').addEventListener('click', () => scene?.interact());
 for (const mode of ['follow','room']) $('camera-' + mode).addEventListener('click', () => scene?.setCameraMode(mode));
 $('motion-toggle').addEventListener('click', () => { const paused = $('motion-toggle').getAttribute('aria-pressed') !== 'true'; $('motion-toggle').setAttribute('aria-pressed',String(paused)); $('motion-toggle').textContent = paused ? 'Retomar animações' : 'Pausar animações'; scene?.setPaused(paused); });
-poll();
+poll();connectTelemetry();
 try {
   loadingStep(8,'CARREGANDO MÓDULOS');
   const {createLabScene} = await import('./lab-scene.js');
   scene = await createLabScene($('scene'),{
-    onInteract:openChat,onRagInteract:()=>ragUI.setOpen(true),onEquipment:id=>equipmentUI.open(id), onToast:toast,onRagNode:n=>ragUI.select(n),
+    onInteract:openChat,onRagInteract:()=>ragUI.setOpen(true),onEquipment:(id,zoom)=>equipmentUI.open(id,zoom), onToast:toast,onRagNode:n=>ragUI.select(n),
     onLoadProgress:loadingStep,onReady:revealScene,
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
@@ -204,10 +205,8 @@ try {
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
   if (state) scene.update(state);
+  if(telemetryPayload)applyTelemetry(telemetryPayload);
   ragUI.loadBase();
-  const channels={},sources={stats:'/api/stats',vm:'/api/vmstats?breakdown=0',live:'/api/live',mcp:'/api/mcps',memory:'/api/memory',rag:'/api/rag/list?summary=1',events:'/api/events'};let monitorsBusy=false;
-  async function refreshMonitors(){if(document.hidden||monitorsBusy)return;monitorsBusy=true;try{await Promise.allSettled(Object.entries(sources).map(async([key,url])=>{if(!['vm','live','stats'].includes(key)&&Date.now()-(channels[key]?.updatedAt||0)<60000)return;try{const data=await fetchJSON(url);channels[key]={data,updatedAt:Date.now()};}catch(e){channels[key]={...channels[key],error:e.message};}}));scene.setDashboardIndicators(channels);equipmentUI.update(channels);}finally{monitorsBusy=false;}}
-  refreshMonitors();setInterval(refreshMonitors,15000);
   let lastHeat=null,heatBusy=false;
   async function refreshInstruments(){
     if(document.hidden||heatBusy)return;heatBusy=true;

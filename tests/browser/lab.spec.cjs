@@ -4,6 +4,7 @@ async function ready(page) {
   await page.goto('/lab');
   await expect(page.locator('#loading')).toBeHidden({timeout:20000});
   await expect(page.locator('#connection')).not.toHaveAttribute('data-state','loading');
+  if(await page.locator('#lab-play').isVisible())await page.locator('#lab-play').click();
 }
 const position = page => page.locator('#scene').evaluate(el => ({x:+el.dataset.x,z:+el.dataset.z}));
 async function visit(page, id) {
@@ -38,7 +39,7 @@ test('full-screen WebGL, walking, camera modes and proximity conversation', asyn
   await page.getByRole('button',{name:'Qual é sua função?'}).click();
   await expect(page.locator('#chat-messages .message.robot').last()).toContainText('Coordeno');
   const stopped=await position(page);
-  await page.locator('#chat-input').fill('wasd');await page.keyboard.type('wasd');
+  await expect(page.locator('#chat-input')).toBeHidden();await page.locator('#chat-close').focus();await page.keyboard.type('wasd');
   await page.waitForTimeout(350);expect(await position(page)).toEqual(stopped);
   await page.keyboard.press('Escape');
   await expect(page.locator('#chat')).toBeHidden();
@@ -63,11 +64,11 @@ test('all eight stations can be reached around equipment', async ({page}) => {
 
 test('reconnects and labels retained telemetry stale', async ({page}) => {
   await ready(page);await visit(page,'hermes');
-  await page.route('**/api/lab/state',route=>route.abort());
+  await page.context().setOffline(true);
   await expect(page.locator('#connection')).toHaveAttribute('data-state','offline',{timeout:15000});
   await page.locator('#interaction').click();
   await expect(page.locator('#chat-status')).toContainText('desatualizados');
-  await page.unroute('**/api/lab/state');
+  await page.context().setOffline(false);
   await expect(page.locator('#connection')).not.toHaveAttribute('data-state','offline',{timeout:15000});
 });
 
@@ -75,6 +76,7 @@ test('overflow subagents receive reachable benches and safe task text', async ({
   const snapshot=await(await request.get('/api/lab/state')).json();
   snapshot.workers.push(...Array.from({length:20},(_,i)=>({id:`test:${i}`,name:i===0?'<img src=x onerror=alert(1)>':`Agente ${i}`,sector:'hermes',kind:'subagent',status:'running',status_label:'Execução registrada',detail:'Consultar documento',source:'fixture: subagent_runs',parent_id:'parent-1'})));
   await page.route('**/api/lab/state',route=>route.fulfill({json:snapshot}));
+  await page.route('**/api/lab/stream',route=>route.fulfill({contentType:'text/event-stream',body:`event: telemetry\ndata: ${JSON.stringify({state:snapshot,channels:{},boards:{}})}\n\n`}));
   await ready(page);await page.locator('#map-toggle').click();
   await expect(page.locator('#roster [data-robot="test:0"]')).toContainText('<img');
   await expect(page.locator('#roster img')).toHaveCount(0);
@@ -102,7 +104,7 @@ test('mobile touch scene and conversation fit the viewport', async ({page}) => {
   const before=await position(page);await page.locator('#scene canvas').click({position:{x:190,y:640}});
   await expect.poll(async()=>Math.hypot((await position(page)).x-before.x,(await position(page)).z-before.z),{timeout:15000}).toBeGreaterThan(.2);
   await visit(page,'hermes');await page.locator('#interaction').click();
-  await expect(page.locator('#chat-input')).toBeVisible();
+  await expect(page.locator('#chat-input')).toBeHidden();await expect(page.locator('#chat-free-toggle')).toBeVisible();
   const box=await page.locator('#chat').boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(390);expect(box.y+box.height).toBeLessThan(844*.7);
 });

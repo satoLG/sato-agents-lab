@@ -12,7 +12,7 @@ from flask import Flask, abort, jsonify, render_template, request
 
 from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
-from hermes_dashboard import config
+from hermes_dashboard import config, lab_feed, streaming
 
 app = Flask(__name__)
 web_chat.configure(app)
@@ -109,6 +109,16 @@ def lab_asset(version, filename):
 @app.route("/api/lab/state")
 def api_lab_state():
     return jsonify(lab.snapshot())
+
+
+@app.get("/api/lab/stream")
+def api_lab_stream():
+    return streaming.response(lab_feed.feed.messages())
+
+
+@app.get("/api/lab/hermes-chat/stream")
+def api_hermes_chat_stream():
+    return web_chat.stream()
 
 
 @app.post("/api/lab/chat")

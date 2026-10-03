@@ -8,6 +8,7 @@
   <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab-campus.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab-live.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
 </head>
 <body data-started="false" data-loading="true">
@@ -52,7 +53,7 @@
     <div class="panel-heading"><div><small>DADOS DO HERMES</small><h2>Por dentro do lab</h2></div><button type="button" data-close="telemetry-panel" aria-label="Fechar telemetria">×</button></div>
     <div class="metrics"><div><small>Processos</small><strong id="metric-processes">—</strong></div><div><small>Eventos / 3 min</small><strong id="metric-events">—</strong></div></div>
     <p id="sync-note" class="sync-note">Aguardando primeira leitura</p><div id="events" class="event-list"></div>
-    <details class="source-notes"><summary id="source-summary">Fontes e disponibilidade</summary><ul id="warnings"></ul><p>Atividade a cada 5 s, catálogos a cada 30 s. Os gestos dos robôs são animações de ambientação; os estados e tarefas nos monitores vêm da telemetria. As conexões no piso representam a arquitetura.</p><p>Os pacotes e robôs entregadores ilustram o fluxo da arquitetura. Até quatro robôs por estação aparecem de cada vez; a recepção também mostra os gateways detectados. Escolha outro na lista para visitar sua bancada.</p></details>
+    <details class="source-notes"><summary id="source-summary">Fontes e disponibilidade</summary><ul id="warnings"></ul><p>Conexão contínua, leituras a cada 2 s e indicadores de catálogo a cada 5 s. Os gestos dos robôs são animações de ambientação; os estados e tarefas nos monitores vêm da telemetria. As conexões no piso representam a arquitetura.</p><p>Os pacotes e robôs entregadores ilustram o fluxo da arquitetura. Até quatro robôs por estação aparecem de cada vez; a recepção também mostra os gateways detectados. Escolha outro na lista para visitar sua bancada.</p></details>
   </aside>
   <section id="chat" class="robot-chat glass" role="dialog" aria-modal="true" aria-labelledby="chat-name" hidden>
     <header class="chat-header"><span class="robot-icon">◉</span><div><small id="chat-sector">NÚCLEO</small><h2 id="chat-name">H-01</h2></div><span id="chat-status"></span><button id="chat-history-toggle" type="button" aria-expanded="false">Histórico</button><button type="button" id="chat-close" aria-label="Encerrar conversa">×</button></header>
@@ -60,7 +61,8 @@
     <p id="chat-queue" class="chat-queue" role="status" hidden></p>
     <form id="chat-login" class="chat-login" hidden><label for="chat-password">Acesso privado ao Hermes</label><div><input id="chat-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button type="submit">Entrar</button></div><small id="chat-login-note">As perguntas ficam na fila mesmo se você fechar a página.</small></form>
     <div class="chat-suggestions"><button type="button" data-question="O que você está fazendo agora?">O que está fazendo?</button><button type="button" data-question="O que você representa?">Qual é sua função?</button><button type="button" data-question="Quais dados você tem?">Ver dados</button><button type="button" data-question="Há alguma falha?">Ver falhas</button></div>
-    <form id="chat-form"><label class="sr-only" for="chat-input">Pergunte ao robô</label><input id="chat-input" maxlength="500" autocomplete="off" placeholder="Pergunte sobre esta estação…" required><button type="submit" aria-label="Enviar pergunta">↑</button></form>
+    <button id="chat-free-toggle" type="button" hidden>Conversa livre</button>
+    <form id="chat-form" hidden><label class="sr-only" for="chat-input">Converse com Hermes</label><input id="chat-input" maxlength="4000" autocomplete="off" placeholder="Converse sobre qualquer assunto…" required><button type="submit" aria-label="Enviar mensagem">↑</button></form>
     <p class="chat-footnote"><span id="chat-kind"></span> · <span id="chat-mode">conversa baseada em telemetria</span></p>
   </section>
   <noscript><div class="fallback glass"><h1>Ative JavaScript para entrar no laboratório.</h1><a href="/dashboard">Abrir dashboard ↗</a></div></noscript>

@@ -25,6 +25,7 @@ jobs:
       - run: npm run test:navigation
       - run: npm run test:avatar
       - run: npm run test:controls
+      - run: node --test tests/lab-monitors.test.mjs
       - run: npx playwright install --with-deps chromium
       - name: Start local dashboard
         run: |

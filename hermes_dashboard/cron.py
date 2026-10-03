@@ -136,7 +136,7 @@ def _executions(limit=1000):
             row['exit_code'] = 0 if status in ('completed', 'success', 'done') else (1 if status in ('failed', 'error') else None)
             row['output_bytes'] = None
         row["duration_s"] = _duration(row.get("start_time"), row.get("end_time"))
-        row["ok"] = row.get("exit_code") == 0
+        row["ok"] = None if row.get("exit_code") is None else row["exit_code"] == 0
     return rows, None
 
 
@@ -166,7 +166,7 @@ def overview():
     for run in executions:
         entry = stats.setdefault(run["job_id"], {"runs": 0, "failures": 0, "last": None})
         entry["runs"] += 1
-        if not run["ok"]:
+        if run["ok"] is False:
             entry["failures"] += 1
         if entry["last"] is None or str(run["start_time"]) > str(entry["last"]):
             entry["last"] = run["start_time"]
@@ -177,7 +177,7 @@ def overview():
         "jobs": jobs,
         "executions": executions,
         "total_runs": len(executions),
-        "failed_runs": sum(1 for r in executions if not r["ok"]),
+        "failed_runs": sum(1 for r in executions if r["ok"] is False),
         "sources": sorted({j["source"] for j in jobs}),
         "jobs_error": jobs_error,
         "executions_error": exec_error,
