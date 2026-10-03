@@ -4,6 +4,7 @@ import * as T from '../vendor/three.module.min.js';
 // status rings and interactive signs are kept separate by their caller.
 export function batchStatic(scene) {
   scene.updateMatrixWorld(true);
+  const toLocal=scene.matrixWorld.clone().invert();
   const buckets = new Map();
   scene.traverse(object => {
     if (!object.isMesh || object.isInstancedMesh || object.userData.dynamic || object.userData.walkable || object.userData.station || Array.isArray(object.material) || object.material.transparent) return;
@@ -13,7 +14,7 @@ export function batchStatic(scene) {
   });
   for (const objects of buckets.values()) {
     if (objects.length < 2) continue;
-    const parts = objects.map(m => { const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); return g.applyMatrix4(m.matrixWorld); });
+    const parts = objects.map(m => { const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); return g.applyMatrix4(toLocal.clone().multiply(m.matrixWorld)); });
     const geometry = new T.BufferGeometry();
     for (const attribute of ['position','normal','uv','color']) {
       if (!parts.every(g => g.hasAttribute(attribute))) continue;

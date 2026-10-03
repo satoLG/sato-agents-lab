@@ -7,7 +7,7 @@ import {createLabBiome} from './lab-biome.js';
 import {createAreaFloors,createEnergyLines} from './lab-layout.js';
 import {loadSectorIcons,createSectorSign} from './lab-signage.js';
 import {loadEnvironment} from './lab-environment.js';
-import {createLabAudio} from './lab-audio.js';
+import {createLabAudio,ambienceLevels} from './lab-audio.js';
 import {createDialogue} from './lab-dialogue.js';
 import {createInstallations} from './lab-installations.js';
 import {createRagDome} from './lab-rag.js';
@@ -117,29 +117,18 @@ export async function createLabScene(container, callbacks) {
   createAreaFloors(hall,art,obstacles);
   const biome=createLabBiome(hall,art,environment);
   const energy=createEnergyLines(hall,groundHeight);
-  function consoleDesk(group, color) {
-    box(group, 2.5, .22, 1.25, '#e4eade', 0, 1, -.4);
-    box(group, 1.95, .92, .75, '#27323b', 0, .46, -.55);
-    for(const side of [-1,1]){
-      box(group,.16,.78,.94,'#e2e8e9',side*1.03,.5,-.49);
-      for(let i=0;i<5;i++)box(group,.018,.035,.45,'#27323b',side*1.12,.35+i*.08,-.48);
+  function consoleDesk(group,color){
+    group.name='sector-shared-workbench';
+    box(group,8.4,.2,1.65,'#e4eade',0,1.07,0);
+    for(const x of [-3.65,3.65]){box(group,.22,1,.95,'#27323b',x,.5,0);box(group,.28,.12,1.3,'#71818a',x,.06,0);}
+    box(group,7.2,.16,.07,'#27323b',0,.84,.6);
+    box(group,7.8,.045,.04,glow(color),0,.94,.82);
+    for(const x of [-2.8,0,2.8]){
+      box(group,1.02,.05,.35,'#27323b',x,1.2,.38);
+      for(let row=0;row<3;row++)for(let col=0;col<8;col++)box(group,.078,.014,.065,'#71818a',x-.35+col*.1,1.23,.27+row*.08);
+      sphere(group,.033,glow(color),x+.6,1.2,.35);
     }
-    box(group,1.65,.48,.03,'#dce2e5',0,.5,-.155);
-    for(const x of [-.72,.72])for(const y of [.32,.68])sphere(group,.025,'#394851',x,y,-.132);
-    box(group, 2.05, .07, .06, glow(color), 0, .85, .23);
-    box(group, 1.08, .07, .55, '#b7cbbb', 0, 1.07, .27);
-    box(group, .88, .04, .3, '#708c7b', 0, 1.15, .34);
-    for(let row=0;row<3;row++)for(let col=0;col<8;col++)box(group,.073,.018,.054,mat('#263943',.65,.28),-.35+col*.1,1.178,.24+row*.075);
-    // Service panel, readable circuitry and individual status diodes.
-    box(group,.62,.29,.033,mat('#163934',.25,.6),.45,.5,-.117);
-    for(let i=0;i<4;i++){
-      box(group,.24,.008,.014,glow('#398a80'),.44,.4+i*.056,-.09);
-      box(group,.045,.024,.034,mat('#b8c3cc',.8,.22),.25+i*.11,.52,-.075);
-    }
-    for(let i=0;i<3;i++)sphere(group,.022,glow(i===2?'#edb85c':'#72e8e7'),-.52+i*.16,.5,-.11);
-
-    for (let k = 0; k < 3; k++) sphere(group, .04, glow(k === 0 ? color : '#b1bc9b'), .79 + k * .15, 1.15, .02);
-    return null;
+    batchStatic(group);group.traverse(o=>o.userData.dynamic=true);
   }
 
   function receptionDesk(group,color){
@@ -151,91 +140,49 @@ export async function createLabScene(container, callbacks) {
     return null;
   }
   for (const [id, zone] of Object.entries(ZONES)) {
-    const group = new T.Group(); group.position.set(zone.x, groundHeight(zone.x,zone.z), zone.z); (id==='gateway'?world:hall).add(group);
+    const group = new T.Group(); group.position.set(zone.x, groundHeight(zone.x,zone.z), zone.z); (id==='gateway'?campus.reception:hall).add(group);
     const r = id === 'rag' ? 8.4 : id==='gateway'? 4.1 : 4.5;
     const trim=box(group,3,.04,.035,glow(zone.color),0,.055,3.7);
-    const desk = new T.Group(); desk.position.z = id==='rag'?6.75:id==='gateway'?.9:.95; group.add(desk); if(id==='gateway')receptionDesk(desk,zone.color);else consoleDesk(desk, zone.color);
-    const display=createMonitorBank(group,art,{sector:id,z:id==='rag'?8.8:-3.1});
-    const history=createHistoryBoard(group,art,id,{z:id==='rag'?8.8:-3.1});
-    for(const side of [-1,1])obstacles.push({x:zone.x+side*3.6,z:zone.z+(id==='rag'?8.8:-3.1),w:.22,d:.22});
-    obstacles.push({x: zone.x, z: zone.z + (id==='rag'?6.35:id==='gateway'?.9:.55), w: id==='gateway'?6.6:3.1, d: id==='gateway'?1.5:1.8});
+    const desk = new T.Group(); desk.position.z = id==='rag'?6.95:id==='gateway'?.9:-.45; group.add(desk); if(id==='gateway')receptionDesk(desk,zone.color);else consoleDesk(desk, zone.color);
+    // Gateway screens mount on the reception face of the partition (z > 18).
+    const monitorZ=id==='gateway'?18.48-zone.z:id==='rag'?5.8:-1.65;
+    const display=createMonitorBank(group,art,{sector:id,z:monitorZ,y:id==='gateway'?-.25:0,wallMounted:id==='gateway'});
+    const history=createHistoryBoard(group,art,id,{z:monitorZ,y:id==='gateway'?6.05:6.3});
+    if(id!=='gateway')for(const side of [-1,1])obstacles.push({x:zone.x+side*3.6,z:zone.z+monitorZ,w:.22,d:.22});
+    obstacles.push({x:zone.x,z:zone.z+desk.position.z,w:id==='gateway'?6.6:8.5,d:1.75});
     zones.set(id, {group, trim, display, history, status:'unknown',radius:r});
-    createSectorSign(id==='gateway'?world:hall,id,art,sectorIcons,obstacles);
+    createSectorSign(id==='gateway'?campus.reception:hall,id,art,sectorIcons,obstacles);
   }
-  // Nucleus: segmented containment ring with articulated supports.
-  const nucleus = new T.Group(); zones.get('hermes').group.add(nucleus);
-  ring(nucleus, 2.05, .14, '#dde7d9', 0, 3.65, -.45, true);
-  ring(nucleus, 1.87, .035, glow('#6df4da'), 0, 3.64, -.45, true);
-  for (const side of [-1, 1]) {
-    rod(nucleus, [side * 2.4, 0, -1.6], [side * 2.2, 2.8, -1.6], .11, mat('#617c6e', .55));
-    rod(nucleus, [side * 2.2, 2.8, -1.6], [side * 1.6, 3.65, -1.6], .09, mat('#dae4d4'));
+  // Sector equipment now sits on the shared bench, leaving the screens clear.
+  const patch=zones.get('mcp').group;
+  for(let i=0;i<6;i++){
+    const x=-2.2+i*.88;box(patch,.64,.23,.52,'#365851',x,1.32,-.65);
+    sphere(patch,.04,glow('#80d3d8'),x,1.43,-.35);
   }
-  nucleus.traverse(o => o.userData.dynamic = true);
-  // Provider portals: two gateways, configuration is shown by the UI, never invented.
-  const providers = zones.get('models').group;
-  for (const side of [-1, 1]) {
-    box(providers,.9,.45,.7,'#91a998',side*2.7,.225,-1.3);
-    ring(providers, .9, .17, '#dce3d3', side * 2.7, 1.5, -1.3);
-    ring(providers, .71, .065, glow(side === -1 ? '#70d9f5' : '#ffb76b'), side * 2.7, 1.5, -1.17);
-    const inner = cylinder(providers, .65, .07, '#376768', side * 2.7, 1.5, -1.2); inner.rotation.x = Math.PI / 2;
+  const shelves=zones.get('memory').group;
+  for(let col=0;col<7;col++)box(shelves,.24,.38+(col%2)*.07,.36,['#abb0cf','#d8ce9f','#8ac4b1'][col%3],-1.25+col*.4,1.38,-.72);
+  const scheduler=zones.get('cron').group;
+  ring(scheduler,.32,.045,'#e1e6d2',3.5,1.49,-.52);
+  const dial=cylinder(scheduler,.28,.045,'#426e62',3.5,1.49,-.52);dial.rotation.x=Math.PI/2;
+  rod(scheduler,[3.5,1.49,-.48],[3.62,1.63,-.48],.02,glow('#ebc786'));
+  // One workbench per sector; auxiliary agents share it without extra furniture.
+  const benches=new Map();
+  for(const [id,zone] of Object.entries(ZONES)){
+    for(let i=1;i<slotsFor(id).length;i++)benches.set(`${id}:${i}`,{display:{update(){}}});
+    zones.get(id).trim.userData.dynamic=true;
   }
-  // MCP patch bay: cabling plugs into a central spine.
-  const patch = zones.get('mcp').group;
-  box(patch, 3.35, 3.1, .35, '#365851', 0, 3.45, -1.7);
-  for (let i = 0; i < 6; i++) {
-    const x = -.99 + (i % 3) * .99, y = 2.95 + Math.floor(i / 3) * .95;
-    box(patch, .76, .58, .18, '#b3c7b4', x, y, -1.42);
-    sphere(patch, .08, glow('#80d3d8'), x - .17, y, -1.28);
-    rod(patch, [x + .1, y, -1.24], [x + .2, .44, -1.1], .035, mat('#456f65'));
-  }
-  // Memory shelves and removable context cartridges.
-  const shelves = zones.get('memory').group;
-  box(shelves, 3.4, 2.8, .54, '#678374', 0, 1.4, -1.8);
-  for (let row = 0; row < 2; row++) {
-    box(shelves, 3.5, .12, .73, '#dce5d0', 0, .52 + row * 1.12, -1.65);
-    for (let col = 0; col < 7; col++) box(shelves, .27, .72 + (col % 2) * .11, .4, ['#abb0cf', '#d8ce9f', '#8ac4b1'][col % 3], -1.35 + col * .43, .96 + row * 1.1, -1.54);
-  }
-  // Cron clock, with a static dial; robot activity is driven only by evidence.
-  const scheduler = zones.get('cron').group;
-  rod(scheduler, [0, 0, -1.65], [0, 4.05, -1.65], .16, mat('#66816d'));
-  ring(scheduler, 1.05, .17, '#e1e6d2', 0, 4.1, -1.6);
-  const dial = cylinder(scheduler, .94, .1, '#426e62', 0, 4.1, -1.6); dial.rotation.x = Math.PI / 2;
-  for (let i = 0; i < 12; i++) {
-    const tick = box(scheduler, .05, .14, .035, '#d6dcbc', Math.sin(i * Math.PI / 6) * .78, 4.1 + Math.cos(i * Math.PI / 6) * .78, -1.49); tick.rotation.z = -i * Math.PI / 6;
-  }
-  rod(scheduler, [0, 4.1, -1.45], [.52, 4.4, -1.45], .045, glow('#ebc786'));
-  rod(scheduler, [0, 4.1, -1.44], [0, 4.69, -1.44], .03, '#e9e3c5');
-  // Each extra worker has its own bench, terminal and tool to operate.
-  const benches = new Map(), machineParts = [];
-  for (const [id,zone] of Object.entries(ZONES)) {
-    for (let i=1;i<slotsFor(id).length;i++) {
-      const [sx,sz] = slotsFor(id)[i], g = new T.Group();
-      g.position.set(zone.x+sx,groundHeight(zone.x+sx,zone.z+sz),zone.z+(id==='gateway'?.9:sz-.95));(id==='gateway'?world:hall).add(g);
-      if(id==='gateway'){const display=receptionDesk(g,zone.color);benches.set(`${id}:${i}`,{group:g,display});obstacles.push({x:g.position.x,z:g.position.z,w:3.8,d:1.65});continue;}
-      box(g,1.2,.14,.62,'#bccdc4',0,.86,0); box(g,.85,.84,.39,'#59756b',0,.42,-.07);
-      const display={update(){},indicators(){}};
-      box(g,.56,.04,.21,'#506e64',-.14,.96,.24);
-      const tool = new T.Group(); tool.position.set(.42,1.02,.09); g.add(tool);
-      cylinder(tool,.08,.15,'#d7e3d6'); ring(tool,.08,.018,glow('#54b9f1'),0,.05,.07);
-      tool.traverse(o => o.userData.dynamic=true); machineParts.push({object:tool,sector:id,slot:i,position:tool.getWorldPosition(new T.Vector3())});
-      benches.set(`${id}:${i}`,{group:g,display});
-      obstacles.push({x:g.position.x,z:g.position.z,w:id==='gateway'?2.6:1.3,d:id==='gateway'?1.1:.72});
-    }
-    const z = zones.get(id); z.trim.userData.dynamic = true;
-    // Back equipment, not just the desktops, participates in collision.
-    if(id!=='gateway')obstacles.push({x:zone.x,z:zone.z+(id==='rag'?5.3:-1.8),w:id==='hermes'?4.8:5,d:1.1});
-  }
-  for (const side of [-1,1]) obstacles.push({x:ZONES.vm.x+side*1.65,z:ZONES.vm.z-1.9,w:1.25,d:.5});
   // Keep the plaques raycastable when batching the static chamber.
   world.traverse(o => { if (o.isMesh && o.userData.station) hitObjects.push(o); });
-  const installations=createInstallations(hall,zones,art),ragDome=createRagDome(hall,art,ZONES.rag);
+  const installations=createInstallations(hall,zones,art);campus.attachToWall('north',installations.activityRoot);const ragDome=createRagDome(hall,art,ZONES.rag);
+  for(const x of [-5.3,-6.3])obstacles.push({x:ZONES.models.x+x,z:ZONES.models.z-1.6,w:1,d:1});
   obstacles.push({x:ZONES.rag.x,z:ZONES.rag.z,w:10.5,d:10.5});
   batchStatic(hall);
   hall.traverse(o=>o.userData.dynamic=true);
+  campus.registerReception();
   batchStatic(world);
 
   const factory = createRigFactory({box,sphere,cylinder,ring,rod,mesh,mat,glow,geo});
-  const parcels=createParcelFlow(world,art,ZONES,factory,obstacles,hall,(kind,p)=>audio.cue(kind,p));batchStatic(world);
+  const parcels=createParcelFlow(world,art,ZONES,factory,obstacles,hall,(kind,p)=>audio.cue(kind,p),campus.reception,p=>campus.registerReception(p));campus.registerReception();batchStatic(world);
   const hallReveal=createHallReveal(world,hall);
   const walkSurfaces=[];world.traverse(o=>{if(o.isMesh&&o.userData.walkable)walkSurfaces.push(o);});
   const avatar = hero.root; avatar.position.set(0,FLOOR,46); avatar.scale.setScalar(1.12);avatar.rotation.y=Math.PI; world.add(avatar);
@@ -259,7 +206,7 @@ export async function createLabScene(container, callbacks) {
   function bubble(parent,height) { const sprite=new T.Sprite(emoticons.get('…'));sprite.position.y=height;sprite.scale.set(.53,.53,1);sprite.visible=false;sprite.renderOrder=10;parent.add(sprite);return sprite; }
   hero.bubble=bubble(avatar,2.7);
   function showBubble(rig,text) { rig.bubble.material=emoticons.get(text);rig.bubble.visible=true; }
-  function refreshCircles() { circles.length=0; for (const [id,item] of robots) circles.push({id,x:item.rig.root.position.x,z:item.rig.root.position.z,r:item.slot===0?.57:.44}); }
+  function refreshCircles() { circles.length=0; for (const [id,item] of robots) circles.push({id,x:item.rig.root.position.x,z:item.rig.root.position.z,r:item.worker.sector==='hermes'&&item.slot===0?.87:item.slot===0?.57:.44}); }
   function update(data) {
     latestData=data;stale=false;dirty=true;installations.update(data);
     const keep=new Set();
@@ -275,12 +222,12 @@ export async function createLabScene(container, callbacks) {
         keep.add(w.id); let item=robots.get(w.id);
         if (!item) {
           const slot=w.kind==='guide'?0:slots.map((_,i)=>i).slice(1).find(i=>!occupied.has(i));if(slot===undefined)continue;occupied.add(slot);
-          const rig=factory.robot();rig.phase=phaseFor(w.id);rig.root.scale.setScalar(slot===0?1:.8);rig.root.position.set(zone.x+slots[slot][0],groundAt(zone.x+slots[slot][0],zone.z+slots[slot][1])-.03,zone.z+slots[slot][1]);
-          rig.root.traverse(o=>o.userData.robot=w.id);rig.bubble=bubble(rig.root,2.27);(id==='gateway'?world:hall).add(rig.root);
+          const isCore=id==='hermes'&&slot===0;const rig=factory.robot({core:isCore});rig.phase=phaseFor(w.id);rig.root.scale.setScalar(isCore?1.35:slot===0?1:.8);rig.root.position.set(zone.x+slots[slot][0],groundAt(zone.x+slots[slot][0],zone.z+slots[slot][1])-.03,zone.z+slots[slot][1]);
+          rig.root.traverse(o=>o.userData.robot=w.id);rig.bubble=bubble(rig.root,2.27);(id==='gateway'?campus.reception:hall).add(rig.root);
           item={rig,slot,worker:w};robots.set(w.id,item);renderer.shadowMap.needsUpdate=true;
         }
         item.worker=w;zoneByRobot.set(w.id,id);
-        item.rig.indicator.material=glow(w.status==='error'?'#df9c6d':LIVE.has(w.status)?'#89d7b9':'#829c93');
+        item.rig.indicator.material=glow(id==='hermes'&&item.slot===0?'#ffad4a':w.status==='error'?'#df9c6d':LIVE.has(w.status)?'#89d7b9':'#829c93');
         if(item.slot)benches.get(`${id}:${item.slot}`).display.update([w.name,w.status_label,w.detail||'']);
       }
       for(let i=1;i<slotsFor(id).length;i++) if(!visible.some(w=>robots.get(w.id)?.slot===i))benches.get(`${id}:${i}`).display.update(['BANCADA AUXILIAR','Aguardando agente','']);
@@ -288,12 +235,12 @@ export async function createLabScene(container, callbacks) {
       if(guide)z.display.update([NAMES[id]+' / '+guide.name,guide.status_label,...(guide.facts||[]).slice(0,2)]);
     }
     for(const[id,item]of robots)if(!keep.has(id)){item.rig.root.removeFromParent();for(const g of item.rig.ownedGeometry)g.dispose();item.rig.pupil.material.dispose();item.rig.opticMaterial.dispose();robots.delete(id);zoneByRobot.delete(id);renderer.shadowMap.needsUpdate=true;}
-    hallReveal.register();refreshCircles();
+    campus.registerReception();hallReveal.register();refreshCircles();
     const free=nearestFree(avatar.position,obstacles,circles,2);if(free&&!canStand(avatar.position.x,avatar.position.z,obstacles,circles)){avatar.position.x=free.x;avatar.position.z=free.z;stopWalking();}
     if(route.length)route=findPath(avatar.position,route.at(-1),obstacles,circles);
     if(chatId&&!robots.has(chatId))endChat();
   }
-  function stopWalking(){controls.reset();route=[];movementSpeed=0;hero.cancelActions();aimPoint=null;destination.visible=false;dirty=true;}
+  function stopWalking(){controls.reset();route=[];movementSpeed=0;hero.cancelActions();aimPoint=null;aimHeading=null;aimUntil=0;destination.visible=false;dirty=true;}
   const cornerRadius=()=>camera.aspect<.8?Math.max(45,20/camera.aspect):55;
   const outside=()=>avatar.position.z>29||Math.abs(avatar.position.x)>32||avatar.position.z<-31;
   function start(){if(started)return;started=true;arrivalView=false;cameraMode='follow';targetRadius=30*CAMPUS_SCALE;targetElevation=.48;targetAzimuth=.55;callbacks.onCamera('follow');audio.cue('click');dirty=true;}
@@ -320,7 +267,7 @@ export async function createLabScene(container, callbacks) {
   function beginChat(id){
     if(!canInteract(id)||chatId||study)return false;
     stopWalking();chatId=id;savedCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};
-    nucleus.visible = false;renderer.shadowMap.needsUpdate=true;
+    renderer.shadowMap.needsUpdate=true;
     const robot=robots.get(id).rig;
     savedCamera.aim=aim.clone();targetAzimuth=azimuth;targetElevation=elevation;targetRadius=radius;
     dialogue.setOpen(true);audio.cue('robotVoice',robot.root.position,`voice:${id}`);
@@ -329,7 +276,7 @@ export async function createLabScene(container, callbacks) {
   }
   function endChat(){
     chatId=null;dialogue.setOpen(false);hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;
-    nucleus.visible=true;renderer.shadowMap.needsUpdate=true;previousCandidate=null;
+    renderer.shadowMap.needsUpdate=true;previousCandidate=null;
     if(savedCamera){cameraMode=savedCamera.mode;targetAzimuth=savedCamera.azimuth;targetElevation=savedCamera.elevation;targetRadius=savedCamera.radius;savedCamera=null;}
     callbacks.onCamera(cameraMode);dirty=true;
   }
@@ -339,7 +286,7 @@ export async function createLabScene(container, callbacks) {
   const playable=()=>started&&!chatId&&!study&&!contextLost;
   const jump=()=>{if(playable()){hero.jump();dirty=true;}};
   const attack=()=>{if(playable()){route=[];hero.attack();dirty=true;}};
-  const controls=createLabControls(container,{enabled:playable,onJump:jump,onAttack:attack,onInteract:interact,onAim(){dirty=true;},onMove(){leaveArrival();route=[];dirty=true;}});
+  const controls=createLabControls(container,{enabled:playable,onJump:jump,onAttack:attack,onInteract:interact,onAim(){dirty=true;},onMove(){leaveArrival();route=[];aimPoint=null;aimUntil=0;dirty=true;}});
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),floor=new T.Plane(new T.Vector3(0,1,0),-FLOOR*CAMPUS_SCALE);
   const reticle=ring(world,.16,.015,glow('#f1f7db'),0,.15,0,true);reticle.visible=false;
   let drag=null,aimPoint=null,aimHeading=null,aimUntil=0;
@@ -368,7 +315,7 @@ export async function createLabScene(container, callbacks) {
       if(drag.orbit&&drag.moved){targetAzimuth-=(e.clientX-drag.px)*.006;targetElevation=T.MathUtils.clamp(targetElevation+(e.clientY-drag.py)*.004,.25,1.18);aimPoint=null;dirty=true;}
       drag.px=e.clientX;drag.py=e.clientY;
     }
-    if(e.pointerType==='mouse'&&!study&&!(drag?.orbit&&drag.moved)){aimPoint=pointAt(e);dirty=true;}
+    if(e.pointerType==='mouse'&&!study&&!(drag?.orbit&&drag.moved)){aimPoint=pointAt(e);aimUntil=performance.now()+220;dirty=true;}
   });
   container.addEventListener('pointerup',e=>{
     if(!drag||drag.id!==e.pointerId)return;const gesture=drag;drag=null;
@@ -390,7 +337,7 @@ export async function createLabScene(container, callbacks) {
   let movementSpeed=0,previousLocation='',previousCandidate='',wasInterior=false,wasHallLit=false;
   function frame(ms){
     requestAnimationFrame(frame);if(ms-lastTime<1000/30)return;
-    const lightingDt=Math.min((ms-lastTime)/1000,1),elapsed=Math.min(lightingDt,.25),dt=elapsed;lastTime=ms;if(document.hidden||contextLost)return;
+    const lightingDt=Math.max(0,(ms-lastTime)/1000),elapsed=Math.min(lightingDt,.25),dt=elapsed;lastTime=ms;if(document.hidden||contextLost)return;
     // Lower fill cost on sustained slow devices, keeping the canvas/UI dimensions.
     if(!paused){qualityFrames++;qualityElapsed+=elapsed;if(qualityFrames>=45){if(qualityElapsed/qualityFrames>.08&&pixelRatio>1){pixelRatio=Math.max(1,pixelRatio-.2);renderer.setPixelRatio(pixelRatio);dirty=true;}qualityFrames=0;qualityElapsed=0;}}
     if(!paused)animationTime+=dt;
@@ -417,9 +364,9 @@ export async function createLabScene(container, callbacks) {
     const moving=dist(before,avatar.position)>.001;
     const aimingTouch=Math.hypot(controls.aim.x,controls.aim.y)>.01;
     if(aimingTouch){
-      const a=controls.aim;aimHeading=Math.atan2(a.x*Math.cos(azimuth)+a.y*Math.sin(azimuth),a.y*Math.cos(azimuth)-a.x*Math.sin(azimuth));aimPoint=null;aimUntil=ms+650;
-    }else if(aimPoint)aimHeading=Math.atan2(aimPoint.x-avatar.position.x,aimPoint.z-avatar.position.z);
-    const aiming=playable()&&(!!aimPoint||aimingTouch||ms<aimUntil);
+      const a=controls.aim;aimHeading=Math.atan2(a.x*Math.cos(azimuth)+a.y*Math.sin(azimuth),a.y*Math.cos(azimuth)-a.x*Math.sin(azimuth));aimPoint=null;aimUntil=ms+100;
+    }else if(aimPoint&&ms<aimUntil)aimHeading=Math.atan2(aimPoint.x-avatar.position.x,aimPoint.z-avatar.position.z);
+    const aiming=playable()&&(aimingTouch||aimHeading!==null&&ms<aimUntil);
     if(aiming)avatar.rotation.y=dampAngle(avatar.rotation.y,aimHeading,dt,18);
     else if(moving)avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(avatar.position.x-before.x,avatar.position.z-before.z),dt,12);
     reticle.visible=aiming;
@@ -448,6 +395,10 @@ export async function createLabScene(container, callbacks) {
       camera.position.x+=Math.sin(animationTime*1.8)*.035+Math.sin(animationTime*2.7)*.012;
       camera.position.y+=Math.sin(animationTime*1.4+.7)*.025;
       camera.lookAt(aim);
+    }
+    if(callbacks.onPromptPosition){
+      const p=avatar.position.clone();p.y+=3.7;p.multiplyScalar(CAMPUS_SCALE).project(camera);
+      callbacks.onPromptPosition((p.x*.5+.5)*container.clientWidth,(-p.y*.5+.5)*container.clientHeight);
     }
     if(emoteUntil&&ms>emoteUntil){hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;emoteUntil=0;dirty=true;}
     if(!dirty&&paused&&!moving&&!wasMoving&&!changing&&!hero.transitioning&&campus.settled)return;dirty=false;wasMoving=moving;
@@ -478,7 +429,6 @@ export async function createLabScene(container, callbacks) {
         if(Math.sin(animationTime*.8+phaseFor(id))>.7)audio.cue('equipment',p,`equipment:${id}`);
       }
     }
-    if(!paused)for(const part of machineParts){if(dist(avatar.position,part.position)<13)part.object.rotation.y=animationTime*.65+part.slot;}
     const {interior,enteredHall,hallLight,doorChanged}=campus.tick(lightingDt,avatar.position,camera);hallReveal.set(hallLight);audio.tick();
     if(doorChanged)audio.cue('door');if(hallLight>.5&&!wasHallLit)audio.cue('arrival');wasHallLit=hallLight>.5;
     container.dataset.hall=String(enteredHall);
@@ -487,7 +437,8 @@ export async function createLabScene(container, callbacks) {
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
     // Shadow maps update on every rendered frame, including idle and turns.
     energy.tick(animationTime);biome.tick(animationTime);
-    audio.ambient([...Array.from(zones,([id,zone])=>({id:`machine:${id}`,kind:['vm','mcp','rag'].includes(id)?'machineFan':'machineMotor',position:zone.group.position,volume:.045,range:11})),{id:'stream',kind:'stream',position:biome.streamAt(avatar.position),volume:.075,range:7}],started&&!paused&&hallLight>.5);
+    const levels=ambienceLevels(interior,hallLight);
+    audio.ambient([{id:'outdoor-nature',kind:'nature',bed:true,position:null,volume:levels.nature},{id:'laboratory-hum',kind:'hum',bed:true,position:null,volume:levels.equipment},...Array.from(zones,([id,zone])=>({id:`machine:${id}`,kind:['vm','mcp','rag'].includes(id)?'machineFan':'machineMotor',position:zone.group.position,volume:id==='gateway'?0:.07*hallLight,range:14})),{id:'stream',kind:'stream',position:biome.streamAt(avatar.position),volume:levels.stream,range:7}],started);
     if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera,dt,paused);
     for(const packet of parcels.tick(animationTime,enteredHall))hallReveal.register(packet);
     for(const {id,rig,speed,parcel} of parcels.couriers){
@@ -508,5 +459,5 @@ export async function createLabScene(container, callbacks) {
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
   renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;dirty=true;renderer.shadowMap.needsUpdate=true;callbacks.onLostContext(false);});
-  return {start,setChatMessages(entries,name){dialogue.setMessages(entries,name);dirty=true;},setHistoryBoards(boards){for(const[id,zone]of zones)zone.history.update(boards[id]);dirty=true;},setDashboardIndicators(channels){for(const[id,zone]of zones)zone.display.indicators(indicatorCards(id,channels));dirty=true;},toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
+  return {start,setChatMessages(entries,name){dialogue.setMessages(entries,name);dirty=true;},setHistoryBoards(boards){for(const[id,zone]of zones)zone.history.update(boards[id]);dirty=true;},setDashboardIndicators(channels){for(const[id,zone]of zones)zone.display.indicators(indicatorCards(id,channels));dirty=true;},async toggleAudio(){const on=await audio.toggle();dirty=true;return on;},setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
 }

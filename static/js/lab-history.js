@@ -1,7 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 export function boardRows(board){return [...(board?.upcoming||[]),...(board?.rows||[])];}
-export function createHistoryBoard(parent,{box,mesh},sector,{z=-3.1}={}){
- const root=new T.Group();root.name='sector-execution-board';root.userData.historySector=sector;root.position.set(0,3.6,z);root.visible=false;parent.add(root);
+export function createHistoryBoard(parent,{box,mesh},sector,{z=-1.65,y=6.3}={}){
+ const root=new T.Group();root.name='sector-execution-board';root.userData.historySector=sector;root.position.set(0,y,z);root.visible=false;parent.add(root);
  box(root,8.25,2.5,.15,'#25333b');
  const canvas=document.createElement('canvas');canvas.width=1536;canvas.height=480;const ctx=canvas.getContext('2d'),texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
  const screen=mesh(root,new T.PlaneGeometry(8,2.3),new T.MeshBasicMaterial({map:texture}),0,0,.09,false);screen.userData.dynamic=true;

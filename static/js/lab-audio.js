@@ -1,10 +1,11 @@
 // Local Portal 2 samples, with per-source attenuation and short voice budgets.
-const FILES=['machineFan','machineMotor','stream','robotBlink','click','node','chat','answer','error','door','arrival','drop','pickup','walk1','walk2','walk3','walk4'];
+const FILES=['nature','hum','machineFan','machineMotor','stream','robotBlink','click','node','chat','answer','error','door','arrival','drop','pickup','walk1','walk2','walk3','walk4'];
 const VARIANTS={walk:4,run:4,land:2,robotStep:3,robotServo:2,jump:2,punch:2,typing:2,computer:2,equipment:2,energy:2,robotVoice:3};
 for(const [kind,count] of Object.entries(VARIANTS))for(let i=1;i<=count;i++)if(!FILES.includes(`${kind}${i}`))FILES.push(`${kind}${i}`);
 const VOLUME={click:.16,node:.12,chat:.12,answer:.10,error:.12,door:.10,arrival:.06,drop:.10,pickup:.07,walk:.13,run:.18,jump:.10,land:.17,punch:.12,robotStep:.07,robotServo:.035,typing:.07,computer:.035,equipment:.055,energy:.045,robotVoice:.18,robotBlink:.035};
 const RANGE={robotStep:7,robotServo:6,typing:6,computer:7,equipment:10,energy:11,robotVoice:8,robotBlink:3,drop:8,pickup:8,door:12};
 export const AUDIO_FILES=Object.freeze([...FILES]);
+export function ambienceLevels(interior,hallLight){return {nature:.24*(1-interior),equipment:.075*hallLight,stream:.08*hallLight};}
 export function distanceGain(distance,range=12){const t=Math.max(0,1-distance/range);return t*t;}
 export function spatialMix(listener,position,range=12){
   if(!position)return {gain:1,pan:0};
@@ -13,14 +14,16 @@ export function spatialMix(listener,position,range=12){
 }
 export function createLabAudio(){
   let ctx,master,enabled=false,loading;const variants=new Map();const buffers=new Map(),last=new Map(),voices=new Set(),loops=new Map(),listener={x:0,z:46,yaw:0};
+  let ambienceSources=[],ambienceActive=false;
   function init(){
     const Context=window.AudioContext||window.webkitAudioContext;if(!Context)return false;
     ctx=new Context();master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
     loading=Promise.allSettled(FILES.map(async key=>{const r=await fetch(new URL(`../audio/portal2/${key}.wav`,import.meta.url));if(r.ok)buffers.set(key,await ctx.decodeAudioData(await r.arrayBuffer()));}));return true;
   }
-  async function toggle(){if(!ctx&&!init())return false;enabled=!enabled;if(enabled){last.clear();await ctx.resume();await loading;cue('click');}else {silence();await ctx.suspend();}return enabled;}
+  async function toggle(){if(!ctx&&!init())return false;enabled=!enabled;if(enabled){last.clear();await ctx.resume();await loading;ambient(ambienceSources,ambienceActive);cue('click');}else {silence();await ctx.suspend();}return enabled;}
   function cue(kind,position,id=kind){
     if(!enabled||!ctx||document.hidden||voices.size>=12)return false;
+    if(kind==='jump')return arcadeJump();
     if(position&&[...voices].filter(v=>v.position).length>=6)return false;
     const range=RANGE[kind]??12,mix=spatialMix(listener,position,range);if(mix.gain<=.002)return false;
     const t=ctx.currentTime,interval={walk:.20,run:.13,robotStep:.14,robotServo:.8,typing:.18,computer:3.5,equipment:3.1,energy:3.7,robotVoice:.6,robotBlink:1,punch:.23}[kind]??.12;
@@ -35,6 +38,14 @@ export function createLabAudio(){
     source.onended=()=>{voices.delete(voice);source.disconnect();gain.disconnect();pan.disconnect();};source.start();if(kind==='robotVoice'||kind==='robotServo')chirp(kind,position,id);return true;
   }
   function hash(id){return [...String(id)].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0);}
+  function arcadeJump(){
+    const time=ctx.currentTime;if(time-(last.get('jump')??-10)<.2)return false;last.set('jump',time);
+    const source=ctx.createOscillator(),gain=ctx.createGain(),pan=ctx.createStereoPanner();source.type='triangle';
+    source.frequency.setValueAtTime(210,time);source.frequency.exponentialRampToValueAtTime(820,time+.14);source.frequency.exponentialRampToValueAtTime(540,time+.23);
+    gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(.105,time+.008);gain.gain.exponentialRampToValueAtTime(.0001,time+.25);
+    source.connect(gain).connect(pan).connect(master);const voice={source,gain,pan,volume:0};voices.add(voice);
+    source.onended=()=>{voices.delete(voice);source.disconnect();gain.disconnect();pan.disconnect();};source.start(time);source.stop(time+.26);return true;
+  }
   function chirp(kind,position,id){
     if(voices.size>=12)return;
     const mix=spatialMix(listener,position,6);if(mix.gain<.01)return;
@@ -50,8 +61,10 @@ export function createLabAudio(){
     loops.clear();
   }
   function ambient(sources,active=true){
+    ambienceSources=sources;ambienceActive=active;
     if(!ctx||!enabled||document.hidden||!active){for(const v of loops.values())v.source.stop();loops.clear();return;}
-    const nearest=sources.map(s=>({...s,mix:spatialMix(listener,s.position,s.range||10)})).filter(s=>s.mix.gain>.008).sort((a,b)=>b.mix.gain-a.mix.gain).slice(0,4),keep=new Set();
+    const audible=sources.map(s=>({...s,mix:spatialMix(listener,s.position,s.range||10)})).filter(s=>s.mix.gain*(s.volume??.045)>.0001);
+    const nearest=[...audible.filter(s=>s.bed),...audible.filter(s=>!s.bed).sort((a,b)=>b.mix.gain-a.mix.gain).slice(0,4)],keep=new Set();
     for(const s of nearest){
       const buffer=buffers.get(s.kind);if(!buffer)continue;keep.add(s.id);let v=loops.get(s.id);
       if(!v){const source=ctx.createBufferSource(),gain=ctx.createGain(),pan=ctx.createStereoPanner();source.buffer=buffer;source.loop=true;source.playbackRate.value=.96+(hash(s.id)%5)*.02;gain.gain.value=0;source.connect(gain).connect(pan).connect(master);v={source,gain,pan};loops.set(s.id,v);source.onended=()=>{source.disconnect();gain.disconnect();pan.disconnect();};source.start(0,(hash(s.id)%100)/100*buffer.duration);}
@@ -59,7 +72,7 @@ export function createLabAudio(){
     }
     for(const [id,v]of loops)if(!keep.has(id)){v.gain.gain.setTargetAtTime(0,ctx.currentTime,.05);v.source.stop(ctx.currentTime+.2);loops.delete(id);}
   }
-  document.addEventListener('visibilitychange',()=>{if(ctx){if(document.hidden){silence();ctx.suspend();}else if(enabled)ctx.resume();}});
+  document.addEventListener('visibilitychange',()=>{if(ctx){if(document.hidden){silence();ctx.suspend();}else if(enabled)ctx.resume().then(()=>ambient(ambienceSources,ambienceActive));}});
   return {toggle,cue,ambient,get enabled(){return enabled;},setListener(x,z,yaw=0){Object.assign(listener,{x,z,yaw});},tick(){
     if(!ctx||!enabled)return;const t=ctx.currentTime;
     for(const v of voices){if(!v.volume)continue;const mix=spatialMix(listener,v.position,v.range);v.gain.gain.setTargetAtTime(v.volume*mix.gain,t,.035);v.pan.pan.setTargetAtTime(mix.pan,t,.035);}

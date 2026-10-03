@@ -3,7 +3,7 @@ import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {WALK_SPEED,RUN_SPEED} from './lab-controls.js';
 
 export const AVATAR_HEIGHT=2.45;
-export const JUMP_TIMING={start:.18,air:.72,land:.20,height:.85};
+export const JUMP_TIMING={start:.09,air:.88,land:.14,height:1.65};
 export async function loadSatoAvatar(){
   return createSatoAvatar(await new GLTFLoader().loadAsync(new URL('../models/sato.glb',import.meta.url).href));
 }
@@ -20,7 +20,9 @@ export function createSatoAvatar({scene,animations}){
   // so a baked takeoff cannot add a second jump or move the character through walls.
   const neutralHip=idleClip.tracks.find(t=>/hips.*\.position$/.test(t.name));
   function action(name,seconds){
-    const c=required(name).clone();
+    // Skip the long crouched anticipation in the source takeoff; use its push-off.
+    const source=required(name);
+    const c=name==='Jump_Start'?T.AnimationUtils.subclip(source,name,Math.floor(source.duration*30*.42),Math.ceil(source.duration*30),30):source.clone();
     if(name.startsWith('Jump_'))for(const t of c.tracks){
       if(/hips.*\.position$/.test(t.name))for(let i=0;i<t.values.length;i+=3){
         t.values[i]=neutralHip?.values[0]??t.values[0];
@@ -42,7 +44,7 @@ export function createSatoAvatar({scene,animations}){
   const bounds=new T.Box3().setFromObject(scene),scale=AVATAR_HEIGHT/(bounds.max.y-bounds.min.y);
   const model=new T.Group();model.scale.setScalar(scale);model.position.y=-bounds.min.y*scale;model.add(scene);root.add(model);
   scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.isSkinnedMesh)o.frustumCulled=false;}});
-  let blend=0,runBlend=0,phase='ground',phaseTime=0,current=null,punchIndex=0,height=0,footPhase=0;
+  let blend=0,runBlend=0,phase='ground',phaseTime=0,flightTime=0,current=null,punchIndex=0,height=0,footPhase=0;
   const events=[];
   function begin(next,a){phase=next;phaseTime=0;current=a;if(a)a.reset().play();}
   function finish(){current=null;phase='ground';phaseTime=0;height=0;}
@@ -53,7 +55,7 @@ export function createSatoAvatar({scene,animations}){
     get attacking(){return phase==='attack';},
     get transitioning(){return blend>0&&blend<1||runBlend>0&&runBlend<1||phase!=='ground'||specialWeight>.0001;},
     drainEvents(){return events.splice(0);},
-    jump(){if(phase!=='ground')return false;begin('takeoff',jumpStart);return true;},
+    jump(){if(phase!=='ground')return false;flightTime=0;begin('takeoff',jumpStart);events.push('jump');return true;},
     attack(){if(phase!=='ground')return false;begin('attack',punches[punchIndex++%2]);events.push('punch');return true;},
     cancelActions(){finish();for(const a of specials){a.stop();weights.set(a,0);}specialWeight=0;events.length=0;},
     update(dt,{speed=0,running=false,travelAngle=0,reduced=false}={}){
@@ -61,10 +63,10 @@ export function createSatoAvatar({scene,animations}){
       if(steered){hips.quaternion.copy(savedHip);spine.quaternion.copy(savedSpine);steered=false;}
       // Direct actions remain available with ambient motion paused.
       phaseTime+=dt;
-      if(phase==='takeoff'&&phaseTime>=JUMP_TIMING.start){begin('air',jumpAir);events.push('jump');}
-      else if(phase==='air'){
-        const t=Math.min(1,phaseTime/JUMP_TIMING.air);height=4*JUMP_TIMING.height*t*(1-t);
+      if(phase==='takeoff'||phase==='air'){
+        flightTime+=dt;const t=Math.min(1,flightTime/JUMP_TIMING.air);height=4*JUMP_TIMING.height*t*(1-t);
         if(t===1){height=0;begin('landing',jumpLand);events.push('land');}
+        else if(phase==='takeoff'&&phaseTime>=JUMP_TIMING.start)begin('air',jumpAir);
       }else if(phase==='landing'&&phaseTime>=JUMP_TIMING.land)finish();
       else if(phase==='attack'&&phaseTime>=current.getClip().duration/current.getEffectiveTimeScale())finish();
       const moving=!reduced&&speed>.03;

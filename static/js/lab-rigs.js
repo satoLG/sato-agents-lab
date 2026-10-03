@@ -14,19 +14,20 @@ export function createRigFactory(art) {
     const head = bone(spine, 'head', 0, type === 'avatar' ? .84 : 0, 0);
     return {type, root, hips, spine, head, arms: [], legs: [], eyes: [], move: 0, attention: 0, work: .6, phase: 0, greeting: 0, gaitPhase: 0, steps: 0, blink: 0, lids: []};
   }
-  function robot() {
-    const rig = base('robot');
-    sphere(rig.spine, .54, mat('#e3e8df',.42,.3), 0, 0, 0, [1.08, .96, .98]);
+  function robot({core=false}={}) {
+    const rig = base('robot');rig.core=core;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
+    const signal=core?'#ffad4a':'#65d5ff';
+    sphere(rig.spine, .54, mat('#e3e8df',.42,.3), 0, 0, 0, [1.08, core?1.55:.96, .98]);
     ring(rig.spine, .535, .043, '#61736c', 0, 0, 0, true);
     ring(rig.spine, .53, .028, '#81928a', 0, 0, 0);
     // Independent gimbal inside the shell keeps eye tracking separate from the torso.
     sphere(rig.head, .31, '#253d3c', 0, .015, .445, [1.2, 1, .5]);
-    ring(rig.head, .18, .015, opticRim, 0, .015, .6);
-    const pupilMaterial = new T.MeshBasicMaterial({color:'#d5f7ff',toneMapped:false});
+    ring(rig.head, .18, .015, core?new T.MeshBasicMaterial({color:signal,toneMapped:false}):opticRim, 0, .015, .6);
+    const pupilMaterial = new T.MeshBasicMaterial({color:core?'#ffca78':'#d5f7ff',toneMapped:false});
     rig.pupil = mesh(rig.head,geo('optic-disc',()=>new T.CircleGeometry(.082,32)),pupilMaterial,0,.015,.611,false);
-    const halo=geo('optic-halo-texture',()=>{
+    const halo=geo(core?'core-optic-halo-texture':'optic-halo-texture',()=>{
       const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d'),g=ctx.createRadialGradient(64,64,3,64,64,64);
-      g.addColorStop(0,'rgba(180,244,255,1)');g.addColorStop(.22,'rgba(59,182,255,.85)');g.addColorStop(.55,'rgba(0,133,255,.23)');g.addColorStop(1,'rgba(0,120,255,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c);
+      g.addColorStop(0,core?'rgba(255,234,179,1)':'rgba(180,244,255,1)');g.addColorStop(.22,core?'rgba(255,158,38,.85)':'rgba(59,182,255,.85)');g.addColorStop(.55,core?'rgba(255,110,0,.23)':'rgba(0,133,255,.23)');g.addColorStop(1,core?'rgba(255,110,0,0)':'rgba(0,120,255,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c);
     });
     const glowMaterial=new T.MeshBasicMaterial({map:halo,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
     mesh(rig.head,geo('optic-halo-plane',()=>new T.PlaneGeometry(.65,.65)),glowMaterial,0,.015,.616,false);
@@ -40,7 +41,7 @@ export function createRigFactory(art) {
     for(const side of [-1,1]){
       box(rig.spine,.14,.38,.2,mat('#24333c',.72,.3),side*.47,.04,-.27);
       for(let i=0;i<5;i++)box(rig.spine,.15,.022,.23,mat('#9caeb6',.8,.25),side*.47,-.1+i*.055,-.27);
-      rod(rig.spine,[side*.38,-.23,.35],[side*.4,.22,.34],.012,glow('#3eafd0'));
+      rod(rig.spine,[side*.38,-.23,.35],[side*.4,.22,.34],.012,glow(core?signal:'#3eafd0'));
       for(const y of [-.25,.26])sphere(rig.spine,.025,mat('#31404a',.9,.2),side*.32,y,.4);
     }
     box(rig.spine,.23,.12,.035,mat('#26333e',.7,.25),0,-.34,.4);
@@ -51,14 +52,14 @@ export function createRigFactory(art) {
       const arm = bone(rig.spine, side < 0 ? 'shoulder_L' : 'shoulder_R', side * .71, -.04, 0);
       sphere(arm, .125, mat('#24343f',.8,.23));
       const hinge=cylinder(arm,.095,.18,mat('#b4c0c5',.9,.22));hinge.rotation.z=Math.PI/2;
-      ring(arm,.086,.012,glow('#63d4df'),side*.102,0,0).rotation.y=Math.PI/2;
+      ring(arm,.086,.012,glow(core?signal:'#63d4df'),side*.102,0,0).rotation.y=Math.PI/2;
       rod(arm, [0, 0, 0], [side * .05, -.33, 0], .054, mat('#586e68', .65));
       rod(arm, [side * .07, -.01, -.045], [side * .12, -.31, -.04], .019, mat('#c4d1c2', .65));
       const elbow = bone(arm, 'elbow', side * .05, -.33, 0);
       sphere(elbow, .075, '#405f57');
       cylinder(elbow, .065, .3, mat('#d5e1d0',.55,.28), 0, -.15, 0);
       rod(elbow,[-.08,-.045,-.04],[-.08,-.27,-.04],.019,mat('#acbbc3',.95,.2));
-      box(elbow,.032,.18,.025,glow('#5ec5df'),0,-.16,.067);
+      box(elbow,.032,.18,.025,glow(core?signal:'#5ec5df'),0,-.16,.067);
       for (const finger of [-1, 1]) rod(elbow, [0, -.3, 0], [finger * .065, -.39, .075], .022, mat('#4c665b'));
       rig.arms.push({upper: arm, lower: elbow, side});
       const leg = bone(rig.hips, side < 0 ? 'hip_L' : 'hip_R', side * .25, 0, 0);
@@ -104,7 +105,7 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  rig.head.rotation.y=damp(rig.head.rotation.y,lookYaw*rig.attention+glance*idle*(1-rig.attention),dt);
  rig.head.rotation.x=damp(rig.head.rotation.x,talk?Math.sin(phase*5.2)*.055:rig.work*.06+Math.sin(phase*.8)*.025,dt);
  rig.pupil.position.x=damp(rig.pupil.position.x,(rig.attention?lookYaw:glance)*.11,dt);
- rig.pupil.material.color.set(talk?'#f0fbff':'#9de6ff');
+ rig.pupil.material.color.set(rig.core?(talk?'#fff3d3':'#ffca78'):(talk?'#f0fbff':'#9de6ff'));
  rig.opticMaterial.opacity=talk?.7+Math.sin(phase*12)*.18:.62;
  for(let i=0;i<rig.arms.length;i++){
   const {upper,lower,side}=rig.arms[i],wave=!reduced&&t<rig.greeting&&i===1?Math.sin(Math.min(1,rig.greeting-t)*Math.PI/2):0;

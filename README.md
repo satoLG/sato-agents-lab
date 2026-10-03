@@ -28,14 +28,18 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   WASD/setas movem; Shift ou **Correr** alterna para corrida. O mouse mira,
   clique esquerdo/F dá um soco e Espaço/**Pular** salta. Clique direito no piso
   escolhe um destino; arraste com o botão direito para girar e use a roda para zoom.
-  No celular há analógicos independentes de movimento e mira, botões de ação e
-  toque no piso para escolher um destino. **Seguir** acompanha o personagem;
+  No celular, arrastar a área inferior esquerda anda e a direita mira; os
+  analógicos aparecem somente durante o toque. Os botões de correr, pular e socar
+  usam ícones SVG, e o som fica junto das câmeras no topo. A interação usa um
+  botão flutuante junto ao personagem. Sem mira ativa, ele gira na direção do movimento. **Seguir** acompanha o personagem;
   **Sala** enquadra o laboratório. Placas físicas identificam as estações.
-- O som é opcional. Passos, corrida, salto e soco usam amostras locais do Portal 2;
+- O som é opcional. Passos, corrida e soco usam amostras locais do Portal 2;
+  o salto usa um efeito arcade sintetizado, com subida imediata e altura de 1,65 m.
   robôs têm passos/servos, terminais têm teclas e feedback, equipamentos têm
   mecanismos e as linhas iluminadas têm pulsos elétricos. O volume e o estéreo
   seguem a distância e a câmera, com silêncio fora do alcance. Motores, ventiladores e água têm loops locais atenuados por distância;
-  até quatro fontes próximas tocam juntas. A origem e os recortes estão em `static/audio/portal2/`.
+  até quatro fontes próximas tocam juntas, com natureza no exterior e um fundo
+  contínuo de equipamentos no salão. A recepção permanece mais silenciosa. A origem e os recortes estão em `static/audio/portal2/`.
 - A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
   contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
   dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
@@ -44,10 +48,11 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
 - Guias explicam cada setor. Robôs individuais representam processos detectados,
   registros em `agent_runs`/`subagent_runs`, servidores MCP e jobs. O laboratório
   lê até 48 registros por tabela de agentes. Mostra até quatro robôs por setor:
-  responsável e três bancadas auxiliares. Selecionar outro robô na lista reserva
+  responsável e três trabalhadores que compartilham uma única bancada por setor. Selecionar outro robô na lista reserva
   uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
-  Todas as bancadas têm conjuntos de monitores com indicadores das APIs do dashboard,
-  nome e estado do trabalhador. Valores indisponíveis aparecem como “—”.
+  Cada setor tem seis monitores acima da bancada e um painel de histórico mais
+  acima. O gateway fica na parede da recepção, atrás do robô. O responsável do
+  núcleo tem carcaça oval maior e óptica laranja.
 - O avatar usa `static/models/sato.glb`, com idle ancorado (4,8 s),
   caminhada (0,92 s) e piscar independente. As poses se misturam ao iniciar/parar. A cadência
   acompanha a velocidade real, com aceleração e desaceleração. Detalhes e
@@ -67,13 +72,17 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   e parentesco vêm de `id`/`run_id`/`agent_id` e `parent_id`/`parent_run_id`.
 - Equipamentos da VM mostram CPU/RAM em barras luminosas e percentuais a cada
   snapshot (5 s). Falhas preservam a última leitura identificada; sem leitura
-  anterior aparece um traço. Tubos dos providers reproduzem as chamadas da
-  amostra recente, com retorno quando há tokens de saída registrados; são um
-  replay visual, não uma captura de pacotes de rede.
-- A oficina de skills exibe nomes do catálogo em uma lousa, livros articulados
-  e mecanismos de escrita. Mudanças nos arquivos/atividades acionam os gestos.
+  anterior aparece um traço. Os tubos dos providers ficam no corredor lateral,
+  com conexões alinhadas ao percurso e circulação ilustrativa de líquido por
+  entrada superior e retorno inferior; o painel mantém os dados reais da amostra recente.
+- A oficina de skills exibe o catálogo no sexto monitor, sem lousa adicional.
   O mural na parede mostra o calendário real de atividades (365 dias, UTC),
   atualizado a cada 15 s. O catálogo de skills usa o cache existente de 30 s.
+- Exterior e recepção escurecem e são retirados da renderização ao avançar;
+  retornam ao sair. Portas e mural acompanham as paredes nos recortes da câmera.
+  As árvores internas e externas compartilham folhagem e casca texturizada, com
+  uma árvore maior e cipós num espaço livre à direita. O riacho usa reflexos e
+  ondulações suaves, e as pedras têm variação mineral e musgo.
 - Dentro de RAG, **Explorar rede RAG** aproxima a cúpula: clique nos pontos ou
   na lista para abrir repositórios/categorias/documentos. A busca usa o mesmo
   `/api/rag/search` do dashboard (LanceDB/fastembed), mostra trechos e distâncias

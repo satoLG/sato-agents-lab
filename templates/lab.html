@@ -19,14 +19,15 @@
     <a class="brand glass" href="/dashboard" aria-label="Voltar ao dashboard"><img class="brand-icon" src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="36" height="36"><span>SATO <b>LAB</b><small>AGENT RESEARCH / 01</small></span></a>
     <div class="location glass"><i></i><span id="location-name">EXPLORANDO</span></div>
     <div class="camera-switch glass" role="group" aria-label="Modo de câmera"><button type="button" id="camera-follow" aria-pressed="true" aria-label="Câmera seguir" title="Seguir personagem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button><button type="button" id="camera-room" aria-pressed="false" aria-label="Câmera aberta" title="Câmera aberta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6"/></svg></button></div>
+    <button id="sound-toggle" class="sound-toggle glass" type="button" aria-pressed="false" aria-label="Ativar som" title="Ativar som"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path class="sound-on" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-off" d="m16 9 5 6m0-6-5 6"/></svg></button>
   </header>
   <div class="hud-bottom">
-    <button id="sound-toggle" class="sound-toggle glass" type="button" aria-pressed="false" aria-label="Ativar som" title="Ativar som"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path class="sound-on" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-off" d="m16 9 5 6m0-6-5 6"/></svg></button>
+
     <button type="button" id="telemetry-toggle" class="telemetry-chip glass" aria-expanded="false" aria-controls="telemetry-panel"><span class="connection" id="connection" data-state="loading"><i></i><span>Conectando</span></span><span class="chip-divider"></span><span>CPU <b id="metric-cpu">—</b></span><span class="chip-memory">RAM <b id="metric-memory">—</b></span><span class="chip-arrow">↗</span></button>
     <button type="button" id="map-toggle" class="map-toggle glass" aria-expanded="false" aria-controls="map-panel">⌘ <span>Estações</span></button>
   </div>
   <div id="campus-welcome" class="campus-welcome glass"><small>INSTALAÇÃO 01 / CAMPO ABERTO</small><h1>Sato Agents Lab</h1><p>Entre. Cada ideia tem um caminho.</p><button id="enter-lab" type="button">Entrar no laboratório ↗</button><span>WASD / analógico para andar · Shift / Correr · Espaço / Pular</span></div>
-  <button type="button" id="interaction" class="interaction glass" hidden><span class="action-symbol">◉</span><span><small id="interaction-name"></small><strong>Conversar</strong></span><kbd>E</kbd></button>
+  <button type="button" id="interaction" class="interaction" hidden><span class="input-button" aria-hidden="true"><svg viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="8"/><path d="M15 12h11M15 20h9M15 28h11M15 12v16"/></svg></span><span><small id="interaction-name"></small><strong>Conversar</strong></span></button>
   <button type="button" id="rag-action" class="rag-action glass" hidden>◎ Explorar rede RAG</button>
   <aside id="rag-panel" class="rag-panel overlay glass" aria-label="Explorador RAG em 3D" hidden>
     <div class="panel-heading"><div><small>BASE VETORIAL</small><h2>Conexões &amp; ideias</h2></div><button id="rag-close" type="button" aria-label="Fechar explorador RAG">×</button></div>
