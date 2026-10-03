@@ -52,7 +52,8 @@ function renderMcps(d) {
     stat("Servidores", fmt.num(servers.length)),
     stat("Chamadas MCP", fmt.num(d.total_calls), `ultimos ${d.days} dias`),
     stat("Acoes distintas", fmt.num(servers.reduce((sum, s) => sum + s.action_count, 0))),
-    stat("Com falha", fmt.num(servers.reduce((sum, s) => sum + (s.failures || 0), 0))),
+    stat("Com falha", d.detail_available === false ? "—" :
+      fmt.num(servers.reduce((sum, s) => sum + (s.failures || 0), 0))),
   ]));
 
   if (!servers.length) {
@@ -72,6 +73,13 @@ function renderMcps(d) {
   }
 
   servers.forEach((server) => blocks.push(serverCard(server)));
+  if (d.history?.length) blocks.push(h("div", { class: "card" }, [
+    h("header", {}, h("h2", { text: "Histórico recente de chamadas MCP" })),
+    table([
+      { key: "when", label: "Quando", render: (r) => fmt.dateTime(r.when) },
+      { key: "tool", label: "Ferramenta" },
+    ], d.history, { scroll: true }),
+  ]));
   return blocks;
 }
 
@@ -95,9 +103,12 @@ function serverCard(s) {
       ? table([
           { key: "action", label: "Acao" },
           { key: "calls", label: "Calls", num: true, render: (r) => fmt.num(r.calls) },
-          { key: "failures", label: "Falhas", num: true, render: (r) => fmt.num(r.failures) },
+          { key: "failures", label: "Falhas", num: true,
+            render: (r) => s.detail_available === false ? "—" : fmt.num(r.failures) },
           { key: "last", label: "Ultimo uso", render: (r) => (r.last ? fmt.relative(r.last) : "nunca") },
         ], s.actions)
       : empty("nenhuma acao registrada"),
   ]);
 }
+
+export function refresh() { return reload(); }

@@ -13,6 +13,8 @@ export function init(root) {
   reload();
 }
 
+export function refresh() { return reload(); }
+
 async function reload() {
   renderControls();
   const data = await load(refs.body, `/api/tools?days=${state.days}`, renderTools);
@@ -53,8 +55,9 @@ function renderTools(d) {
     h("div", { class: "stat-grid" }, [
       stat("Tool calls", fmt.num(d.total_calls), `ultimos ${d.days} dias`),
       stat("Tools usadas", fmt.num(used.length), `de ${fmt.num(all.length)} disponiveis`),
-      stat("Chamadas com falha", fmt.num(failedCalls),
-        d.total_calls ? fmt.pct(failedCalls / d.total_calls * 100) + " do total" : null),
+    stat("Chamadas com falha", d.detail_available === false ? "—" : fmt.num(failedCalls),
+      d.detail_available === false ? "status por chamada indisponível" :
+      d.total_calls ? fmt.pct(failedCalls / d.total_calls * 100) + " do total" : null),
       stat("Nunca chamadas", fmt.num(unused.length)),
     ]),
 
@@ -84,6 +87,14 @@ function renderTools(d) {
           ], used, { scroll: true })
         : empty("nenhuma chamada no periodo"),
     ]),
+
+    d.history?.length ? h("div", { class: "card" }, [
+      h("header", {}, h("h2", { text: "Histórico recente" })),
+      table([
+        { key: "when", label: "Quando", render: (r) => fmt.dateTime(r.when) },
+        { key: "tool", label: "Ferramenta" },
+      ], d.history, { scroll: true }),
+    ]) : null,
 
     unused.length
       ? h("div", { class: "card" }, [

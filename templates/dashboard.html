@@ -22,7 +22,8 @@
   <button class="tab" type="button" role="tab" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
   <button class="tab" type="button" role="tab" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
   <button class="tab" type="button" role="tab" data-tab="rag" aria-selected="false" aria-controls="panel-rag">RAG</button>
-  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Events</button>
+  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Cron</button>
+  <button class="tab" type="button" role="tab" data-tab="webhooks" aria-selected="false" aria-controls="panel-webhooks">Webhooks</button>
 </nav>
 {% endblock %}
 
@@ -31,7 +32,7 @@
 <section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade">
   <div class="panel-head">
     <h1>Atividade</h1>
-    <p>Prompts, chamadas de modelo e tool calls do Hermes, lidos do events.db.</p>
+    <p>Mensagens e ferramentas do histórico nativo do Hermes. O conteúdo dos prompts fica oculto nesta página de acesso aberto.</p>
   </div>
 
   {# painel ao vivo: htmx troca este bloco sozinho, e o filtro entre colchetes
@@ -148,10 +149,15 @@
 
 <section class="panel" id="panel-cron" role="tabpanel" hidden>
   <div class="panel-head">
-    <h1>Events</h1>
-    <p>Cron jobs, timers e webhooks do Hermes na VM.</p>
+    <h1>Cron</h1>
+    <p>Agendamentos e execuções do Hermes na VM.</p>
   </div>
   <div data-role="cron"><p class="skeleton">carregando...</p></div>
+</section>
+
+<section class="panel" id="panel-webhooks" role="tabpanel" hidden>
+  <div class="panel-head"><h1>Webhooks</h1><p>Requisições recebidas que tenham registro estruturado.</p></div>
+  <div data-role="webhooks"><p class="skeleton">carregando...</p></div>
 </section>
 
 {% endblock %}

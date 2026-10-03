@@ -24,6 +24,7 @@ def vm(tmp_path, monkeypatch):
     obs.mkdir()
     monkeypatch.setattr(config, "HERMES_HOME", hermes)
     monkeypatch.setattr(config, "DB_PATH", obs / "events.db")
+    monkeypatch.setattr(config, "STATE_DB_PATH", hermes / "state.db")
     monkeypatch.setattr(config, "RAG_PATH", tmp_path / "rag-db")
     monkeypatch.setattr(config, "CONFIG_PATH", hermes / "config.yaml")
     monkeypatch.setattr(config, "CRON_DIR", hermes / "cron")
@@ -100,6 +101,7 @@ ROUTES = [
     "/api/rag/list",
     "/api/rag/search?q=teste",
     "/api/cronjobs",
+    "/api/webhooks",
     "/api/models",
     "/api/status",
     "/api/recent",

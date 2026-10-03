@@ -6,8 +6,10 @@ let refs = {};
 
 export function init(root) {
   refs = { body: root.querySelector("[data-role=cron]") };
-  load(refs.body, "/api/events", renderCron);
+  load(refs.body, "/api/cronjobs", renderCron);
 }
+
+export function refresh() { return load(refs.body, "/api/cronjobs", renderCron); }
 
 const SOURCE_LABELS = { hermes: "Hermes", crontab: "crontab", systemd: "systemd" };
 
@@ -27,15 +29,6 @@ function renderCron(d) {
     stat("Ativos", fmt.num(jobs.filter((j) => j.enabled !== false).length)),
   ]));
 
-  const hooks=d.webhooks||{};
-  blocks.push(h("div", {class:"card"}, [h("header",{},h("h2",{text:"Webhooks"})),
-    hooks.available ? table([
-      {key:"name",label:"Rota"}, {key:"events",label:"Eventos",render:r=>r.events.join(" · ")||"todos"},
-      {key:"profile",label:"Perfil"}, {key:"cron_job",label:"Cron associado"},
-      {key:"enabled",label:"Estado",render:r=>r.enabled?"configurado":"desativado"},
-    ], hooks.routes||[]) : notice(hooks.error||hooks.config_error||"Fonte de webhooks indisponível"),
-    h("p",{class:"muted",text:"Configuração observada em disco; recebimento e execução não verificados."}),
-  ]));
   if (!jobs.length && !runs.length) {
     blocks.push(h("div", { class: "card" }, [
       empty("nenhum cron job encontrado"),

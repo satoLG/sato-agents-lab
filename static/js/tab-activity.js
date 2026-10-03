@@ -5,7 +5,8 @@ import { h, fmt, render, load, empty, getJSON, notice } from "./core.js";
 import { heatmap, stat } from "./charts.js";
 
 const KIND_LABELS = {
-  prompt: "Prompts", model: "Modelos", tool: "Tool calls",
+  prompt: "Prompts", response: "Respostas", model: "Modelos",
+  tool: "Tool calls", tool_result: "Retornos de tools",
   agent: "Agentes", subagent: "Subagentes",
 };
 
@@ -22,6 +23,8 @@ export function init(root) {
   };
   reload();
 }
+
+export function refresh() { return reload(); }
 
 function periodControls() {
   const options = [[90, "90 dias"], [180, "6 meses"], [365, "1 ano"], [730, "2 anos"]];
@@ -135,7 +138,9 @@ function dayDetail(data) {
   ]));
 
   return h("div", { class: "card" },
-    [header, chips, h("div", { class: "timeline scroll-y" }, rows)]);
+    [header, chips,
+     data.truncated ? notice(`Mostrando os ${data.events.length} eventos mais recentes deste dia.`) : null,
+     h("div", { class: "timeline scroll-y" }, rows)]);
 }
 
 function eventDetail(e) {

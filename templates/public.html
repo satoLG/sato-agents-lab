@@ -28,11 +28,11 @@
   </div>
   <div class="stat">
     <div class="label">Fallbacks</div>
-    <div class="value">{{ stats.fallback_count }}</div>
+    <div class="value">{{ stats.fallback_count if stats.fallback_count is not none else '—' }}</div>
   </div>
   <div class="stat">
     <div class="label">Taxa de fallback</div>
-    <div class="value">{{ stats.fallback_rate }}%</div>
+    <div class="value">{{ (stats.fallback_rate ~ '%') if stats.fallback_rate is not none else '—' }}</div>
   </div>
 </div>
 

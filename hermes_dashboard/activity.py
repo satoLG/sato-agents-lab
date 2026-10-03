@@ -9,7 +9,7 @@ import re
 import subprocess
 from datetime import datetime, timedelta, date as date_cls
 
-from . import db
+from . import db, state
 from . import config
 
 TS_CANDIDATES = ["timestamp", "ts", "created_at", "started_at", "start_time", "time"]
@@ -26,6 +26,11 @@ KIND_SOURCES = [
 
 def available_kinds():
     """[(kind, tabela, coluna_de_tempo, rotulo)] para o que existe no banco."""
+    if state.available():
+        return [('prompt', 'messages', 'timestamp', 'Prompts'),
+                ('response', 'messages', 'timestamp', 'Respostas'),
+                ('tool', 'messages', 'timestamp', 'Chamadas de ferramenta'),
+                ('tool_result', 'messages', 'timestamp', 'Retornos de ferramenta')]
     present = set(db.tables())
     found = []
     for kind, table, label in KIND_SOURCES:
@@ -53,6 +58,8 @@ def heatmap(days=365, kinds=None):
     O calendario precisa dos dias vazios para desenhar a grade, entao a lista
     volta densa: um item por dia entre start e end.
     """
+    if state.available():
+        return state.heatmap(days, kinds)
     sources = [s for s in available_kinds() if not kinds or s[0] in kinds]
     missing = None
     if not sources:
@@ -138,6 +145,8 @@ def _normalize(kind, row, ts_col):
 
 def day_activity(day, kinds=None, limit=500):
     """Todos os eventos de um dia, de todas as fontes, em ordem cronologica."""
+    if state.available():
+        return state.day_activity(day, kinds, limit)
     sources = [s for s in available_kinds() if not kinds or s[0] in kinds]
     events = []
     for kind, table, ts, _label in sources:
@@ -259,6 +268,16 @@ def _log_tail(lines=25):
 
 def live_snapshot(window_seconds=180):
     """O que esta acontecendo agora: eventos recentes, processos e log."""
+    if state.available():
+        since = (datetime.utcnow() - timedelta(seconds=window_seconds)).timestamp()
+        recent = state.events(start=since, limit=15)
+        procs = _running_processes()
+        return {'now': datetime.utcnow().isoformat() + 'Z',
+                'window_seconds': window_seconds, 'busy': bool(procs or recent),
+                'events': recent, 'processes': procs,
+                'models': list(dict.fromkeys(e['model'] for e in recent if e['model'])),
+                'log': {'path': None, 'lines': []}, 'error': None,
+                'source': 'Hermes state.db'}
     cutoff = (datetime.utcnow() - timedelta(seconds=window_seconds)).isoformat()
     recent = []
     db_error = None

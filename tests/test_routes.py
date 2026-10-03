@@ -1,5 +1,6 @@
 """Nenhuma rota pode responder 500, em nenhum estado de VM plausivel."""
 import pytest
+from datetime import datetime, timezone
 
 from conftest import ROUTES
 
@@ -133,11 +134,13 @@ def test_symlink_quebrado_na_memoria(vm, client):
 
 def test_model_usage_sem_custo_nem_fallback(vm, client):
     """events.db enxuto: sem cost_usd e sem fallback_reason."""
+    current_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0,
+                                                       second=0, microsecond=0).isoformat()
     vm.db(
         ["CREATE TABLE model_usage (timestamp TEXT, model TEXT)",
          "CREATE TABLE tool_calls (timestamp TEXT, tool_name TEXT)"],
-        [("INSERT INTO model_usage VALUES (?,?)", ("2026-09-09T10:00:00", "gpt-5.6-luna")),
-         ("INSERT INTO tool_calls VALUES (?,?)", ("2026-09-09T10:00:00", "read_file"))],
+        [("INSERT INTO model_usage VALUES (?,?)", (current_month, "gpt-5.6-luna")),
+         ("INSERT INTO tool_calls VALUES (?,?)", (current_month, "read_file"))],
     )
     check_all(client, "sem custo nem fallback")
     stats = client.get("/api/stats").get_json()
