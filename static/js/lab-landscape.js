@@ -20,13 +20,13 @@ export function terrainHeight(x,z){
 }
 export function pavedAt(x,z){
   // Rounded forecourt and perimeter road; the entrance remains level.
-  const dx=Math.max(0,Math.abs(x)-34),dz=Math.max(0,Math.abs(z-13)-47);
+  const dx=Math.max(0,Math.abs(x)-42),dz=Math.max(0,Math.abs(z-7)-57);
   return Math.hypot(dx,dz)<=16;
 }
 
 export function pavementHeight(x,z){
   if(!pavedAt(x,z))return null;
-  const edge=Math.hypot(Math.max(0,Math.abs(x)-33.5),Math.max(0,Math.abs(z-13)-42.5));
+  const edge=Math.hypot(Math.max(0,Math.abs(x)-41.5),Math.max(0,Math.abs(z-7)-52.5));
   return edge<=5.5?.06:edge<=6.5?.1:.035;
 }
 
@@ -55,7 +55,7 @@ export function createLandscape(world,art,obstacles,materials){
     shader.fragmentShader='uniform sampler2D soilMap; varying vec3 vTerrain; varying vec3 vTerrainWorld;\n'+shader.fragmentShader;
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
       vec2 p=vTerrain.xz;
-      float edge=length(max(abs(p-vec2(0.,13.))-vec2(34.,47.),0.));
+      float edge=length(max(abs(p-vec2(0.,7.))-vec2(42.,57.),0.));
       float variation=sin(p.x*.47+sin(p.y*.23))*sin(p.y*.39)+sin(p.x*.11+p.y*.17)*.7;
       float soilWeight=(1.-smoothstep(15.,21.+variation*2.,edge))*.88;
       soilWeight=max(soilWeight,smoothstep(.7,1.6,variation)*.35);
@@ -65,17 +65,17 @@ export function createLandscape(world,art,obstacles,materials){
   };
   land.customProgramCacheKey=()=> 'clearing-splat-v1';
   const terrain=mesh(world,ground,land,0,0,0,false);terrain.name='rolling-forest-terrain';terrain.renderOrder=-1;
-  function flat(shape,y,material,z=13){const g=new T.ShapeGeometry(shape,12);g.rotateX(-Math.PI/2);return mesh(world,g,material,0,y,z,false);}
+  function flat(shape,y,material,z=7){const g=new T.ShapeGeometry(shape,12);g.rotateX(-Math.PI/2);return mesh(world,g,material,0,y,z,false);}
   // Pavement, curb and asphalt are distinct continuous surfaces, with real edges.
-  const road=rounded(100,126,16);road.holes.push(rounded(79,97,6));
+  const road=rounded(116,146,16);road.holes.push(rounded(95,117,6));
   const asphalt=new T.MeshStandardMaterial({color:'#8a9396',roughness:1,map:materials.paving.map?.clone()});
   if(asphalt.map)asphalt.map.repeat.set(.35,.35);
   const neutralPaving=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb=mix(vec3(dot(diffuseColor.rgb,vec3(.2126,.7152,.0722))),diffuseColor.rgb,.15);');};
   asphalt.onBeforeCompile=neutralPaving;
   flat(road,.035,asphalt);
-  const curb=rounded(80,98,6.5);curb.holes.push(rounded(78,96,5.5));flat(curb,.1,mat('#aeb5ad',0,.95));
-  const walk=rounded(78,96,5.5);
-  const hole=new T.Path();hole.moveTo(-32,-17);hole.lineTo(-32,43);hole.lineTo(32,43);hole.lineTo(32,-17);hole.closePath();walk.holes.push(hole);
+  const curb=rounded(96,118,6.5);curb.holes.push(rounded(94,116,5.5));flat(curb,.1,mat('#aeb5ad',0,.95));
+  const walk=rounded(94,116,5.5);
+  const hole=new T.Path();hole.moveTo(-40,-26);hole.lineTo(-40,50);hole.lineTo(40,50);hole.lineTo(40,-26);hole.closePath();walk.holes.push(hole);
   const paving=materials.paving.clone();for(const key of ['map','normalMap'])if(paving[key]){paving[key]=paving[key].clone();paving[key].repeat.set(.2,.2);}
   paving.onBeforeCompile=neutralPaving;
   flat(walk,.06,paving);
@@ -102,7 +102,7 @@ export function createLandscape(world,art,obstacles,materials){
     trees.push({x,z:z-d*.24,y:.28,h:6.5+random()*2,r:2.3,garden:true});
     if(d>14)trees.push({x:x+.3,z:z+d*.24,y:.28,h:7.5,r:2.6,garden:true});
   }
-  island(-16,44,5,19);island(18,43,5.8,23);island(-30,33,8,4.6);island(29,31.8,8,4.5);
+  island(-16,44,5,19);island(18,43,5.8,23);island(-35,37,8,4.6);island(35,37,8,4.5);
   // Jittered forest stands surround the clearing on every side, with hills behind.
   for(let x=-154;x<=154;x+=8.8)for(let z=-158;z<=166;z+=9.2){
     const px=x+(random()-.5)*6,pz=z+(random()-.5)*6;

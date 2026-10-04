@@ -15,11 +15,11 @@ export function createSectorSign(parent,id,art,icons,obstacles){
 }
 export function createSectorMap(parent,{box,mesh},icons){
  const c=document.createElement('canvas');c.width=2048;c.height=1056;const p=c.getContext('2d');p.fillStyle='#edf0e9';p.fillRect(0,0,c.width,c.height);p.fillStyle='#182932';p.font='800 60px Nunito';p.fillText('00—07 / LAB DIRECTORY',55,84);p.font='600 25px Nunito';p.fillText('GATEWAY → INFRA → CORE → ÁREAS',58,130);
- const left=65,top=190,sx=16,sz=11;const pos=(x,z)=>[left+(x+32)*sx,top+(z+31)*sz];
- for(const a of [...AREAS,{name:'CORE',x:0,z:-3,w:20,d:17},{name:'GATEWAY',x:ZONES.gateway.x,z:22,w:15,d:7}]){const [x,y]=pos(a.x-a.w/2,a.z-a.d/2);p.strokeStyle='#9ca8aa';p.lineWidth=2;p.beginPath();p.roundRect(x,y,a.w*sx,a.d*sz,14);p.stroke();p.font='800 17px Nunito';p.fillStyle='#50616b';p.fillText(a.name,x+10,y+23);}
+ const left=65,top=190,sx=12,sz=9;const pos=(x,z)=>[left+(x+40)*sx,top+(z+43)*sz];
+ for(const a of [...AREAS,{name:'CORE',x:0,z:-4,w:30,d:28},{name:'GATEWAY',x:ZONES.gateway.x,z:22,w:15,d:7}]){const [x,y]=pos(a.x-a.w/2,a.z-a.d/2);p.strokeStyle='#9ca8aa';p.lineWidth=2;p.beginPath();p.roundRect(x,y,a.w*sx,a.d*sz,14);p.stroke();p.font='800 17px Nunito';p.fillStyle='#50616b';p.fillText(a.name,x+10,y+23);}
  for(const route of ENERGY_ROUTES){p.strokeStyle='#2b94bf';p.lineWidth=3;p.setLineDash([5,7]);p.beginPath();route.forEach(([x,z],i)=>{const q=pos(x,z);i?p.lineTo(...q):p.moveTo(...q);});p.stroke();}p.setLineDash([]);
  for(const [id,z]of Object.entries(ZONES)){const [x,y]=pos(z.x,z.z);p.fillStyle='#f9faf7';p.fillRect(x-19,y-20,43,36);p.fillStyle='#142d3c';p.font='800 27px Nunito';p.fillText(z.number,x-17,y+7);}
  p.fillStyle='#253641';p.font='700 22px Nunito';p.fillText('↑ PAREDE DE ATIVIDADES',80,176);p.fillText('↓ ENTRADA / VOCÊ ESTÁ AQUI',260,977);
  Object.entries(ZONES).forEach(([id,z],i)=>{const y=210+i*94;p.drawImage(icons[id],1220,y-33,45,45);p.fillStyle='#172b36';p.font='800 39px Nunito';p.fillText(z.number,1300,y);p.font='800 28px Nunito';p.fillText(z.name,1390,y);p.font='600 18px Nunito';p.fillStyle='#5a717c';p.fillText(z.area,1390,y+27);});
- box(parent,17.4,8.05,.22,'#24343d',17,4.37,18.38);const plane=mesh(parent,new T.PlaneGeometry(17,7.72),new T.MeshBasicMaterial({map:canvasTexture(c)}),17,4.37,18.52,false);plane.name='numbered-sector-map';return plane;
+ box(parent,17.4,8.05,.22,'#24343d',14,4.37,18.38);const plane=mesh(parent,new T.PlaneGeometry(17,7.72),new T.MeshBasicMaterial({map:canvasTexture(c)}),14,4.37,18.52,false);plane.name='numbered-sector-map';return plane;
 }

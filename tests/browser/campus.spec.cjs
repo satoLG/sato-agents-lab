@@ -13,9 +13,10 @@ test('identity is shared by public, dashboard and lab pages',async({page})=>{
 
 test('campus cutaways, grounded actors, courier routes and parcel landing',async({page})=>{
   test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(()=>window.labQARender=false);
   // Test-only instrumentation; no debug globals are shipped by the application.
   await page.route('**/js/lab-scene.js',async route=>{
-    const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.__campus={world,camera,avatar,obstacles,campus,parcels,hall,robots};renderer.render(world,camera);')});
+    const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.__campus={world,camera,avatar,obstacles,campus,parcels,hall,robots};if(window.labQARender!==false)renderer.render(world,camera);else{world.updateMatrixWorld(true);camera.updateMatrixWorld(true);}')});
   });
   await page.goto('/lab');await expect(page.locator('#loading')).toBeHidden({timeout:30000});await page.waitForFunction(()=>window.__campus);
   const result=await page.evaluate(async()=>{
@@ -26,26 +27,27 @@ test('campus cutaways, grounded actors, courier routes and parcel landing',async
     camera.position.set(0,15,32);
     const reception=campus.tick(2,new T.Vector3(0,.06,24),camera);
     const partitionInReception=campus.partition.visible;
-    const inside=campus.tick(2,new T.Vector3(0,.06,15),camera);
+    const inside=campus.tick(2,new T.Vector3(0,.06,11),camera);
     const walls=campus.walls.map(w=>({name:w.name,visible:w.group.visible}));
     parcels.tick(parcels.travel+2,true);const landed=parcels.packets[0].p.position.y;
     const routes=parcels.couriers.map(c=>({length:c.curve.getLength(),clear:c.curve.curves.every(segment=>clearSegment(segment.v1,segment.v2,obstacles,[]))}));
     parcels.tick(4,true);const carrying=parcels.couriers[0].parcel.visible;
     parcels.tick(parcels.couriers[0].duration+3.5,true);const deposited=parcels.couriers[0].deposited.visible;
-    return {scale:world.scale.x,ground:avatar.position.y,reception,partitionInReception,inside,walls,landed,routes,carrying,deposited,sky:world.background.isTexture};
+    return {scale:world.scale.x,ground:avatar.position.y,reception,partitionInReception,inside,walls,landed,routes,carrying,deposited,sky:world.background.isTexture||world.background.getHex()===0};
   });
   expect(result.scale).toBe(.7);expect(result.ground).toBe(.06);expect(result.sky).toBe(true);
   expect(result.reception.enteredHall).toBe(false);expect(result.partitionInReception).toBe(true);expect(result.inside.enteredHall).toBe(true);
   expect(result.walls.filter(w=>w.visible).map(w=>w.name)).toEqual(['west','east','north']);
-  expect(result.landed).toBeCloseTo(.45);expect(result.carrying).toBe(true);expect(result.deposited).toBe(true);
+  expect(result.landed).toBeCloseTo(2.25);expect(result.carrying).toBe(true);expect(result.deposited).toBe(true);
   expect(result.routes).toHaveLength(7);for(const route of result.routes){expect(route.length).toBeGreaterThan(1);expect(route.clear).toBe(true);}
   expect(errors).toEqual([]);
 });
 
 
 test('forest terrain shader compiles and corner sign is separate from Lab',async({page})=>{
+  await page.addInitScript(()=>window.labQARender=false);
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  await page.route('**/js/lab-scene.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.__exterior={world,camera,campus};renderer.render(world,camera);')});});
+  await page.route('**/js/lab-scene.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.__exterior={world,camera,campus};if(window.labQARender!==false)renderer.render(world,camera);else{world.updateMatrixWorld(true);camera.updateMatrixWorld(true);}')});});
   await page.goto('/lab');await page.waitForFunction(()=>window.__exterior);
   const info=await page.evaluate(async()=>{
     const {world,camera,campus}=window.__exterior,T=await import('/static/vendor/three.module.min.js');

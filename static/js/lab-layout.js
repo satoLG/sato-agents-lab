@@ -2,25 +2,48 @@ import * as T from '../vendor/three.module.min.js';
 export const FLOOR=.06;
 export const DECK_HEIGHT=1.86;
 export const WALL_HEIGHT=16;
-export const ZONES={
- gateway:{x:-7,z:19.9,color:'#64cfff',number:'00',name:'GATEWAY',area:'GATEWAY',icon:'log-in',sign:[-13,19.2]},
- vm:{x:-21,z:10,color:'#64cfff',number:'01',name:'VM',area:'INFRA',icon:'server',sign:[-25,5]},
- hermes:{x:0,z:-3,color:'#64cfff',number:'02',name:'HERMES',area:'CORE',icon:'cpu',sign:[-4.8,-7]},
- models:{x:-24,z:-21,color:'#64cfff',number:'03',name:'PROVIDERS',area:'INTEGRATIONS',icon:'cloud',sign:[-29,-24]},
- mcp:{x:-13,z:-21,color:'#64cfff',number:'04',name:'MCP',area:'INTEGRATIONS',icon:'plug',sign:[-17,-27]},
- memory:{x:12,z:-22,color:'#64cfff',number:'05',name:'MEMORY',area:'DATA',icon:'database',sign:[8.5,-28]},
- rag:{x:24,z:-22,color:'#64cfff',number:'06',name:'RAG',area:'DATA',icon:'network',sign:[27,-28]},
- cron:{x:23,z:10,color:'#64cfff',number:'07',name:'EVENTS',area:'EVENTS',icon:'clock',sign:[18,5]},
+// Every cell is 2 m. Floor footprints and the rear wall share this coordinate system.
+export const GRID_CELL=2;
+export const BUILDING={halfWidth:40,north:-43,front:33,partition:18};
+export const GRID_FOOTPRINTS={
+ number:{x:-4.5,z:-4,w:2,d:1,wall:[0,0,2,3]},
+ monitors:{x:-2.5,z:-4,w:5,d:1,wall:[2,0,5,3]},
+ history:{x:2.5,z:-4,w:2,d:1,wall:[7,0,2,3]},
+ bench:{x:-2.5,z:-3,w:5,d:1},
+ equipment:{x:-2,z:0,w:4,d:4},
 };
+export const EQUIPMENT_FOOTPRINTS={
+ vm:{x:-2,z:.5,w:4,d:3},models:{x:-1.5,z:.5,w:3,d:3},
+ mcp:{x:-1.5,z:.5,w:3,d:3},memory:{x:-1.5,z:1,w:3,d:2},
+ rag:{x:-2,z:0,w:4,d:4},hermes:{x:-1,z:1,w:2,d:2},
+ cron:{x:-2,z:1.5,w:4,d:1},
+};
+export const PROVIDER_SERVICE_FOOTPRINT={x:-9,z:1.5,w:8,d:2,minHeight:5};
+export function gridPlacement(zone,footprint){
+ const f=typeof footprint==='string'?GRID_FOOTPRINTS[footprint]:footprint;
+ return {x:zone.x+(f.x+f.w/2)*GRID_CELL,z:zone.z+(f.z+f.d/2)*GRID_CELL,w:f.w*GRID_CELL,d:f.d*GRID_CELL,cells:{...f}};
+}
+const zone=(x,z,number,name,area,icon)=>({x,z,color:'#64cfff',number,name,area,icon,sign:[x-7,z-7]});
+export const ZONES={
+ gateway:zone(-14,22,'00','GATEWAY','GATEWAY','log-in'),
+ vm:zone(-28,8,'01','VM','INFRA','server'),
+ hermes:zone(0,-4,'02','HERMES','CORE','cpu'),
+ models:zone(-28,-32,'03','PROVIDERS','INTEGRATIONS','cloud'),
+ mcp:zone(-10,-32,'04','MCP','INTEGRATIONS','plug'),
+ memory:zone(10,-32,'05','MEMORY','DATA','database'),
+ rag:zone(28,-32,'06','RAG','DATA','network'),
+ cron:zone(28,8,'07','EVENTS','EVENTS','clock'),
+};
+ZONES.gateway.sign=[-21,18.5];
 export const AREAS=[
- {name:'INTEGRATIONS',x:-19,z:-21,w:24,d:16},
- {name:'DATA',x:19,z:-20,w:25,d:20},
- {name:'INFRA',x:-21,z:10,w:14,d:12},
- {name:'EVENTS',x:23,z:10,w:15,d:12},
+ {name:'INTEGRATIONS',x:-19,z:-30,w:36,d:22},
+ {name:'DATA',x:19,z:-30,w:36,d:22},
+ {name:'INFRA',x:-28,z:7,w:20,d:20},
+ {name:'EVENTS',x:28,z:7,w:20,d:20},
 ];
-export const slotsFor=id=>id==='gateway'?[[0,-.9]]:id==='rag'?[[0,8.5],[-2.8,8.5],[2.8,8.5],[0,10.6]]:[[0,1.3],[-2.8,1.3],[2.8,1.3],[0,3.5]];
+export const slotsFor=id=>id==='gateway'?[[0,-.9]]:[[0,-3.4],[-2.8,-3.4],[2.8,-3.4],[0,-1.2]];
 // Two flights of four risers with a generous intermediate landing.
-export const CORE_STEPS=Array.from({length:8},(_,i)=>({w:20-i*.8-(i>=4?.8:0),d:17-i*.8-(i>=4?.8:0),h:(i+1)*.24,r:1.2}));
+export const CORE_STEPS=Array.from({length:8},(_,i)=>({w:28-i*.8-(i>=4?.8:0),d:26-i*.8-(i>=4?.8:0),h:(i+1)*.24,r:1.2}));
 export function inRounded(x,z,w,d,r){return Math.hypot(Math.max(0,Math.abs(x)-(w/2-r)),Math.max(0,Math.abs(z)-(d/2-r)))<=r;}
 export function coreHeight(x,z){let height=0;for(const s of CORE_STEPS)if(inRounded(x,z-ZONES.hermes.z,s.w,s.d,s.r))height=s.h;return height;}
 export function roundedShape(w,d,r){
@@ -29,21 +52,20 @@ export function roundedShape(w,d,r){
 // The same orthogonal footprint drives deck meshes, railings and navigation.
 export const DECKS=[
  ...AREAS,
- {name:'CORE',x:0,z:-3,w:22,d:19},
- {name:'SPINE',x:0,z:-5,w:6,d:34},
- {name:'NORTH LINK',x:0,z:-21,w:39,d:5},
- {name:'SOUTH LINK',x:1,z:10,w:44,d:5},
- {name:'WEST LINK',x:-21,z:-5.5,w:5,d:31},
- {name:'EAST LINK',x:23,z:-5.5,w:5,d:31},
- {name:'TRIAGE',x:-27,z:2,w:8,d:8},
- {name:'TRIAGE LINK',x:-22,z:2,w:8,d:4},
+ {name:'CORE',x:0,z:-4,w:30,d:28},
+ {name:'SPINE',x:0,z:-13,w:6,d:50},
+ {name:'NORTH LINK',x:0,z:-30,w:58,d:6},
+ {name:'SOUTH LINK',x:0,z:8,w:58,d:6},
+ {name:'WEST LINK',x:-28,z:-12,w:6,d:40},
+ {name:'EAST LINK',x:28,z:-12,w:6,d:40},
+ {name:'TRIAGE',x:-35,z:-7,w:9,d:8},
+ {name:'TRIAGE LINK',x:-30,z:-7,w:10,d:4},
  {name:'ENTRY',x:0,z:14,w:6,d:8},
 ];
 export const ENERGY_ROUTES=[
- [[0,-3],[0,-21],[-24,-21]],[[0,-3],[0,-21],[24,-21]],
- [[0,-3],[0,10],[-21,10]],[[0,-3],[0,10],[23,10]],
- [[-21,10],[-21,-21]],[[23,10],[23,-21]],
- [[0,10],[0,17]],
+ [[0,-4],[0,-30],[-28,-30]],[[0,-4],[0,-30],[28,-30]],
+ [[0,-4],[0,8],[-28,8]],[[0,-4],[0,8],[28,8]],
+ [[-28,8],[-28,-32]],[[28,8],[28,-32]],[[0,8],[0,17]],
 ];
 const contains=(a,x,z)=>Math.abs(x-a.x)<=a.w/2+1e-7&&Math.abs(z-a.z)<=a.d/2+1e-7;
 export function onDeck(x,z,radius=0){

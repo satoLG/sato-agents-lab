@@ -14,16 +14,19 @@
 .player-controls{position:absolute;inset:0;pointer-events:none;z-index:2}
 .player-controls>*{pointer-events:auto}
 .control-help{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);padding:8px 13px;border-radius:9px;font-size:10px;line-height:1.7;text-align:center;color:#c3d9dc;pointer-events:none;white-space:nowrap}
-.player-actions{position:absolute;right:18px;bottom:90px;display:flex;gap:9px}
+.player-actions{position:absolute;right:18px;bottom:max(18px,env(safe-area-inset-bottom));display:flex;gap:9px}
 .player-actions button{display:grid;place-items:center;width:48px;height:48px;padding:11px;border-radius:50%;touch-action:none;user-select:none;background:#14252b70}
-.player-actions svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.player-actions img{width:28px;height:28px;pointer-events:none}
 .player-actions button[aria-pressed=true]{background:#386776;border-color:#b9e9d3;color:#c7f8be}
 .touch-zone{display:none;position:absolute;bottom:0;width:50%;height:clamp(150px,29dvh,240px);touch-action:none;user-select:none;-webkit-user-select:none}
-.move-zone{left:0}.aim-zone{right:0}
+.move-zone{left:0}
 .touch-stick{position:absolute;width:112px;height:112px;transform:translate(-50%,-50%);border-radius:50%;background:#17313566;border:1px solid #d3e8e455;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s}
 .touch-zone.active .touch-stick{opacity:1;visibility:visible}
 .touch-stick span{position:absolute;top:calc(100% + 5px);width:100%;text-align:center;font-size:8px;letter-spacing:1.5px;color:#e1efef}
 .touch-stick i{position:absolute;left:50%;top:50%;width:44px;height:44px;background:#c6e6e15c;border:1px solid #e4fff89c;border-radius:50%;transform:translate(-50%,-50%)}
 body[data-chat=true] .player-controls,body[data-rag=true] .player-controls{display:none}
-@media(any-pointer:coarse),(max-width:900px){.touch-zone{display:block}.control-help{display:none}.player-actions{right:max(14px,env(safe-area-inset-right));bottom:calc(clamp(150px,29dvh,240px) + 12px)}.toast{bottom:310px}}
-@media(max-height:520px) and (any-pointer:coarse){.touch-stick{width:92px;height:92px}.touch-zone{height:125px}.player-actions{bottom:140px;gap:6px}.player-actions button{width:42px;height:42px}}
+@media(any-pointer:coarse),(max-width:900px){.player-controls[data-input=touch] .touch-zone{display:block}.control-help{display:none}.player-actions{right:max(14px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom))}.toast{bottom:310px}}
+@media(max-height:520px) and (any-pointer:coarse){.touch-stick{width:92px;height:92px}.touch-zone{height:125px}.player-actions{bottom:max(12px,env(safe-area-inset-bottom));gap:6px}.player-actions button{width:42px;height:42px}}
+
+.player-controls[data-input=touch] .touch-zone{display:block}
+.player-controls[data-input=touch] .control-help{display:none}

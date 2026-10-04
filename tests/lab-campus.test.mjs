@@ -7,8 +7,8 @@ import {parcelDrop,groundHeight,FLOOR,CAMPUS_SCALE} from '../static/js/lab-campu
 test('reception stays level while the entry ramps onto the decks and the campus is thirty percent smaller',()=>{
   assert.equal(CAMPUS_SCALE,.7);
   for(const [x,z]of [[0,46],[0,29],[-8,24]])assert.equal(groundHeight(x,z),FLOOR);
-  assert.equal(groundHeight(40,46),.1);
-  assert.equal(groundHeight(19,-14),DECK_HEIGHT);
+  assert.equal(groundHeight(48,46),.1);
+  assert.equal(groundHeight(28,-18),DECK_HEIGHT);
   assert.ok(groundHeight(0,17)>FLOOR&&groundHeight(0,17)<DECK_HEIGHT);
 });
 test('parcel drop accelerates, bounces without penetrating the tray and settles on it',()=>{
@@ -24,7 +24,7 @@ test('parcel drop accelerates, bounces without penetrating the tray and settles 
 test('forest height field is flat beneath roads and irregular outside the clearing',async()=>{
   const {terrainHeight,pavementHeight}=await import('../static/js/lab-landscape.js');
   for(const [x,z] of [[0,46],[-50,13],[0,76],[32,-31]])assert.equal(terrainHeight(x,z),.02);
-  assert.equal(pavementHeight(0,46),.06);assert.equal(pavementHeight(45,46),.035);
+  assert.equal(pavementHeight(0,46),.06);assert.equal(pavementHeight(53,46),.035);
   const heights=[terrainHeight(-95,-85),terrainHeight(-88,-85),terrainHeight(80,100)];
   assert.ok(heights.every(h=>h>.5));assert.ok(new Set(heights).size===3);
   assert.ok(Math.abs(terrainHeight(80.001,100)-terrainHeight(80,100))<.01);
@@ -35,10 +35,10 @@ test('CORE has two flights with a wider landing and matching walking heights',as
   const {CORE_STEPS,coreHeight}=await import('../static/js/lab-layout.js');
   assert.equal(CORE_STEPS.length,8);
   assert.equal(groundHeight(0,-3),DECK_HEIGHT+1.92);
-  assert.equal(coreHeight(11,-3),0);
+  assert.equal(coreHeight(15,-4),0);
   assert.ok(CORE_STEPS[3].w-CORE_STEPS[4].w>CORE_STEPS[2].w-CORE_STEPS[3].w);
-  for(const s of CORE_STEPS)assert.ok(Math.abs(coreHeight(s.w/2-.01,-3)-s.h)<1e-8);
-  assert.equal(coreHeight(10,-3+8.5),0); // Rounded corner is outside the step.
+  for(const s of CORE_STEPS)assert.ok(Math.abs(coreHeight(s.w/2-.01,-4)-s.h)<1e-8);
+  assert.equal(coreHeight(14,-4+13),0); // Rounded corner is outside the step.
 });
 
 
@@ -54,13 +54,13 @@ test('numbered pillars do not overlap worker slots and stand fully on their leve
   }
 });
 
-test('every sector is reachable from reception along the protected raised footprint',()=>{
+test('every sector is reachable from reception along the protected raised footprint',async()=>{
  const boxes=[];boxes.walkable=(x,z,r)=>z>=18||onDeck(x,z,r+.08);
- for(const goal of [{x:-21,z:10},{x:23,z:10},{x:0,z:-3},{x:-24,z:-21},{x:-13,z:-21},{x:12,z:-22},{x:24,z:-12}]){
+ for(const goal of Object.values((await import('../static/js/lab-layout.js')).ZONES).filter(z=>z.name!=='GATEWAY')){
   const start={x:0,z:24},path=findPath(start,goal,boxes,[]);assert.ok(path.length,JSON.stringify(goal));
   let prev=start;for(const p of path){assert.ok(clearSegment(prev,p,boxes,[]));prev=p;}
  }
- const next=moveWithCollision({x:0,z:-15},9,0,boxes,[]);assert.ok(next.x<3);assert.ok(onDeck(next.x,next.z,.32));
+ const next=moveWithCollision({x:0,z:-19},9,0,boxes,[]);assert.ok(next.x<3);assert.ok(onDeck(next.x,next.z,.32));
 });
 test('energy uses only straight orthogonal spans on a deck and railings leave entry open',()=>{
  for(const route of ENERGY_ROUTES)for(let i=1;i<route.length;i++){
@@ -68,5 +68,5 @@ test('energy uses only straight orthogonal spans on a deck and railings leave en
   for(let j=0;j<=50;j++)assert.ok(onDeck(a[0]+(b[0]-a[0])*j/50,a[1]+(b[1]-a[1])*j/50));
  }
  assert.ok(deckEdges().length>10);assert.ok(!deckEdges().some(e=>e.axis==='z'&&e.fixed===18&&e.start<3&&e.end> -3));
- assert.equal(deckHeight(6,-14),null);
+ assert.equal(deckHeight(16,-16),null);
 });

@@ -25,13 +25,14 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   memória/skills, EVENTS (cron jobs e webhooks) e infraestrutura. As linhas do piso representam a
   arquitetura conceitual, não tráfego de rede capturado.
 - A cena Three.js ocupa toda a tela; mapa, telemetria e conversa são overlays.
-  WASD/setas movem; Shift ou **Correr** alterna para corrida. O mouse mira,
-  clique esquerdo/F dá um soco e Espaço/**Pular** salta. Clique direito no piso
+  WASD/setas movem; Shift ou **Correr** alterna para corrida. Clique esquerdo/F dá um soco e Espaço/**Pular** salta. Clique direito no piso
   escolhe um destino; arraste com o botão direito para girar e use a roda para zoom.
-  No celular, arrastar a área inferior esquerda anda e a direita mira; os
-  analógicos aparecem somente durante o toque. Os botões de correr, pular e socar
-  usam ícones SVG, e o som fica junto das câmeras no topo. A interação usa um
-  botão flutuante junto ao personagem. Sem mira ativa, ele gira na direção do movimento. **Seguir** acompanha o personagem;
+  No celular, arrastar a área inferior esquerda anda; o analógico aparece durante
+  o toque e as ações aparecem no canto inferior direito enquanto ele se move.
+  Correr, pular e socar usam ícones locais do Game-icons.net (CC BY 3.0), e o som fica junto das câmeras no topo. A interação usa um
+  botão flutuante, sem seleção de texto, com ícone de toque ou tecla E conforme
+  o dispositivo usado. Ele escolhe uma posição acima/abaixo do personagem que
+  evita cobrir o objeto. O personagem gira na direção do movimento. **Seguir** acompanha o personagem;
   **Sala** enquadra o laboratório. Placas físicas identificam as estações.
 - O som é opcional. Passos, corrida e soco usam amostras locais do Portal 2;
   o salto usa um efeito arcade sintetizado, com subida imediata e altura de 1,65 m.
@@ -50,8 +51,9 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   lê até 48 registros por tabela de agentes. Mostra até quatro robôs por setor:
   responsável e três trabalhadores que compartilham uma única bancada por setor. Selecionar outro robô na lista reserva
   uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
-  Cada setor tem seis monitores acima da bancada e um painel de histórico mais
-  acima. O gateway fica na parede da recepção, atrás do robô. O responsável do
+  Cada setor tem uma fileira com painel numerado, seis monitores e um painel
+  de histórico do mesmo tamanho do numerado, com espaço entre eles. O grid
+  reserva células de 2 m no chão e na parede; detalhes em [docs/lab-grid.md](docs/lab-grid.md). O gateway fica na parede da recepção, atrás do robô. O responsável do
   núcleo tem carcaça oval maior e óptica laranja.
 - O avatar usa `static/models/sato.glb`, com idle ancorado (4,8 s),
   caminhada (0,92 s) e piscar independente. As poses se misturam ao iniciar/parar. A cadência
@@ -70,20 +72,25 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   **processo detectado** não confirma trabalho. Registros `running` sem um
   timestamp recente aparecem como **último estado sem confirmação**. Identidade
   e parentesco vêm de `id`/`run_id`/`agent_id` e `parent_id`/`parent_run_id`.
-- Equipamentos da VM mostram CPU/RAM em barras luminosas e percentuais a cada
+- A VM tem dois corredores entre armários de servidor. Seus monitores mostram
+  CPU/RAM/disco em barras de progresso e os processos por uso de CPU, a cada
   snapshot (5 s). Falhas preservam a última leitura identificada; sem leitura
   anterior aparece um traço. Os tubos dos providers ficam no corredor lateral,
   com conexões alinhadas ao percurso e circulação ilustrativa de líquido por
   entrada superior e retorno inferior; o painel mantém os dados reais da amostra recente.
-- A oficina de skills exibe o catálogo no sexto monitor, sem lousa adicional.
+- A oficina de skills tem pilhas de livros e exibe o catálogo no sexto monitor.
+  MCP tem caixas de ferramentas e uma blueprint; o núcleo tem um cérebro em
+  água; EVENTS tem relógios de fusos reais que apitam nos horários dos crons
+  próximos quando o som está ativado.
   O mural na parede mostra o calendário real de atividades (365 dias, UTC),
   atualizado a cada 15 s. O catálogo de skills usa o cache existente de 30 s.
-- Exterior e recepção escurecem e são retirados da renderização ao avançar;
-  retornam ao sair. Portas e mural acompanham as paredes nos recortes da câmera.
+- Exterior e recepção escurecem nas passagens das portas e são retirados da
+  renderização ao avançar; perto de paredes opacas só o ambiente atual fica
+  visível. Retornam ao sair pelas passagens. Portas e mural acompanham as paredes nos recortes da câmera.
   As árvores internas e externas compartilham folhagem e casca texturizada, com
   uma árvore maior e cipós num espaço livre à direita. O riacho usa reflexos e
   ondulações suaves, e as pedras têm variação mineral e musgo.
-- Dentro de RAG, **Explorar rede RAG** aproxima a cúpula: clique nos pontos ou
+- Dentro de RAG, **Explorar rede RAG** aproxima a cúpula menor, montada sobre seu projetor: clique nos pontos ou
   na lista para abrir repositórios/categorias/documentos. A busca usa o mesmo
   `/api/rag/search` do dashboard (LanceDB/fastembed), mostra trechos e distâncias
   reais e anima as conexões dos resultados. O layout 3D é ilustrativo: não
