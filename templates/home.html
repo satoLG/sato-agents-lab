@@ -6,51 +6,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark">
-  <title>Sato Agent · Hermes</title>
+  <title>Sato Agent</title>
   <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/scene-ui.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home-appearance.css') }}">
 </head>
 <body data-ready="false">
-<main id="home" aria-label="Converse com o Sato Agent">
+<main id="home" data-theme="cyan" data-scenario="black" aria-label="Converse com o Sato Agent">
+  <svg class="logo-filters" aria-hidden="true"><defs><filter id="home-logo-ink" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -.3333 -.3333 -.3333 0 1"/></filter></defs></svg>
   <header class="home-header">
     <a class="brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="30" height="30"></a>
-    <nav class="home-nav glass" aria-label="Explorar Sato Agents"><a href="/dashboard" data-destination="dashboard">Dashboard {{ icon('arrow-up-right') }}</a><a href="/lab" data-destination="lab">Lab {{ icon('arrow-up-right') }}</a></nav>
+    <nav class="home-nav glass" aria-label="Explorar Sato Agents"><a href="/dashboard" data-destination="dashboard">{{ icon('layout-dashboard') }} Dashboard</a><a href="/lab" data-destination="lab">{{ icon('flask-conical') }} Lab</a></nav>
   </header>
   <div id="home-scene" aria-hidden="true"></div>
+  <div id="home-art" aria-hidden="true"></div>
   <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
   <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
-  <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Preparando seu companheiro…</small></div>
+  <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Carregando robô…</small></div>
   <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>
   <section id="home-history" aria-label="Histórico da conversa" hidden>
-    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2>Hermes</h2><span id="history-subtitle">Sua conversa</span></div><span class="history-avatar">{{ icon('sparkles') }}</span></header>
+    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2>Sato Agent</h2><span id="history-subtitle">Conversa</span></div><span class="history-avatar">{{ icon('sparkles') }}</span></header>
     <div id="home-messages" role="log" aria-live="polite" aria-relevant="additions text"><p class="history-empty">Sua conversa aparece aqui.</p></div>
     <button id="history-bottom" class="icon-button glass" type="button" aria-label="Ir para a mensagem mais recente" hidden>{{ icon('chevron-down') }}</button>
   </section>
-  <section id="home-chat" aria-label="Chat com Hermes" hidden>
-    <p id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span><button id="question-more" class="text-button" type="button" hidden>{{ icon('ellipsis') }}<span>Ver mais</span></button></p>
+  <section id="home-chat" aria-label="Chat com Sato Agent" hidden>
+    <div id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span><div class="bubble-actions"><button id="question-more" class="text-button" type="button" hidden><span>Ver mais</span></button><button id="question-copy" class="copy-button" type="button" aria-label="Copiar pergunta" title="Copiar pergunta">{{ icon('copy') }}</button></div></div>
     <div class="home-composer glass">
-      <div class="composer-heading"><span><i aria-hidden="true"></i> HERMES</span><span id="home-chat-status" role="status">Conectando…</span></div>
-      <form id="home-login" hidden><label for="home-password">Entre para conversar com Hermes</label><div><input id="home-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button class="icon-button" type="submit" aria-label="Entrar no chat" title="Entrar">{{ icon('log-in') }}</button></div></form>
+      <p id="home-chat-status" class="sr-only" role="status">Conectando…</p>
+      <form id="home-login" hidden><label for="home-password">Entre para conversar com Sato Agent</label><div><input id="home-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button class="icon-button" type="submit" aria-label="Entrar no chat" title="Entrar">{{ icon('log-in') }}</button></div></form>
       <div class="composer-row">
         <button id="home-history-toggle" class="icon-button" type="button" aria-label="Abrir histórico da conversa" title="Histórico" aria-expanded="false" aria-controls="home-history">{{ icon('history') }}</button>
-        <form id="home-form"><label class="sr-only" for="home-input">Sua mensagem para Hermes</label><textarea id="home-input" rows="1" maxlength="4000" placeholder="Mensagem…" autocomplete="off" required disabled></textarea><button id="home-send" class="icon-button" type="submit" aria-label="Enviar mensagem" disabled>{{ icon('arrow-up') }}</button></form>
+        <form id="home-form"><label class="sr-only" for="home-input">Sua mensagem para Sato Agent</label><textarea id="home-input" rows="1" maxlength="4000" placeholder="Mensagem…" autocomplete="off" required disabled></textarea><button id="home-send" class="icon-button" type="submit" aria-label="Enviar mensagem" disabled>{{ icon('arrow-up') }}</button></form>
         <button id="home-settings-toggle" class="icon-button" type="button" aria-label="Configurações" title="Configurações" aria-haspopup="dialog" aria-controls="home-settings">{{ icon('settings-2') }}</button>
       </div>
     </div>
   </section>
   <dialog id="home-settings" class="glass" aria-labelledby="settings-title">
-    <header><div><span class="eyebrow">DO SEU JEITO</span><h2 id="settings-title">Seu companheiro</h2></div><button id="settings-close" class="icon-button" type="button" aria-label="Fechar configurações">{{ icon('x') }}</button></header>
+    <header><h2 id="settings-title">Configurações</h2><button id="settings-close" class="icon-button" type="button" aria-label="Fechar configurações">{{ icon('x') }}</button></header>
     <fieldset><legend>Cenário</legend><div class="scene-options">
       <label class="scene-option"><input type="radio" name="home-scenario" value="black" checked><span class="scene-preview preview-black">{{ icon('circle') }}</span><span>Preto</span></label>
       <label class="scene-option"><input type="radio" name="home-scenario" value="lab"><span class="scene-preview preview-lab">{{ icon('flask-conical') }}</span><span>Laboratório</span></label>
       <label class="scene-option"><input type="radio" name="home-scenario" value="forest"><span class="scene-preview preview-forest">{{ icon('trees') }}</span><span>Floresta</span></label>
     </div></fieldset>
-    <p id="settings-status" role="status">Um cantinho para o seu robô.</p>
-    <div class="settings-sound"><div><strong>Som do robô</strong><span>Bips, gestos e um pouco de personalidade.</span></div><button id="home-sound" class="icon-button" type="button" aria-pressed="false" aria-label="Ativar som do robô" title="Som do robô"><span class="sound-waves">{{ icon('volume-2') }}</span><span class="sound-muted">{{ icon('volume-x') }}</span></button></div>
+    <p id="settings-status" role="status"></p>
+    <fieldset class="theme-field"><legend>Cor do chat</legend><div class="theme-options">
+      {% for value, label in [('cyan','Azul'),('mint','Verde'),('violet','Violeta'),('amber','Âmbar')] %}<label class="theme-option"><input type="radio" name="home-theme" value="{{ value }}" {% if value == 'cyan' %}checked{% endif %}><span class="theme-swatch swatch-{{ value }}"></span><span>{{ label }}</span></label>{% endfor %}
+    </div></fieldset>
+    <div class="settings-sound"><strong>Som do robô</strong><button id="home-sound" class="icon-button" type="button" aria-pressed="false" aria-label="Ativar som do robô" title="Som do robô"><span class="sound-waves">{{ icon('volume-2') }}</span><span class="sound-muted">{{ icon('volume-x') }}</span></button></div>
   </dialog>
-  <noscript><div class="home-noscript glass"><p>Ative JavaScript para conversar com o Sato Agent.</p><a href="/dashboard">Dashboard {{ icon('arrow-up-right') }}</a> · <a href="/lab">Lab {{ icon('arrow-up-right') }}</a></div></noscript>
+  <noscript><div class="home-noscript glass"><p>Ative JavaScript para conversar com o Sato Agent.</p><a href="/dashboard">{{ icon('layout-dashboard') }} Dashboard</a> · <a href="/lab">{{ icon('flask-conical') }} Lab</a></div></noscript>
 </main>
 <script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/home.js') }}"></script>
 </body>

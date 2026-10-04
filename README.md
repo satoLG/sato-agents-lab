@@ -1,6 +1,6 @@
 # Flask + HTMX Dashboard for Sato Agents
 
-Companheiro 3D e chat informativo do Hermes na raiz, dashboard de observabilidade
+Sato Agent 3D e chat na raiz, dashboard de observabilidade
 em abas e laboratório interativo.
 
 ## Rodando
@@ -16,7 +16,7 @@ Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explora
 
 `/` apresenta um robô do laboratório próximo ao campo de mensagem. Após o
 carregamento, o tubo da recepção desce, entrega o robô e recolhe; ele cai, diz
-**Ouch!** e se levanta antes da saudação **Hello, im a Sato Agent**. Ele pisca,
+**Ouch!** e volta a flutuar antes da saudação **Hello, im a Sato Agent**. Ele pisca,
 acompanha o ponteiro e alterna entre aceno, cócegas, dança e timidez ao receber
 toques. A dança dá uma volta completa no corpo e duas voltas nos braços.
 Navegadores que bloqueiam autoplay liberam os bips sintetizados no primeiro
@@ -29,18 +29,25 @@ O campo fica compacto no rodapé e expande ao digitar. O histórico abre uma
 conversa com balões, datas e horários, mantendo o input disponível. Na cena,
 respostas têm uma prévia de até cinco linhas/420 caracteres, e perguntas de
 duas linhas/180 caracteres. **Ver mais** abre a mensagem integral no histórico.
-As superfícies têm blur sem linhas de borda. Os botões usam SVGs oficiais do
+Cada balão tem um botão para copiar a mensagem completa, incluindo as prévias
+cortadas. Somente o conteúdo do chat e os campos de texto podem ser selecionados.
+O histórico usa blur de 1 px, mantendo a cena visível. Os botões usam SVGs oficiais do
 Lucide, servidos localmente; licença e revisão em `static/icons/README.md`.
 O layout acompanha o viewport disponível quando o teclado móvel abre e respeita
 a preferência por movimento reduzido. Sem WebGL, chat e navegação continuam.
 
-As configurações oferecem preto, laboratório e floresta, e salvam a escolha
-neste navegador. Os dois cenários são miniaturas feitas com os materiais e
-árvores do lab; são carregados uma vez, sob demanda, no mesmo canvas. A troca
-desvanece pelo preto e oculta o cenário inativo. A cena limita a 30 fps e DPR
-1,75, sem carregar o campus ou mapas HDR. Robôs da raiz e do lab compartilham
-obturador dentro do encaixe branco da lente, íris azul radial, dedos articulados
-e pés arredondados com dobradiças.
+As configurações oferecem preto, laboratório e floresta, além de quatro cores
+de chat: azul, verde, violeta e âmbar. As escolhas ficam salvas neste navegador.
+Todos os fundos têm desenhos vetoriais suaves de robôs. O laboratório tem um
+skybox cinza claro; a floresta tem céu azul com nuvens e terreno irregular com
+a textura local de solo. Os cenários são carregados uma vez, sob demanda, no
+mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. A cena
+limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
+O Sato Agent da raiz tem braços lisos, sem mãos, pernas ou antena, e uma base
+magnética com flutuação leve no idle. Os braços ficam recolhidos até a carcaça
+inteira sair pela boca aberta do tubo. A óptica é compartilhada com o lab.
+Durante a espera, o chat alterna frases e exibe um SVG Lucide animado; o indicador
+some quando a resposta ou o erro chega. Movimento reduzido desativa a animação.
 
 A raiz usa a mesma autenticação, fila persistente e processo Hermes isolado do
 chat livre do Núcleo. Não há respostas locais substituindo o modelo quando ele

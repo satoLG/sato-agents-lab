@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="380" viewBox="0 0 380 380">
+  <g fill="none" stroke="#c9e1eb" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(28 32) rotate(-12 22 28)"><rect x="3" y="2" width="38" height="30" rx="14"/><path d="M9 35q13 20 26 0M1 38l-5 15m46-15 5 15M12 60q10 5 20 0"/><circle cx="15" cy="17" r="3"/><circle cx="29" cy="17" r="3"/><path d="M17 26h10"/></g>
+    <g transform="translate(226 192) rotate(15 28 30)"><circle cx="26" cy="25" r="23"/><circle cx="26" cy="25" r="10"/><circle cx="26" cy="25" r="4"/><path d="m1 28-6 25m56-25 6 25M10 54q16 7 32 0m-27 7q11 5 22 0"/></g>
+    <g transform="translate(167 27) rotate(15)"><path d="M4 0h27v16a8 8 0 0 1-8 8H12a8 8 0 0 1-8-8Z"/><path d="M13 7h10m-6 4v5M9 27h17M0 7v10m35-10v10"/></g>
+    <g transform="translate(292 44) rotate(-18)"><path d="M0 7h32v23H0zM10 30v6m12-6v6M5 36h22M8 15l-4 4 4 4m16-8 4 4-4 4"/></g>
+    <g transform="translate(106 157) rotate(-12)"><path d="M4 3h32v25H4zM12 28v8m16-8v8M8 36h25"/><path d="m10 13 4 4-4 4m9 0h8"/></g>
+    <g transform="translate(37 273) rotate(12)"><path d="M4 3h34v24H4zM11 10h20M11 16h12M16 27v8m9-8v8M9 35h23"/><circle cx="31" cy="21" r="1"/></g>
+    <g transform="translate(181 305) rotate(-18)"><rect x="0" y="0" width="31" height="27" rx="7"/><circle cx="10" cy="12" r="3"/><circle cx="22" cy="12" r="3"/><path d="M9 21h14M-3 29l-5 13m42-13 5 13M7 38q9 4 18 0"/></g>
+    <path d="m96 29 5 10 11 2-8 8 2 11-10-5-10 5 2-11-8-8 11-2ZM317 141h16m-8-8v16M45 160h12m-6-6v12M320 307h16m-8-8v16"/>
+    <circle cx="168" cy="111" r="7"/><circle cx="354" cy="223" r="6"/><circle cx="111" cy="286" r="5"/>
+    <path d="M231 100q-9 6-2 15t-2 15M60 227q8-5 16 0t16 0M271 341q10-6 20 0t20 0M125 78l7 7m-7 0 7-7M147 232l7 7m-7 0 7-7"/>
+    <g transform="translate(278 275) rotate(20)"><path d="M1 7h19v27H1zM7 1v6m7-6v6M7 34v6m7-6v6M20 15h6m-6 12h6"/><path d="m8 14 5 6-5 6"/></g>
+    <g transform="translate(236 150) rotate(-15)"><path d="M0 0h14v12h9v15M7 0v-8m16 35h10"/><circle cx="7" cy="-10" r="2"/><circle cx="35" cy="27" r="2"/></g>
+  </g>
+</svg>

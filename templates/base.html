@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>{% block title %}Hermes{% endblock %}</title>
+<title>{% block title %}Sato Agents{% endblock %}</title>
 <link rel="icon" href="{{ url_for('static', filename='sato-logo.png') }}" type="image/png">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='sato-logo.css') }}">
@@ -15,13 +15,13 @@
 <header class="topbar">
   <a class="brand" href="/">
     <img class="brand-logo" src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="48" height="48">
-    <span class="brand-name">Sato Agents<span class="brand-sub">{% block subtitle %}Hermes observability{% endblock %}</span></span>
+    <span class="brand-name">Sato Agents<span class="brand-sub">{% block subtitle %}Observabilidade{% endblock %}</span></span>
   </a>
   <div class="topbar-actions">{% block actions %}{% endblock %}</div>
 </header>
 {% block nav %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
-<footer>Hermes &middot; Flask + HTMX &middot; {{ stats.month if stats else '' }}</footer>
+<footer>Sato Agents &middot; {{ stats.month if stats else '' }}</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

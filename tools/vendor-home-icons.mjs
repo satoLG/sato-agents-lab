@@ -3,7 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const response=await fetch('https://api.github.com/repos/lucide-icons/lucide/commits/main',{headers:{'User-Agent':'sato-agents-lab'}});
 if(!response.ok)throw new Error(`Lucide revision: ${response.status}`);
 const {sha}=await response.json();
-const icons=['arrow-up','arrow-up-right','arrow-left','history','settings-2','volume-2','volume-x','x','log-in','ellipsis','chevron-down','check-check','circle','flask-conical','trees','sparkles'];
+const icons=['arrow-up','arrow-up-right','arrow-left','history','settings-2','volume-2','volume-x','x','log-in','ellipsis','chevron-down','check-check','circle','flask-conical','trees','sparkles','layout-dashboard','copy','check','loader-circle'];
 await mkdir('static/icons',{recursive:true});
 const symbols=await Promise.all(icons.map(async name=>{
  const source=name==='history'?'messages-square':name;
