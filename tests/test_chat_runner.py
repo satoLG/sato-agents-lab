@@ -22,6 +22,8 @@ def test_conversation_runner_blocks_dispatch_and_fails_closed(monkeypatch, expos
             with pytest.raises(RuntimeError,match='disabled'):
                 getattr(executor,name)(agent,{},[],'test')
         agent.step_callback(1,[]);agent.thinking_callback(True)
+        with pytest.raises(RuntimeError,match='disabled'):
+            agent.tool_progress_callback('tool.started',name='terminal')
         return {'final_response':'Posso explicar, mas não executar ações.'}
     agent.run_conversation=conversation
     class CLI:

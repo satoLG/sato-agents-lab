@@ -1,6 +1,6 @@
 const {test,expect}=require('@playwright/test');
 
-test('identity is shared by public, dashboard and lab pages',async({page})=>{
+test('identity is shared by home, dashboard and lab pages',async({page})=>{
   for(const url of ['/','/dashboard','/lab']){
     await page.goto(url);await page.evaluate(()=>document.fonts.ready);
     await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href',/sato-logo\.png$/);

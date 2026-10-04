@@ -170,7 +170,10 @@ def test_paginas_html_renderizam(vm, client):
            "CREATE TABLE tool_calls (timestamp TEXT, tool_name TEXT)"])
     home = client.get("/")
     assert home.status_code == 200
-    assert b"Estatisticas publicas" in home.data
+    assert b'id="home-scene"' in home.data and b'id="home-input"' in home.data
+    assert b'js/home.js' in home.data and b'css/scene-ui.css' in home.data
+    assert b'Estatisticas publicas' not in home.data
+    assert client.get('/public').status_code == 404
 
     dash = client.get("/dashboard")
     assert dash.status_code == 200, dash.get_data(as_text=True)[:500]

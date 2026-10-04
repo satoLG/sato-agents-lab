@@ -2,7 +2,8 @@ const {test,expect}=require('@playwright/test');
 
 test('private robot chat logs in, queues a question and later shows the Hermes answer',async({page})=>{
   test.setTimeout(180000);await page.setViewportSize({width:800,height:600});
-  await page.route('**/js/lab-scene.js*',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.chatQA={robots,avatar,groundAt,stopWalking};renderer.render(world,camera);')});});
+  // Conversation coverage runs the actual scene updates without full software-GPU frames.
+  await page.route('**/js/lab-scene.js*',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.chatQA={robots,avatar,groundAt,stopWalking};world.updateMatrixWorld(true);camera.updateMatrixWorld(true);')});});
   let authenticated=false,csrfSeen=false;const jobs=[];
   await page.route('**/api/lab/hermes-chat/session',route=>route.fulfill({json:{available:true,authenticated,csrf:authenticated?'test-csrf':null}}));
   await page.route('**/api/lab/hermes-chat/login',route=>{

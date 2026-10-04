@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <title>Sato Agent · Hermes</title>
+  <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/scene-ui.css') }}">
+</head>
+<body data-ready="false">
+<main id="home" aria-label="Converse com o Sato Agent">
+  <header class="home-header">
+    <a class="brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="30" height="30"></a>
+    <nav class="home-nav glass" aria-label="Explorar Sato Agents"><a href="/dashboard" data-destination="dashboard">Dashboard <span aria-hidden="true">↗︎</span></a><a href="/lab" data-destination="lab">Lab <span aria-hidden="true">↗︎</span></a></nav>
+  </header>
+  <div id="home-scene" aria-hidden="true"></div>
+  <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
+  <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
+  <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Preparando seu companheiro…</small></div>
+  <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>
+  <section id="home-chat" aria-label="Chat com Hermes" hidden>
+    <section id="home-history" class="glass" aria-label="Histórico da conversa" hidden><header><h2>Histórico</h2><button id="history-close" type="button" aria-label="Fechar histórico">×</button></header><div id="home-messages" role="log" aria-live="polite" aria-relevant="additions text"><p class="history-empty">Sua conversa aparece aqui.</p></div></section>
+    <p id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span></p>
+    <div class="home-composer glass">
+      <div class="composer-heading"><span><i aria-hidden="true"></i> HERMES</span><div><button id="home-sound" type="button" aria-pressed="false" aria-label="Ativar som do robô" title="Som do robô"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-muted" d="m16 9 5 6m0-6-5 6"/></svg></button><button id="home-history-toggle" type="button" aria-expanded="false" aria-controls="home-history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7m2-4v6l4 2"/></svg><span>Histórico</span></button></div></div>
+      <form id="home-login" hidden><label for="home-password">Entre para conversar com Hermes</label><div><input id="home-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button type="submit">Entrar <span aria-hidden="true">↗</span></button></div></form>
+      <form id="home-form"><label class="sr-only" for="home-input">Sua mensagem para Hermes</label><textarea id="home-input" rows="1" maxlength="4000" placeholder="Pergunte qualquer coisa…" autocomplete="off" required disabled></textarea><button id="home-send" type="submit" aria-label="Enviar mensagem" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></form>
+      <p id="home-chat-status" role="status">Conectando ao Hermes…</p>
+    </div>
+  </section>
+  <noscript><div class="home-noscript glass"><p>Ative JavaScript para conversar com o Sato Agent.</p><a href="/dashboard">Dashboard ↗</a> · <a href="/lab">Lab ↗</a></div></noscript>
+</main>
+<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/home.js') }}"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-"""Hermes observability dashboard - rota publica + dashboard privado.
+"""Sato Agent companion, Hermes dashboard and laboratory.
 
 A coleta de dados mora no pacote hermes_dashboard/; aqui ficam so as rotas.
 Rodar com: python3 app.py  (ou gunicorn app:app)
@@ -22,7 +22,7 @@ web_chat.configure(app)
 _static_root = Path(app.static_folder)
 _lab_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
 _lab_digest = hashlib.sha256()
-for _path in [Path(app.root_path) / 'templates/lab.html', *_lab_files]:
+for _path in [Path(app.root_path) / 'templates/lab.html', Path(app.root_path) / 'templates/home.html', *_lab_files]:
     _lab_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
     _lab_digest.update(b'\0')
     _lab_digest.update(_path.read_bytes())
@@ -71,11 +71,11 @@ def json_guard(producer, empty):
         return jsonify(dict(empty, error=str(e)))
 
 
-# --- publico ---
+# --- companion ---
 
 @app.route("/")
-def public():
-    return render_template("public.html", stats=stats.public_stats())
+def home():
+    return render_template("home.html", lab_asset_version=LAB_ASSET_VERSION)
 
 
 @app.route("/api/stats")
