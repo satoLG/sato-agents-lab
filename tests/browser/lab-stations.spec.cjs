@@ -11,6 +11,9 @@ test('station prompts, dashboard monitors, bounded dialogue and semantic search'
  await page.evaluate(()=>{const q=stationQA;q.stopWalking();q.avatar.position.set(-14,q.groundAt(-14,24),24);});
  await expect(page.locator('#interaction')).toBeVisible();await expect(page.locator('#interaction strong')).toHaveText('Conversar');
  await page.locator('#scene').focus();await page.keyboard.press('e');await expect(page.locator('#chat')).toBeVisible();
+ for(const selector of ['#chat','.dialogue-layer .speech-card']){
+  const style=await page.locator(selector).first().evaluate(el=>({background:getComputedStyle(el).backgroundColor,blur:getComputedStyle(el).backdropFilter}));expect(style.background).toMatch(/^rgba/);expect(style.blur).toContain('blur');
+ }
  await page.evaluate(async()=>{const {createDialogue}=await import('/static/js/lab-dialogue.js');const d=createDialogue(document.getElementById('scene'));d.setMessages([{role:'user',text:'Pergunta longa '.repeat(100)},{role:'robot',text:'Resposta longa sobre os dados observados '.repeat(100)}],'Gateway');d.setOpen(true);window.testDialogue=d;});
  for(const viewport of [{width:960,height:720},{width:390,height:680},{width:740,height:360}]){
   await page.setViewportSize(viewport);await expect.poll(()=>page.evaluate(()=>[...document.querySelectorAll('.dialogue-layer:not([hidden]) .speech-card'),document.getElementById('chat')].every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1;}))).toBe(true);

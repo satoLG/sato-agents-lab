@@ -17,6 +17,9 @@ def private_chat(tmp_path, monkeypatch):
     monkeypatch.setattr(web_chat, "ENABLED", True)
     monkeypatch.setattr(web_chat, "PASSWORD_HASH", generate_password_hash("senha-forte-de-teste"))
     monkeypatch.setattr(web_chat, "DB_PATH", tmp_path / "private" / "queue.db")
+    monkeypatch.setattr(web_chat.chat_context.vm, "snapshot", lambda **_: {"cpu": {"total": 42}})
+    monkeypatch.setattr(web_chat.chat_context.memory, "catalog", lambda: {"documents": [], "skills": []})
+    monkeypatch.setattr(web_chat.chat_context.rag, "catalog", lambda: {"docs": [], "total": 0})
     monkeypatch.setattr(web_chat.lab, "snapshot", lambda: {
         "now": "2026-09-23T12:00:00Z", "metrics": {"cpu": 42, "memory": 61, "processes": 3},
         "workers": [{"id": "guide:hermes", "name": "Hermes", "sector": "hermes", "kind": "guide", "status": "observed", "description": "Núcleo", "facts": ["CPU real"]}],
@@ -101,3 +104,22 @@ def test_progress_stream_is_private_and_preserves_intermediate_events(private_ch
     event=next(response.response).decode()
     response.close()
     assert 'event: history' in event and 'Consultando modelo' in event
+
+
+@pytest.mark.parametrize('kind', ['tool.started', 'tool.completed'])
+def test_server_kills_a_runner_that_reports_tool_activity(private_chat, monkeypatch, kind):
+    monkeypatch.setattr(web_chat, '_assert_no_tools', lambda: None)
+    killed = []
+    class Process:
+        def __init__(self, *_, **__):
+            self.stdin = io.StringIO()
+            self.stdout = io.StringIO(json.dumps({'kind': kind, 'text': 'terminal'}) + '\n')
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def kill(self): killed.append(True)
+    monkeypatch.setattr(web_chat.subprocess, 'Popen', Process)
+    headers = authorize(private_chat)
+    private_chat.post('/api/lab/hermes-chat/jobs', json={'robot_id': 'guide:hermes', 'question': 'Explique a VM'}, headers=headers)
+    with pytest.raises(RuntimeError, match='isolation failed'):
+        web_chat._answer(web_chat._claim())
+    assert killed == [True]

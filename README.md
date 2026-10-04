@@ -1,7 +1,7 @@
 # Flask + HTMX Dashboard for Sato Agents
 
-Dashboard de observabilidade do agente Hermes: uma pagina publica com os numeros
-do mes e um dashboard interno em abas.
+Companheiro 3D e chat informativo do Hermes na raiz, dashboard de observabilidade
+em abas e laboratório interativo.
 
 ## Rodando
 
@@ -10,7 +10,33 @@ pip install flask pyyaml       # lancedb e fastembed so para a aba de RAG
 python3 app.py                 # http://127.0.0.1:8080
 ```
 
-Abra `/dashboard`.
+Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explorar.
+
+## Sato Agent na raiz
+
+`/` apresenta apenas um robô do laboratório sobre fundo preto. Ele pisca,
+acompanha o ponteiro e alterna entre aceno, cócegas, dança e timidez ao receber
+toques. Depois da primeira renderização e do carregamento da interface, mostra
+**Hello, im a Sato Agent** e emite sons sintetizados. Navegadores que bloqueiam
+autoplay liberam o áudio no primeiro gesto; há um controle para silenciar.
+Dashboard e Lab ficam no canto superior direito: o robô anuncia o destino antes
+de navegar. A antiga página de estatísticas públicas foi removida; os indicadores
+continuam em `/dashboard` e `/api/stats`.
+
+O chat entra com uma animação elástica, mantém a pergunta atual acima do campo e
+expande o histórico em um painel de vidro sobre o robô. Os balões e superfícies
+sobre cenas 3D compartilham transparência e blur com o laboratório. O layout
+acompanha o viewport disponível quando o teclado móvel abre e respeita a
+preferência por movimento reduzido. Sem WebGL, o chat e a navegação continuam.
+
+A raiz usa a mesma autenticação, fila persistente e processo Hermes isolado do
+chat livre do Núcleo. Não há respostas locais substituindo o modelo quando ele
+está indisponível. O servidor prepara contexto de todos os setores, indicadores
+da VM, catálogo e trechos relevantes de memória, contexto, skills e RAG, com
+limites de tamanho e remoção de credenciais. O modelo também responde assuntos
+gerais, declara lacunas e não pode executar ferramentas. Esse contexto contém
+leituras selecionadas das fontes do dashboard, não acesso arbitrário em tempo
+real a qualquer arquivo da VM.
 
 ## Laboratório 3D
 
@@ -105,12 +131,12 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   interrompidos após o prazo de processamento. O histórico permanece ao fechar
   a página. Sem a configuração privada, a prévia local mantém as respostas
   determinísticas de telemetria usadas antes.
-- O chat web é limitado a perguntas informativas. Rejeita pedidos diretos de
-  ação antes da fila, usa apenas dados selecionados do snapshot e inicia uma
-  sessão Hermes separada com `--toolsets context_engine --ignore-rules`. Antes
+- O chat web é limitado a respostas informativas. Pedidos de ação recebem
+  explicações, usa dados e documentos selecionados da VM e inicia uma
+  sessão Hermes separada com o toolset vazio `context_engine`. Antes
   de cada chamada, verifica no Hermes instalado que esse toolset resolve para
   **zero ferramentas**; se isso mudar, falha fechado. O texto da pergunta vai
-  pela entrada padrão (`--query-file -`), sem shell. Assim o Hermes não recebe
+  pela entrada padrão do runner JSON, sem shell. Assim o Hermes não recebe
   terminal, escrita de arquivos, MCP, navegador nem ferramentas de delegação.
   O bloqueio de execução é estrutural; o modelo ainda pode produzir uma resposta
   imprecisa, então estados e métricas continuam atribuídos à telemetria.
@@ -333,7 +359,7 @@ app.py                     rotas Flask (e so isso)
 hermes_dashboard/
   config.py                caminhos, config.yaml, precos
   db.py                    acesso read-only ao events.db + descoberta de schema
-  stats.py                 numeros do mes (pagina publica)
+  stats.py                 numeros do mes (dashboard e API)
   activity.py              heatmap, detalhe do dia, snapshot ao vivo
   vm.py                    CPU/memoria/disco
   tools.py                 catalogo e estatisticas de tools
@@ -346,7 +372,7 @@ static/
   js/                      um modulo ES por aba + core/charts compartilhados
   vendor/                  htmx e cytoscape servidos localmente, sem CDN
 templates/
-  base.html                shell; dashboard.html; public.html; login.html
+  base.html                shell; dashboard.html; home.html; lab.html
   fragments/live.html      fragmento trocado pelo HTMX
 ```
 

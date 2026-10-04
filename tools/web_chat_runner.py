@@ -48,7 +48,7 @@ def main():
         agent.thinking_callback = thinking
         def progress(kind, name=None, preview=None, args=None, **kwargs):
             if kind in {"tool.started", "tool.completed"}:
-                emit(kind, f"{name or 'Ferramenta'} · {'iniciada' if kind == 'tool.started' else 'concluída'}")
+                raise RuntimeError("Tool execution is disabled in conversation mode")
         agent.tool_progress_callback = progress
         emit("model", "Enviando a mensagem ao modelo configurado no Hermes.")
         result = agent.run_conversation(user_message=request["prompt"], conversation_history=request.get("history", []))
