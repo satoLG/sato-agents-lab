@@ -15,7 +15,7 @@ export function createRagUI(getScene,fetchJSON){
     showNode(n);if(!n.expandable||n.kind==='root')return;
     getScene()?.setRagBusy(false);$('rag-search-submit').disabled=false;
     const turn=++generation;message('Abrindo ramo…');
-    try{const data=await fetchJSON(`/api/rag/graph?parent=${encodeURIComponent(n.id)}`);if(turn!==generation)return;if(data.error)throw Error(data.error);accept(data);message(data.truncated?`${data.truncated} documentos adicionais neste ramo; até 180 nós visíveis.`:'Ramo aberto. Selecione um documento para ler o trecho.');}
+    try{const data=await fetchJSON(`/api/rag/graph?parent=${encodeURIComponent(n.id)}`);if(turn!==generation)return;if(data.error)throw Error(data.error);accept({...data,nodes:[n,...(data.nodes||[])]},{replace:true});message(data.truncated?`${data.total} documentos no ramo. Selecione "Próximos documentos" para continuar.`:'Ramo aberto. Selecione um documento para ler o trecho.');}
     catch(e){if(turn===generation)message(e.message);}
   }
   async function loadBase(){

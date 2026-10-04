@@ -5,6 +5,7 @@ A leitura do lancedb (documents(), search()) fica separada da montagem do grafo
 banco vetorial nenhum, e a tela degrada pra "RAG nao configurado" sem quebrar.
 """
 from . import config
+import json
 
 TABLE = "github_docs"
 ROOT_ID = "root"
@@ -20,6 +21,20 @@ CATEGORY_LABELS = {
 }
 
 _EMBED_MODEL = None
+
+
+def sync_status():
+    path = config.HERMES_HOME / "rag_commit_state" / "sync.json"
+    try:
+        state = json.loads(path.read_text())
+        return {"last_full_coverage_confirmed": bool(state.get("complete")),
+                "last_completed_sync_started_at": state.get("completed_at"),
+                "repository_count": len(state.get("coverage", {})),
+                "branch_count": len(state.get("heads", {})),
+                "scope": "all accessible owned repositories, including forks; all branches; all dates and authors"}
+    except (OSError, ValueError):
+        return {"last_full_coverage_confirmed": False,
+                "detail": "Historical sync has not produced a completed checkpoint yet"}
 
 
 def _get_embed_model():
@@ -52,7 +67,7 @@ def _open_table():
 def _records(df, preview=200):
     """DataFrame do lancedb -> lista de dicts, sem o vetor (que e enorme)."""
     keep = [c for c in ("id", "title", "repo", "type", "state", "url", "category",
-                        "parent_id", "number", "author", "created_at")
+                        "parent_id", "number", "author", "created_at", "updated")
             if c in df.columns]
     out = []
     for _, row in df.iterrows():
@@ -92,10 +107,10 @@ def _describe_failure(e):
     return f"falha ao ler a base vetorial ({type(e).__name__}): {e}"
 
 
-def catalog():
+def catalog(preview=200):
     """Lista completa + contagens por repo e por tipo."""
     try:
-        docs = documents()
+        docs = documents(preview=preview)
     except Exception as e:
         return {"docs": [], "by_repo": {}, "by_type": {}, "total": 0,
                 "error": _describe_failure(e)}
@@ -112,6 +127,7 @@ def catalog():
         "by_repo": sorted(by_repo.values(), key=lambda r: -r["count"]),
         "by_type": by_type,
         "total": len(docs),
+        "sync": sync_status(),
     }
 
 
@@ -163,10 +179,16 @@ def build_graph(docs, parent=None, doc_limit=60):
 
     if parent.startswith("cat:"):
         _, repo, kind = parent.split(":", 2)
+        kind, separator, page = kind.partition(":page:")
+        try:
+            offset = max(0, int(page)) if separator else 0
+        except ValueError:
+            offset = 0
         matching = [d for d in docs
                     if (d.get("repo") or "sem repo") == repo
                     and (d.get("type") or "doc") == kind]
-        for d in matching[:doc_limit]:
+        matching.sort(key=lambda d: str(d.get("updated") or ""), reverse=True)
+        for d in matching[offset:offset + doc_limit]:
             node_id = f"doc:{d.get('id')}"
             label = d.get("title") or d.get("id") or "(sem titulo)"
             nodes.append(_node(node_id, label, "doc", expandable=False,
@@ -174,9 +196,14 @@ def build_graph(docs, parent=None, doc_limit=60):
                                url=d.get("url"), size=d.get("size"),
                                preview=d.get("preview")))
             link(parent, node_id)
-        truncated = max(0, len(matching) - doc_limit)
+        truncated = max(0, len(matching) - offset - doc_limit)
+        if truncated:
+            page_id = f"cat:{repo}:{kind}:page:{offset + doc_limit}"
+            nodes.append(_node(page_id, f"Próximos documentos ({truncated} restantes)", "category",
+                               count=truncated, repo=repo, doc_type=kind, expandable=True))
+            link(parent, page_id)
         return {"parent": parent, "nodes": nodes, "edges": edges,
-                "truncated": truncated}
+                "truncated": truncated, "offset": offset, "total": len(matching)}
 
     return {"parent": parent, "nodes": [], "edges": []}
 
