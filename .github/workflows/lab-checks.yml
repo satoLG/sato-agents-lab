@@ -24,6 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run test:navigation
       - run: npm run test:avatar
+      - run: npm run test:rigs
       - run: npm run test:controls
       - run: node --test tests/lab-monitors.test.mjs tests/lab-grid.test.mjs
       - run: npx playwright install --with-deps chromium

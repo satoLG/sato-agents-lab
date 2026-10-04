@@ -16,7 +16,7 @@ async function chatRoutes(page,{loggedIn=true}={}){
  });
  return {jobs,get submitted(){return submitted;},get csrfSeen(){return csrfSeen;}};
 }
-async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home-loading')).toBeHidden();}
+async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:15000});await expect(page.locator('#home-loading')).toBeHidden();}
 
 test('root greets with one robot, real chat protocol and a glass history',async({page},testInfo)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const chat=await chatRoutes(page);
@@ -71,4 +71,46 @@ test('a late older answer never replaces the latest question and history is text
 test('WebGL failure leaves the informative chat and navigation available',async({page})=>{
  await chatRoutes(page);await page.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:original.call(this,type,...args);};});
  await ready(page);await expect(page.locator('#home-fallback')).toBeVisible();await expect(page.locator('#home-input')).toBeEnabled();await expect(page.locator('.home-nav a')).toHaveCount(2);await expect(page.locator('#robot-touch')).toBeHidden();
+});
+
+test('long previews open full chat bubbles without spilling into the scene',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);
+ const answer='Uma resposta longa com detalhes, código e referências.\n'.repeat(160)+'https://example.com/'+('a'.repeat(300));
+ chat.jobs.push({id:'long',question:'Minha pergunta com vários detalhes. '.repeat(25),status:'done',answer,created_at:Date.now()/1000});
+ await ready(page);await expect(page.locator('#speech-more')).toBeVisible({timeout:10000});
+ expect((await page.locator('#home-speech .speech-text').innerText()).length).toBeLessThanOrEqual(421);
+ const metrics=await page.locator('#home-speech .speech-text').evaluate(el=>({height:el.clientHeight,line:parseFloat(getComputedStyle(el).lineHeight),width:el.clientWidth,scrollWidth:el.scrollWidth}));expect(metrics.height).toBeLessThanOrEqual(metrics.line*5+1);expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.width);
+ await page.screenshot({path:testInfo.outputPath('home-long-preview.png')});
+ await page.locator('#speech-more').click();await expect(page.locator('#home-history')).toBeVisible();await expect(page.locator('.history-answer p')).toHaveText(answer);await expect(page.locator('#last-question')).toBeHidden();
+ const chatGeometry=await page.locator('.history-answer').evaluate(el=>({width:el.clientWidth,scrollWidth:el.scrollWidth}));expect(chatGeometry.scrollWidth).toBeLessThanOrEqual(chatGeometry.width);
+ await page.screenshot({path:testInfo.outputPath('home-long-chat.png')});await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();
+});
+
+async function instrumentScene(page){
+ await page.route('**/js/home-scene.js',async route=>{const response=await route.fetch(),source=await response.text();await route.fulfill({response,body:source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace('renderer.render(world,camera);report();\n }','renderer.render(world,camera);report();if(window.__companionFrames)window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,body:rig.root.rotation.y,arm:rig.arms[0].upper.rotation.x});\n }')});});
+}
+
+test('settings lazily reuse miniature lab and forest with smooth scenario changes',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});await chatRoutes(page);await instrumentScene(page);let environmentRequests=0;page.on('request',request=>{if(request.url().includes('/js/home-environments.js'))environmentRequests++;});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await ready(page);expect(environmentRequests).toBe(0);await page.locator('#home-settings-toggle').click();await expect(page.getByRole('dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('home-settings.png')});
+ await page.evaluate(()=>{const r=__companionQA.renderer,compile=r.compileAsync.bind(r);r.compileAsync=async(...args)=>{await new Promise(resolve=>{window.__releaseCompanionCompile=resolve;});return compile(...args);};window.__restoreCompanionCompile=()=>{r.compileAsync=compile;};});
+ await page.locator('[name="home-scenario"][value="lab"]').check();await page.waitForFunction(()=>window.__releaseCompanionCompile);expect(await page.evaluate(()=>__companionQA.world.getObjectByName('companion-lab').visible)).toBe(false);await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');await page.evaluate(()=>{__releaseCompanionCompile();__restoreCompanionCompile();});
+ for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();await page.screenshot({path:testInfo.outputPath(`home-${kind}.png`)});await page.locator('#home-settings-toggle').click();}
+ expect(environmentRequests).toBe(1);const memory=await page.evaluate(()=>({...__companionQA.renderer.info.memory}));
+ await page.locator('[name="home-scenario"][value="lab"]').check();await page.locator('[name="home-scenario"][value="black"]').check();await page.locator('[name="home-scenario"][value="forest"]').check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
+ const actual=await page.evaluate(()=>({memory:{...__companionQA.renderer.info.memory},calls:__companionQA.renderer.info.render.calls,sets:__companionQA.world.children.filter(o=>o.name.startsWith('companion-')).length,saved:localStorage.getItem('sato-home-scenario')}));expect(actual.memory).toEqual(memory);expect(actual.calls).toBeLessThan(220);expect(actual.sets).toBe(2);expect(actual.saved).toBe('forest');expect(errors).toEqual([]);
+ await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toBeHidden();await page.reload();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest',{timeout:15000});
+});
+
+test('tube arrival lands, says ouch, rises and dance makes complete turns',async({browser},testInfo)=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  await chatRoutes(page);await instrumentScene(page);await page.addInitScript(()=>{window.__companionFrames=[];});await page.goto('/');
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','tube',{timeout:10000});await expect(page.locator('#home-loading')).toBeHidden();await page.waitForTimeout(1100);await page.screenshot({path:testInfo.outputPath('home-tube.png')});
+  await expect(page.locator('#home-speech')).toContainText('Ouch!',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-ouch.png')});await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:15000});
+  const stages=await page.evaluate(()=>[...new Set(__companionFrames.map(f=>f.stage))]);expect(stages).toEqual(expect.arrayContaining(['tube','fall','ouch','rise','settled']));
+  const gap=await page.evaluate(()=>{const robot=document.getElementById('robot-touch').getBoundingClientRect(),chat=document.getElementById('home-chat').getBoundingClientRect();return chat.top-robot.bottom;});expect(gap).toBeGreaterThanOrEqual(0);expect(gap).toBeLessThan(70);
+  for(let i=0;i<3;i++)await page.locator('#robot-touch').tap();await expect(page.locator('#home-scene')).toHaveAttribute('data-reaction','dance');await page.waitForTimeout(4400);
+  const turns=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='dance');return {body:Math.max(...f.map(v=>v.body))-Math.min(...f.map(v=>v.body)),arm:Math.max(...f.map(v=>v.arm))-Math.min(...f.map(v=>v.arm)),last:__companionQA.rig.arms[0].upper.rotation.x};});expect(turns.body).toBeGreaterThan(6);expect(turns.arm).toBeGreaterThan(12);expect(Math.abs(turns.last)).toBeLessThan(.6);
+ }finally{await context.close();}
 });

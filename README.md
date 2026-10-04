@@ -14,20 +14,33 @@ Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explora
 
 ## Sato Agent na raiz
 
-`/` apresenta apenas um robô do laboratório sobre fundo preto. Ele pisca,
+`/` apresenta um robô do laboratório próximo ao campo de mensagem. Após o
+carregamento, o tubo da recepção desce, entrega o robô e recolhe; ele cai, diz
+**Ouch!** e se levanta antes da saudação **Hello, im a Sato Agent**. Ele pisca,
 acompanha o ponteiro e alterna entre aceno, cócegas, dança e timidez ao receber
-toques. Depois da primeira renderização e do carregamento da interface, mostra
-**Hello, im a Sato Agent** e emite sons sintetizados. Navegadores que bloqueiam
-autoplay liberam o áudio no primeiro gesto; há um controle para silenciar.
+toques. A dança dá uma volta completa no corpo e duas voltas nos braços.
+Navegadores que bloqueiam autoplay liberam os bips sintetizados no primeiro
+gesto; o modal de configurações contém o controle para silenciar.
 Dashboard e Lab ficam no canto superior direito: o robô anuncia o destino antes
 de navegar. A antiga página de estatísticas públicas foi removida; os indicadores
 continuam em `/dashboard` e `/api/stats`.
 
-O chat entra com uma animação elástica, mantém a pergunta atual acima do campo e
-expande o histórico em um painel de vidro sobre o robô. Os balões e superfícies
-sobre cenas 3D compartilham transparência e blur com o laboratório. O layout
-acompanha o viewport disponível quando o teclado móvel abre e respeita a
-preferência por movimento reduzido. Sem WebGL, o chat e a navegação continuam.
+O campo fica compacto no rodapé e expande ao digitar. O histórico abre uma
+conversa com balões, datas e horários, mantendo o input disponível. Na cena,
+respostas têm uma prévia de até cinco linhas/420 caracteres, e perguntas de
+duas linhas/180 caracteres. **Ver mais** abre a mensagem integral no histórico.
+As superfícies têm blur sem linhas de borda. Os botões usam SVGs oficiais do
+Lucide, servidos localmente; licença e revisão em `static/icons/README.md`.
+O layout acompanha o viewport disponível quando o teclado móvel abre e respeita
+a preferência por movimento reduzido. Sem WebGL, chat e navegação continuam.
+
+As configurações oferecem preto, laboratório e floresta, e salvam a escolha
+neste navegador. Os dois cenários são miniaturas feitas com os materiais e
+árvores do lab; são carregados uma vez, sob demanda, no mesmo canvas. A troca
+desvanece pelo preto e oculta o cenário inativo. A cena limita a 30 fps e DPR
+1,75, sem carregar o campus ou mapas HDR. Robôs da raiz e do lab compartilham
+obturador dentro do encaixe branco da lente, íris azul radial, dedos articulados
+e pés arredondados com dobradiças.
 
 A raiz usa a mesma autenticação, fila persistente e processo Hermes isolado do
 chat livre do Núcleo. Não há respostas locais substituindo o modelo quando ele

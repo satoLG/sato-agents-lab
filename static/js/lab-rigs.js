@@ -6,6 +6,7 @@ import {batchRobot} from './lab-batch.js';
 export function createRigFactory(art) {
   const {box, sphere, cylinder, ring, rod, mesh, mat, glow, geo} = art;
   const opticRim=new T.MeshBasicMaterial({color:'#65d5ff',toneMapped:false});
+  const irisFinishes=new Map();
   function bone(parent, name, x, y, z) { const b = new T.Bone(); b.name = name; b.position.set(x, y, z); parent.add(b); return b; }
   function base(type) {
     const root = new T.Group();
@@ -17,26 +18,52 @@ export function createRigFactory(art) {
   function robot({core=false}={}) {
     const rig = base('robot');rig.core=core;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
     const signal=core?'#ffad4a':'#65d5ff';
-    sphere(rig.spine, .54, mat('#e3e8df',.42,.3), 0, 0, 0, [1.08, core?1.55:.96, .98]);
+    const shell=mat('#e3e8df',.42,.3),mechanism=mat('#344751',.82,.27),fingerMetal=mat('#b8c7cd',.85,.27);
+    sphere(rig.spine, .54, shell, 0, 0, 0, [1.08, core?1.55:.96, .98]);
     ring(rig.spine, .535, .043, '#61736c', 0, 0, 0, true);
     ring(rig.spine, .53, .028, '#81928a', 0, 0, 0);
     // Independent gimbal inside the shell keeps eye tracking separate from the torso.
     sphere(rig.head, .31, '#253d3c', 0, .015, .445, [1.2, 1, .5]);
     ring(rig.head, .18, .015, core?new T.MeshBasicMaterial({color:signal,toneMapped:false}):opticRim, 0, .015, .6);
-    const pupilMaterial = new T.MeshBasicMaterial({color:core?'#ffca78':'#d5f7ff',toneMapped:false});
-    rig.pupil = mesh(rig.head,geo('optic-disc',()=>new T.CircleGeometry(.082,32)),pupilMaterial,0,.015,.611,false);
+    const pupilMaterial = new T.MeshBasicMaterial({color:core?'#251909':'#061925',toneMapped:false});
+    rig.pupil = mesh(rig.head,geo('optic-disc',()=>new T.CircleGeometry(.043,24)),pupilMaterial,0,.015,.611,false);
+    rig.pupil.name='optic-dark-pupil';rig.pupil.userData.dynamic=true;
+    if(!irisFinishes.has(core))irisFinishes.set(core,[new T.MeshBasicMaterial({color:core?'#854411':'#064c89',toneMapped:false}),new T.MeshBasicMaterial({color:core?'#ffb345':'#169eff',toneMapped:false})]);
+    const [irisMaterial,rayMaterial]=irisFinishes.get(core);
+    mesh(rig.pupil,geo('optic-iris',()=>new T.RingGeometry(.047,.151,48)),irisMaterial,0,0,.001,false);
+    // The reference optic is a ring of radial light marks around a dark aperture.
+    mesh(rig.pupil,geo('optic-radial-marks',()=>{
+      const positions=[];
+      for(let i=0;i<32;i++){
+        const a=i*Math.PI/16,b=a+.047;
+        for(const [radius,angle]of [[.057,a],[.145,a],[.145,b],[.057,a],[.145,b],[.057,b]])positions.push(Math.cos(angle)*radius,Math.sin(angle)*radius,0);
+      }
+      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.computeVertexNormals();return g;
+    }),rayMaterial,0,0,.002,false).name='optic-radial-marks';
     const halo=geo(core?'core-optic-halo-texture':'optic-halo-texture',()=>{
       const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d'),g=ctx.createRadialGradient(64,64,3,64,64,64);
-      g.addColorStop(0,core?'rgba(255,234,179,1)':'rgba(180,244,255,1)');g.addColorStop(.22,core?'rgba(255,158,38,.85)':'rgba(59,182,255,.85)');g.addColorStop(.55,core?'rgba(255,110,0,.23)':'rgba(0,133,255,.23)');g.addColorStop(1,core?'rgba(255,110,0,0)':'rgba(0,120,255,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c);
+      g.addColorStop(0,core?'rgba(255,158,38,0)':'rgba(59,182,255,0)');g.addColorStop(.14,core?'rgba(255,158,38,0)':'rgba(59,182,255,0)');g.addColorStop(.32,core?'rgba(255,158,38,.34)':'rgba(59,182,255,.34)');g.addColorStop(.55,core?'rgba(255,110,0,.15)':'rgba(0,133,255,.15)');g.addColorStop(1,core?'rgba(255,110,0,0)':'rgba(0,120,255,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c);
     });
     const glowMaterial=new T.MeshBasicMaterial({map:halo,transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
     mesh(rig.head,geo('optic-halo-plane',()=>new T.PlaneGeometry(.65,.65)),glowMaterial,0,.015,.616,false);
     rig.opticMaterial=glowMaterial;
     rig.eyes.push(rig.pupil);
-    for(const side of [-1,1]){
-      const lid=mesh(rig.head,geo('optic-shutter',()=>new T.CircleGeometry(.195,24,0,Math.PI)),mat('#33434c',.65,.26),0,side*.2,.623);
-      if(side<0)lid.rotation.z=Math.PI;lid.userData.dynamic=true;rig.lids.push({mesh:lid,side});
+    // A bevelled white socket sits ahead of the shutter and hides its outer
+    // edges. Leaves rotate behind that socket, like a camera diaphragm.
+    mesh(rig.head,geo('optic-white-socket',()=>{
+      const radii=[.183,.197,.223,.313,.34],depths=[.038,.043,.039,.036,-.13],positions=[],indices=[],segments=40;
+      for(let band=0;band<radii.length;band++)for(let i=0;i<=segments;i++){const a=i*Math.PI*2/segments;positions.push(Math.cos(a)*radii[band],Math.sin(a)*radii[band],depths[band]);}
+      for(let band=0;band<radii.length-1;band++)for(let i=0;i<segments;i++){const a=band*(segments+1)+i,b=a+1,c=a+segments+1,d=c+1;indices.push(a,c,b,b,c,d);}
+      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return g;
+    }),shell,0,.015,.61).name='optic-white-socket';
+    const shutterGeometry=geo('optic-iris-leaf',()=>{
+      const shape=new T.Shape();shape.moveTo(-.19,.015);shape.lineTo(-.06,-.135);shape.lineTo(.08,-.09);shape.lineTo(.09,-.015);shape.closePath();return new T.ShapeGeometry(shape);
+    });
+    for(let i=0;i<6;i++){
+      const angle=i*Math.PI/3,lid=mesh(rig.head,shutterGeometry,mechanism,Math.cos(angle)*.16,.015+Math.sin(angle)*.16,.63+i*.0005);
+      lid.name=`optic-shutter-${i}`;lid.userData.dynamic=true;rig.lids.push({mesh:lid,side:i%2?1:-1,angle});
     }
+    setRigBlink(rig,0);
     // Exposed service hardware: cooling ribs, power rails, shell seam and bolts.
     for(const side of [-1,1]){
       box(rig.spine,.14,.38,.2,mat('#24333c',.72,.3),side*.47,.04,-.27);
@@ -60,8 +87,20 @@ export function createRigFactory(art) {
       cylinder(elbow, .065, .3, mat('#d5e1d0',.55,.28), 0, -.15, 0);
       rod(elbow,[-.08,-.045,-.04],[-.08,-.27,-.04],.019,mat('#acbbc3',.95,.2));
       box(elbow,.032,.18,.025,glow(core?signal:'#5ec5df'),0,-.16,.067);
-      for (const finger of [-1, 1]) rod(elbow, [0, -.3, 0], [finger * .065, -.39, .075], .022, mat('#4c665b'));
-      rig.arms.push({upper: arm, lower: elbow, side});
+      const wrist=bone(elbow,'wrist',0,-.31,0);sphere(wrist,.044,mechanism);
+      ring(wrist,.044,.009,fingerMetal,0,0,0,true);
+      sphere(wrist,.062,shell,0,-.043,.005,[.78,.85,.53]);
+      const fingers=[];
+      for(let i=0;i<3;i++){
+        const finger=bone(wrist,`finger_${i}`,(i-1)*.031,-.075,.014);finger.rotation.x=-.2;
+        rod(finger,[0,0,0],[0,-.034,0],.011,fingerMetal);sphere(finger,.013,fingerMetal);
+        const tip=bone(finger,'fingertip',0,-.034,0);tip.rotation.x=-.55;
+        rod(tip,[0,0,0],[0,-.027,0],.01,fingerMetal);sphere(tip,.012,fingerMetal,0,-.026,0);
+        fingers.push({root:finger,tip});
+      }
+      const thumb=bone(wrist,'thumb',side*.052,-.028,.019);thumb.rotation.z=side*.65;thumb.rotation.x=-.35;
+      rod(thumb,[0,0,0],[0,-.044,0],.013,fingerMetal);sphere(thumb,.014,fingerMetal,0,-.041,0);
+      rig.arms.push({upper: arm, lower: elbow, wrist, fingers, thumb, side});
       const leg = bone(rig.hips, side < 0 ? 'hip_L' : 'hip_R', side * .25, 0, 0);
       sphere(leg, .11, '#435d54');
       rod(leg, [0, 0, 0], [side * .04, -.22, 0], .074, mat('#e0e7da'));
@@ -69,11 +108,19 @@ export function createRigFactory(art) {
       sphere(knee, .068, '#4b655c');
       rod(knee, [0, 0, 0], [0, -.21, 0], .048, mat('#798b7e', .7));
       const ankle = bone(knee, 'ankle', 0, -.21, 0);
-      box(ankle, .27, .13, .4, '#526e61', 0, -.015, .07);
-      box(ankle, .26, .05, .27, mat('#d6e0cf',.5,.29), 0, .065, .07);
+      // Sculpted shell over a dark sole, with visible ankle and toe hinges.
+      sphere(ankle,.134,mechanism,0,-.021,.069,[1.01,.35,1.49]);
+      sphere(ankle,.126,shell,0,.017,.043,[1.01,.45,1.31]);
+      const ankleHinge=cylinder(ankle,.055,.2,fingerMetal,0,.067,0);ankleHinge.rotation.z=Math.PI/2;
+      sphere(ankle,.056,mechanism,0,.072,-.023);
+      rod(ankle,[-.067,.055,-.069],[-.067,-.014,-.108],.016,fingerMetal);
+      rod(ankle,[.067,.055,-.069],[.067,-.014,-.108],.016,fingerMetal);
+      const toe=bone(ankle,'toe',0,-.002,.16),toeHinge=cylinder(toe,.022,.205,mechanism);toeHinge.rotation.z=Math.PI/2;
+      sphere(toe,.094,shell,0,-.002,.036,[1.25,.37,.96]);
+      sphere(toe,.095,mechanism,0,-.029,.032,[1.25,.16,.98]);
       box(knee,.09,.12,.045,mat('#becbd1',.82,.25),0,-.1,.049);
       rod(leg,[side*.1,-.035,-.04],[side*.1,-.2,-.04],.018,mat('#b2c1c7',.9,.22));
-      rig.legs.push({upper: leg, lower: knee, ankle, side});
+      rig.legs.push({upper: leg, lower: knee, ankle, toe, side});
     }
     rod(rig.spine, [.15, .43, -.12], [.22, .75, -.12], .022, mat('#5a7264'));
     rig.indicator = sphere(rig.spine, .06, glow('#779d8a'), .22, .75, -.12);
@@ -86,6 +133,11 @@ export function createRigFactory(art) {
 
 const damp = (a, b, dt, rate = 6) => a + (b - a) * (1 - Math.exp(-rate * dt));
 export function dampAngle(a, b, dt, rate = 7) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * (1 - Math.exp(-rate * dt)); }
+// Also used by the home entrance: 0 = clear optic, 1 = fully shut.
+export function setRigBlink(rig,amount){
+ const blink=Math.max(0,Math.min(1,amount)),radius=.16-blink*.054;
+ for(const {mesh,angle}of rig.lids){mesh.rotation.z=angle+(1-blink)*1.58;mesh.position.x=Math.cos(angle)*radius;mesh.position.y=.015+Math.sin(angle)*radius;}
+}
 // Distance-based cadence: a half-cycle corresponds to one planted footfall.
 export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=0,reduced=false,carrying=false}={}){
  const moving=Math.min(1,Math.max(0,speed)/2.2);
@@ -104,11 +156,10 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  const glance=Math.sin(phase*.45)*.18+Math.sin(phase*.17)*.1;
  rig.head.rotation.y=damp(rig.head.rotation.y,lookYaw*rig.attention+glance*idle*(1-rig.attention),dt);
  rig.head.rotation.x=damp(rig.head.rotation.x,talk?Math.sin(phase*5.2)*.055:rig.work*.06+Math.sin(phase*.8)*.025,dt);
- rig.pupil.position.x=damp(rig.pupil.position.x,(rig.attention?lookYaw:glance)*.11,dt);
- rig.pupil.material.color.set(rig.core?(talk?'#fff3d3':'#ffca78'):(talk?'#f0fbff':'#9de6ff'));
+ rig.pupil.position.x=damp(rig.pupil.position.x,T.MathUtils.clamp((rig.attention?lookYaw:glance)*.045,-.012,.012),dt);
  rig.opticMaterial.opacity=talk?.7+Math.sin(phase*12)*.18:.62;
  for(let i=0;i<rig.arms.length;i++){
-  const {upper,lower,side}=rig.arms[i],wave=!reduced&&t<rig.greeting&&i===1?Math.sin(Math.min(1,rig.greeting-t)*Math.PI/2):0;
+  const {upper,lower,wrist,fingers,thumb,side}=rig.arms[i],wave=!reduced&&t<rig.greeting&&i===1?Math.sin(Math.min(1,rig.greeting-t)*Math.PI/2):0;
   const tap=Math.sin(phase*(i?5.6:4.4)+i*1.8);
   // Shoulders stay outside the shell. Elbows flex forward, away from the torso.
   const idleCheck=inspect===1&&i===0&&!talk?(1-rig.work)*idle*.42*(.5+.5*Math.sin(phase*.7)):0;
@@ -117,16 +168,23 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
   upper.rotation.z=damp(upper.rotation.z,side*(.2+.025*breath*idle)+(i===1?wave*.95:0),dt,8);
   lower.rotation.x=damp(lower.rotation.x,-.16-Math.max(0,-stride*side)*.24*move*(carrying?0:1)-rig.work*(.45+tap*.07)-(carrying?.4:0)-wave*.4,dt,10);
   lower.rotation.z=wave*Math.sin(phase*8)*.12;
+  wrist.rotation.x=damp(wrist.rotation.x,-rig.work*.22-(carrying?.25:0),dt,8);
+  wrist.rotation.z=side*(talk?.09*Math.sin(phase*3):.025*breath*idle);
+  for(let j=0;j<fingers.length;j++){
+   const finger=fingers[j],curl=rig.work*.24+(carrying?.4:0)+(talk?.08*Math.sin(phase*3+j*.5):0);
+   finger.root.rotation.x=-.2-curl;finger.tip.rotation.x=-.55-curl*.5;
+  }
+  thumb.rotation.x=-.35-rig.work*.17-(carrying?.25:0);
  }
- for(const {upper,lower,ankle,side}of rig.legs){
+ for(const {upper,lower,ankle,toe,side}of rig.legs){
   const gait=stride*side;
   upper.rotation.x=gait*.48*move;
   lower.rotation.x=Math.max(0,-gait)*.64*move;
   ankle.rotation.x=-lower.rotation.x*.5;
+  toe.rotation.x=Math.max(0,gait)*.18*move;
  }
  const blinkPhase=(phase+50)% (4.1+(rig.phase%1)*2),blink=blinkPhase<.18?Math.sin(blinkPhase/.18*Math.PI):0;
  rig.blinked=blink>.6&&rig.blink<=.6;rig.blink=blink;
- for(const eye of rig.eyes)eye.scale.y=Math.max(.08,1-blink);
- for(const {mesh,side}of rig.lids)mesh.position.y=side*.2*(1-blink);
+ setRigBlink(rig,blink);
  rig.root.userData.animation=move>.05?'walk':talk?'talk':rig.work>.4?'operate':inspect===0?'scan':inspect===1?'inspect':'idle';
 }

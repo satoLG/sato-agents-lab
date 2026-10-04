@@ -6,6 +6,7 @@ import {ZONES,FLOOR,slotsFor,deckHeight,WALL_HEIGHT,BUILDING} from './lab-layout
 import {createSectorMap} from './lab-signage.js';
 export {ZONES,FLOOR,slotsFor} from './lab-layout.js';
 import {findPath} from './lab-navigation.js';
+import {createDeliveryChute} from './lab-chute.js';
 
 export const CAMPUS_SCALE = .7;
 export function groundHeight(x,z) {
@@ -236,10 +237,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
   }
   for(let distance=1;distance<BELT_LENGTH;distance+=3){const p=conveyorPoint(distance);box(p.z<18?hall:reception,.16,beltY(p.z),.16,'#384f5e',p.x,beltY(p.z)/2,p.z);}
   obstacles.push({x:-29,z:26,w:15.5,d:1.7},{x:-38,z:9.5,w:1.7,d:31},{x:-37,z:25,w:3.5,d:3.5});
-  const chute=new T.Group();chute.name='gateway-ceiling-parcel-chute';chute.position.set(-22,0,26);reception.add(chute);
-  cylinder(chute,.7,WALL_HEIGHT-4.4,'#647e8e',0,(WALL_HEIGHT+4.4)/2,0);box(chute,1.9,.16,1.9,'#263c4d',0,WALL_HEIGHT-.08,0);cylinder(chute,.84,.2,'#c3d5dd',0,4.4,0);
-  cylinder(chute,.65,.04,'#07131d',0,4.27,0);ring(chute,.74,.055,art.glow('#76d9ff'),0,4.3,0,true);
-  for(const y of [5,8,11,14]){ring(chute,.73,.07,'#344e60',0,y,0,true);}
+  const chute=createDeliveryChute(reception,art,{height:WALL_HEIGHT-4.3});chute.position.set(-22,4.3,26);
   const bin={x:-37.6,z:-7.3},binY=groundHeight(bin.x,bin.z);box(hall,3.5,.15,3.6,'#5f727e',bin.x,binY+.075,bin.z);
   for(const side of [-1,1])box(hall,.1,.55,3.6,'#253846',bin.x+side*1.7,binY+.4,bin.z);
   box(hall,3.5,.55,.1,'#253846',bin.x,binY+.4,bin.z-1.8);obstacles.push({...bin,w:3.7,d:3.8});
