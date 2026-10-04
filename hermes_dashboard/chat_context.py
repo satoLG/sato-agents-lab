@@ -1,9 +1,10 @@
 """Bounded, read-only VM context prepared by the server, never model tool calls."""
 import json
 import re
-import unicodedata
+from collections import Counter
 
 from . import memory, rag, vm
+from .commit_context import _words, _commit_context
 
 TOKEN = re.compile(r"\b(?:sk-[\w-]{16,}|gh[pousr]_[\w]{20,}|github_pat_[\w]{20,})\b")
 SECRET_KEY = re.compile(r"(?:api.?key|token|secret|password|passwd|credential|authorization)", re.I)
@@ -29,11 +30,6 @@ def _read(producer):
         return producer()
     except Exception:
         return {"error": "Fonte indisponível"}
-
-
-def _words(text):
-    plain = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode().lower()
-    return set(re.findall(r"[a-z0-9_]{3,}", plain)) - {"que", "com", "uma", "para", "sobre", "como", "qual", "the", "and"}
 
 
 def collect(snapshot, question):
@@ -64,10 +60,19 @@ def collect(snapshot, question):
         documents.append((score, {"name": entry.get("name"), "category": entry.get("category"),
                                   "content": excerpt[:4000], "excerpt": True}))
     context["documents"] = [item for _, item in sorted(documents, key=lambda pair: -pair[0])[:6]]
-    vector = _read(rag.catalog)
-    docs = sorted(vector.get("docs", []), key=lambda d: -len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")))
+    vector = _read(lambda: rag.catalog(preview=2000))
+    all_docs = vector.get("docs", [])
+    summary, commit_docs = _commit_context(all_docs, question)
+    summary["counts_are_exact_for_indexed_data"] = not bool(vector.get("error"))
+    commit_question = bool(words & {"commit", "commits"})
+    docs = sorted(commit_docs if commit_question else all_docs,
+                  key=lambda d: (len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")),
+                                 str(d.get("updated", ""))), reverse=True)
     context["rag"] = {"total": vector.get("total"), "error": vector.get("error"),
-                      "documents": [{key: item.get(key) for key in ("title", "repo", "type", "preview", "url")}
+                      "by_type": dict(Counter(d.get("type") or "doc" for d in all_docs)),
+                      "sync": vector.get("sync", {"last_full_coverage_confirmed": False}),
+                      "commit_summary": summary, "documents_are_partial": True,
+                      "documents": [{key: item.get(key) for key in ("title", "repo", "type", "preview", "url", "updated")}
                                     for item in docs[:8]]}
     context["limits"] = "Telemetria e trechos selecionados do catálogo da VM; não é uma leitura completa de todos os arquivos ou fontes externas."
     cleaned = scrub(context)

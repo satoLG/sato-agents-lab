@@ -189,7 +189,7 @@ async function onNodeTap(node) {
     cy.layout(layoutFor(cy.nodes().length)).run();
     if (payload.truncated) {
       render(refs.graphInfo, h("p", { class: "graph-hint" },
-        `mostrando os primeiros documentos; ${fmt.num(payload.truncated)} nao couberam neste ramo`));
+        `${fmt.num(payload.truncated)} documentos restantes; toque em "Próximos documentos" para continuar`));
     }
   } catch (err) {
     node.style("opacity", 1);
@@ -247,9 +247,35 @@ function loadList() {
   load(refs.list, "/api/rag/list", (d) => {
     if (d.error) return notice(d.error);
     if (!d.total) return empty("base vetorial vazia");
+    const typeFilter = h("select", { "aria-label": "Tipo de documento" },
+      h("option", { value: "", text: "Todos os tipos" }),
+      Object.keys(d.by_type || {}).sort().map(type => h("option", { value: type, text: type === "commit" ? "Commits" : type })));
+    const repoFilter = h("select", { "aria-label": "Repositorio" },
+      h("option", { value: "", text: "Todos os repositorios" }),
+      (d.by_repo || []).map(r => h("option", { value: r.repo, text: r.repo })));
+    const textFilter = h("input", { type: "search", placeholder: "Titulo, SHA ou assunto", "aria-label": "Filtrar documentos" });
+    const result = h("div");
+    function filterDocuments() {
+      const term = textFilter.value.trim().toLocaleLowerCase();
+      const docs = (d.docs || []).filter(row => (!typeFilter.value || row.type === typeFilter.value) &&
+        (!repoFilter.value || row.repo === repoFilter.value) &&
+        (!term || `${row.title || ''} ${row.id || ''} ${row.preview || ''}`.toLocaleLowerCase().includes(term)))
+        .sort((a,b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+      render(result, h("p", { text: `${fmt.num(docs.length)} documentos encontrados` }), table([
+        { key: "title", label: "Titulo", render: r => r.title || r.id },
+        { key: "repo", label: "Repo" },
+        { key: "type", label: "Tipo" },
+        { key: "updated", label: "Data" },
+      ], docs, { scroll: true, onRow: row => showDoc({ ...row, label: row.title || row.id, doc_type: row.type }) }));
+    }
+    typeFilter.addEventListener("change", filterDocuments);
+    repoFilter.addEventListener("change", filterDocuments);
+    textFilter.addEventListener("input", filterDocuments);
+    filterDocuments();
     return [
       h("div", { class: "stat-grid" }, [
         stat("Documentos", fmt.num(d.total)),
+        stat("Commits", fmt.num(d.by_type?.commit || 0)),
         stat("Repositorios", fmt.num((d.by_repo || []).length)),
         stat("Tipos", fmt.num(Object.keys(d.by_type || {}).length)),
         stat("Maior repo", d.by_repo?.[0]?.repo || "-", d.by_repo?.[0] ? `${d.by_repo[0].count} docs` : null),
@@ -263,14 +289,7 @@ function loadList() {
       ]),
       h("div", { class: "card" }, [
         h("header", {}, h("h2", { text: "Todos os documentos" })),
-        table([
-          { key: "title", label: "Titulo", render: (r) => r.title || r.id },
-          { key: "repo", label: "Repo" },
-          { key: "type", label: "Tipo", render: (r) => h("span", { class: "pill", text: r.type || "doc" }) },
-          { key: "state", label: "Estado" },
-          { key: "size", label: "Tamanho", num: true, render: (r) => fmt.bytes(r.size) },
-        ], d.docs || [], { scroll: true,
-            onRow: (row) => showDoc({ ...row, label: row.title || row.id, doc_type: row.type }) }),
+        h("div", { class: "controls" }, typeFilter, repoFilter, textFilter), result,
       ]),
     ];
   });
