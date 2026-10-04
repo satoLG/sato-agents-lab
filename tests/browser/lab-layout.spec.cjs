@@ -5,11 +5,11 @@ test('grouped hall reveals gradually, keeps routes accessible and decodes opt-in
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
   await page.addInitScript(()=>{
-    window.decodedSamples=0;const decode=AudioContext.prototype.decodeAudioData;
+    window.labQARender=false;window.decodedSamples=0;const decode=AudioContext.prototype.decodeAudioData;
     AudioContext.prototype.decodeAudioData=async function(...args){const buffer=await decode.apply(this,args);window.decodedSamples++;return buffer;};
   });
   await page.route('**/js/lab-scene.js',async route=>{
-    const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.layoutCheck={world,camera,campus,hall,hallReveal,avatar,robots,parcels,obstacles,stopWalking,setCameraMode,groundAt};renderer.render(world,camera);')});
+    const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.layoutCheck={world,camera,campus,hall,hallReveal,avatar,robots,parcels,obstacles,stopWalking,setCameraMode,groundAt};if(window.labQARender!==false)renderer.render(world,camera);else{world.updateMatrixWorld(true);camera.updateMatrixWorld(true);}')});
   });
   await page.goto('/lab');await page.waitForFunction(()=>window.layoutCheck,null,{timeout:90000});
   await page.locator('#lab-play').click();

@@ -1,9 +1,11 @@
 import * as T from '../vendor/three.module.min.js';
-import {deckHeight} from './lab-layout.js';
+import {deckHeight,gridPlacement,EQUIPMENT_FOOTPRINTS} from './lab-layout.js';
 
 const COLORS={root:'#66dfff',repo:'#7ce7bc',category:'#ffc575',doc:'#bbdaf0',query:'#c0a1ff'};
 export function createRagDome(world,art,zone){
-  const {mesh,ring,glow,textPlane}=art,root=new T.Group();root.position.set(zone.x,deckHeight(zone.x,zone.z),zone.z);root.scale.setScalar(1.8);world.add(root);
+  const {mesh,ring,glow,textPlane,cylinder,box}=art,slot=gridPlacement(zone,EQUIPMENT_FOOTPRINTS.rag),root=new T.Group();root.name='rag-hologram-projector';root.position.set(slot.x,deckHeight(slot.x,slot.z)+.6,slot.z);root.userData.grid=slot.cells;world.add(root);
+  cylinder(root,3.2,.5,'#293e50',0,-.35,0);cylinder(root,2.9,.12,'#7293a4',0,-.04,0);
+  for(let i=0;i<8;i++){const a=i*Math.PI/4;box(root,.4,.16,.4,glow('#75deff'),Math.sin(a)*2.4,.08,Math.cos(a)*2.4);}
   const glass=new T.MeshBasicMaterial({color:'#66dcff',transparent:true,opacity:.085,depthWrite:false,side:T.DoubleSide,blending:T.AdditiveBlending});
   mesh(root,new T.SphereGeometry(2.95,32,16,0,Math.PI*2,0,Math.PI/2),glass,0,0,0,false);
   ring(root,2.95,.055,glow('#70c8db'),0,0,0,true);

@@ -6,13 +6,13 @@ test('raised garden remains navigable, robot joints keep clearance and opt-in au
  await page.setViewportSize({width:960,height:720});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
  await page.addInitScript(()=>{
-  window.decodedSamples=0;window.startedLoops=0;
+  window.labQARender=false;window.decodedSamples=0;window.startedLoops=0;
   const make=AudioContext.prototype.createBufferSource;AudioContext.prototype.createBufferSource=function(){const s=make.call(this),start=s.start;s.start=function(...args){if(s.loop)window.startedLoops++;return start.apply(s,args);};return s;};
   const decode=AudioContext.prototype.decodeAudioData;
   AudioContext.prototype.decodeAudioData=async function(...args){const b=await decode.apply(this,args);window.decodedSamples++;return b;};
  });
  await page.route('**/js/lab-scene.js*',async route=>{
-  const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.botanicalQA={world,campus,hall,robots,parcels,obstacles,avatar,stopWalking,groundAt,audio,visitRobot,canInteract,beginChat,emote};renderer.render(world,camera);')});
+  const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.botanicalQA={world,campus,hall,robots,parcels,obstacles,avatar,stopWalking,groundAt,audio,visitRobot,canInteract,beginChat,emote};if(window.labQARender!==false)renderer.render(world,camera);else{world.updateMatrixWorld(true);camera.updateMatrixWorld(true);}')});
  });
  await page.goto('/lab');await page.waitForFunction(()=>window.botanicalQA,null,{timeout:90000});await page.locator('#lab-play').click();
  await page.evaluate(()=>{const q=botanicalQA;q.stopWalking();q.avatar.position.set(0,q.groundAt(0,0),0);});

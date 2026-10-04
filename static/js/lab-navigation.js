@@ -1,5 +1,5 @@
 // Shared collision rules for walking and A*. Circles are the live robot roster.
-export const BOUNDS = {minX: -45, maxX: 45, minZ: -30, maxZ: 65};
+export const BOUNDS = {minX: -55, maxX: 55, minZ: -60, maxZ: 75};
 export const PLAYER_RADIUS = .32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export function canStand(x, z, boxes, circles, radius = PLAYER_RADIUS) {
@@ -17,7 +17,7 @@ export function clearSegment(a, b, boxes, circles) {
   for (let i = 1; i <= steps; i++) if (!canStand(a.x + (b.x - a.x) * i / steps, a.z + (b.z - a.z) * i / steps, boxes, circles)) return false;
   return true;
 }
-export function nearestFree(point, boxes, circles, maxDistance = 3) {
+export function nearestFree(point, boxes, circles, maxDistance = 5) {
   const p = {x: clamp(point.x, BOUNDS.minX + .4, BOUNDS.maxX - .4), z: clamp(point.z, BOUNDS.minZ + .4, BOUNDS.maxZ - .4)};
   if (canStand(p.x, p.z, boxes, circles)) return p;
   for (let r = .2; r <= maxDistance; r += .2) for (let a = 0; a < 24; a++) {

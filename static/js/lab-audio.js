@@ -24,6 +24,7 @@ export function createLabAudio(){
   function cue(kind,position,id=kind){
     if(!enabled||!ctx||document.hidden||voices.size>=12)return false;
     if(kind==='jump')return arcadeJump();
+    if(kind==='clock')return clockAlarm(position);
     if(position&&[...voices].filter(v=>v.position).length>=6)return false;
     const range=RANGE[kind]??12,mix=spatialMix(listener,position,range);if(mix.gain<=.002)return false;
     const t=ctx.currentTime,interval={walk:.20,run:.13,robotStep:.14,robotServo:.8,typing:.18,computer:3.5,equipment:3.1,energy:3.7,robotVoice:.6,robotBlink:1,punch:.23}[kind]??.12;
@@ -38,6 +39,15 @@ export function createLabAudio(){
     source.onended=()=>{voices.delete(voice);source.disconnect();gain.disconnect();pan.disconnect();};source.start();if(kind==='robotVoice'||kind==='robotServo')chirp(kind,position,id);return true;
   }
   function hash(id){return [...String(id)].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0);}
+  function clockAlarm(position){
+    const mix=spatialMix(listener,position,12);if(mix.gain<.002)return false;
+    const start=ctx.currentTime;
+    for(let i=0;i<3;i++){
+      const tone=ctx.createOscillator(),gain=ctx.createGain(),pan=ctx.createStereoPanner(),at=start+i*.18;
+      tone.type='sine';tone.frequency.value=i===1?1046:784;gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.11*mix.gain,at+.01);gain.gain.exponentialRampToValueAtTime(.0001,at+.12);pan.pan.value=mix.pan;
+      tone.connect(gain).connect(pan).connect(master);const voice={source:tone,gain,pan,volume:0};voices.add(voice);tone.onended=()=>{voices.delete(voice);tone.disconnect();gain.disconnect();pan.disconnect();};tone.start(at);tone.stop(at+.14);
+    }return true;
+  }
   function arcadeJump(){
     const time=ctx.currentTime;if(time-(last.get('jump')??-10)<.2)return false;last.set('jump',time);
     const source=ctx.createOscillator(),gain=ctx.createGain(),pan=ctx.createStereoPanner();source.type='triangle';

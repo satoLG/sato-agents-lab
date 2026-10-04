@@ -13,7 +13,7 @@
 </head>
 <body data-started="false" data-loading="true">
 <main id="lab" aria-label="Laboratório interativo do Hermes">
-  <div id="scene" tabindex="0" aria-label="Laboratório 3D. WASD para andar, Shift para correr, mouse para mirar, clique para socar, Espaço para pular. Botão direito ou toque no chão para caminhar. E conversa com o robô próximo."></div>
+  <div id="scene" tabindex="0" aria-label="Laboratório 3D. WASD para andar, Shift para correr, clique para socar, Espaço para pular. Botão direito ou toque no chão para caminhar. E conversa com o robô próximo."></div>
   <button id="lab-play" class="lab-play" type="button" aria-label="Iniciar exploração" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7Z" fill="currentColor" stroke="none"/></svg></button>
   <header class="hud-top">
     <a class="brand glass" href="/dashboard" aria-label="Voltar ao dashboard"><img class="brand-icon" src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="36" height="36"><span>SATO <b>LAB</b><small>AGENT RESEARCH / 01</small></span></a>
@@ -27,7 +27,7 @@
     <button type="button" id="map-toggle" class="map-toggle glass" aria-expanded="false" aria-controls="map-panel">⌘ <span>Estações</span></button>
   </div>
   <div id="campus-welcome" class="campus-welcome glass"><small>INSTALAÇÃO 01 / CAMPO ABERTO</small><h1>Sato Agents Lab</h1><p>Entre. Cada ideia tem um caminho.</p><button id="enter-lab" type="button">Entrar no laboratório ↗</button><span>WASD / analógico para andar · Shift / Correr · Espaço / Pular</span></div>
-  <button type="button" id="interaction" class="interaction" hidden><span class="input-button" aria-hidden="true"><svg viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="8"/><path d="M15 12h11M15 20h9M15 28h11M15 12v16"/></svg></span><span><small id="interaction-name"></small><strong>Conversar</strong></span></button>
+  <button type="button" id="interaction" class="interaction" hidden><span class="input-button" aria-hidden="true"><kbd>E</kbd></span><span><small id="interaction-name"></small><strong>Conversar</strong></span></button>
   <button type="button" id="rag-action" class="rag-action glass" hidden>◎ Explorar rede RAG</button>
   <aside id="rag-panel" class="rag-panel overlay glass" aria-label="Explorador RAG em 3D" hidden>
     <div class="panel-heading"><div><small>BASE VETORIAL</small><h2>Conexões &amp; ideias</h2></div><button id="rag-close" type="button" aria-label="Fechar explorador RAG">×</button></div>
