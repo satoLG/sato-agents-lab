@@ -26,7 +26,11 @@ def main():
             doc["preview"] = doc.get("content", "")[:2000]
         summary, _ = module._commit_context(docs, args.question)
         state = Path.home() / ".hermes/rag_commit_state/sync.json"
-        summary["sync"] = json.loads(state.read_text()) if state.exists() else {"complete": False}
+        checkpoint = json.loads(state.read_text()) if state.exists() else {}
+        summary["sync"] = {"complete": bool(checkpoint.get("complete")),
+                           "completed_at": checkpoint.get("completed_at"),
+                           "repository_count": len(checkpoint.get("coverage", {})),
+                           "branch_count": len(checkpoint.get("heads", {}))}
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         from fastembed import TextEmbedding
