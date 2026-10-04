@@ -118,6 +118,7 @@ test('tube arrival lands, says ouch, rises and dance makes complete turns',async
  try{
   await chatRoutes(page);await instrumentScene(page);await page.addInitScript(()=>{window.__companionFrames=[];});await page.goto('/');
   await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','tube',{timeout:10000});await expect(page.locator('#home-loading')).toBeHidden();await page.waitForTimeout(1100);await page.screenshot({path:testInfo.outputPath('home-tube.png')});
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','fall',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-exit.png')});
   await expect(page.locator('#home-speech')).toContainText('Ouch!',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-ouch.png')});await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:15000});
   const stages=await page.evaluate(()=>[...new Set(__companionFrames.map(f=>f.stage))]);expect(stages).toEqual(expect.arrayContaining(['tube','fall','ouch','rise','settled']));
   const radius=await page.evaluate(()=>Math.max(...__companionFrames.map(f=>f.tubeArmRadius)));expect(radius).toBeGreaterThan(.5);expect(radius).toBeLessThan(1.08*.93);
