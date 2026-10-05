@@ -1,10 +1,12 @@
 import {placeInteraction} from './lab-prompt.js';
+import {copyMessageButton} from './chat-ui.js';
 import {createEquipmentUI} from './lab-equipment-ui.js';
 // The canvas owns space and interaction. These overlays only present telemetry.
 import {createRagUI} from './lab-rag-ui.js';
 const $ = id => document.getElementById(id);
 const SECTORS = [['gateway','GATEWAY','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','MEMORY','◈'],['cron','EVENTS','◷'],['vm','VM','▤']];
 const KINDS = {gateway:'Atendente de gateway',guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',webhook:'Webhook',catalog:'Representação do catálogo'};
+const robotName=robot=>robot?.id==='guide:hermes'?'Sato Agent':robot?.name||'Sato Agent';
 const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'CAMPUS / EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
@@ -53,7 +55,7 @@ function renderRoster() {
   const workers = state?.workers.filter(w => w.sector === sector) || []; $('roster-count').textContent = workers.length;
   const focused = document.activeElement?.dataset.robot;
   const items = workers.map(w => {
-    const b = node('button','robot-button',`${w.kind === 'guide' ? '◎' : '◉'} ${w.name}`); b.type = 'button'; b.dataset.robot = w.id;
+    const b = node('button','robot-button',`${w.kind === 'guide' ? '◎' : '◉'} ${robotName(w)}`); b.type = 'button'; b.dataset.robot = w.id;
     b.append(node('small','',`${KINDS[w.kind]} · ${w.status_label}`)); b.addEventListener('click', () => visit(w.id)); return b;
   }); $('roster').replaceChildren(...items); if (focused) items.find(b => b.dataset.robot === focused)?.focus({preventScroll:true});
 }
@@ -91,10 +93,10 @@ function applyTelemetry(payload){clearTimeout(timer);timer=null;if(!payload.stat
 function connectTelemetry(){if(document.hidden||telemetryStream)return;telemetryStream=new EventSource('/api/lab/stream');telemetryStream.addEventListener('telemetry',e=>{try{applyTelemetry(JSON.parse(e.data));}catch{telemetryOffline();}});telemetryStream.onerror=()=>{if(!timer)timer=setTimeout(()=>{timer=null;telemetryOffline();},Math.max(0,5000-(Date.now()-lastSuccess)));};}
 document.addEventListener('visibilitychange',()=>{scene?.stopWalking();if(document.hidden){telemetryStream?.close();telemetryStream=null;chatStream?.close();chatStream=null;}else{connectTelemetry();if(lastSuccess&&Date.now()-lastSuccess>15000)telemetryOffline();if(selectedRobot&&webChatMode==='private')connectChatStream(selectedRobot);}});
 function messages() {
-  scene?.setChatMessages(histories.get(selectedRobot)||[],state?.workers.find(w=>w.id===selectedRobot)?.name||'Hermes');
+  scene?.setChatMessages(histories.get(selectedRobot)||[],robotName(state?.workers.find(w=>w.id===selectedRobot)));
   $('chat-messages').replaceChildren(...(histories.get(selectedRobot) || []).map(entry => {
     const el = node('div',`message ${entry.role}`,entry.text);
-    if (entry.source) el.append(node('small','',`${entry.source} · ${clock(entry.when)}${entry.catalog ? ` · catálogo ${clock(entry.catalog)}` : ''}`)); return el;
+    if (entry.source) el.append(node('small','',`${entry.source} · ${clock(entry.when)}${entry.catalog ? ` · catálogo ${clock(entry.catalog)}` : ''}`));if(entry.role==='user'||entry.role==='robot')el.append(copyMessageButton(()=>entry.text));return el;
   })); $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
 }
 function chatMode(mode){
@@ -103,7 +105,7 @@ function chatMode(mode){
   $('chat-form').hidden=mode!=='private'||selectedRobot!=='guide:hermes';
   document.querySelector('.chat-suggestions').hidden=mode==='locked'||mode==='loading';
   $('chat-free-toggle').hidden=selectedRobot!=='guide:hermes';$('chat-free-toggle').textContent=mode==='local'?'Conversa livre':'Voltar aos indicadores';
-  $('chat-mode').textContent=mode==='private'?'Conversa livre · responde e analisa · sem executar ações':mode==='local'?'perguntas sobre indicadores':mode==='locked'?'acesso privado ao Hermes':'conectando ao Hermes';
+  $('chat-mode').textContent=mode==='private'?'Conversa livre · responde e analisa · sem executar ações':mode==='local'?'perguntas sobre indicadores':mode==='locked'?'acesso privado ao chat':'conectando ao chat';
   if(mode==='locked')$('chat-password').focus({preventScroll:true});
 }
 async function loadChatSession(id){
@@ -139,10 +141,10 @@ function openChat(id) {
   selectedRobot = id; sector = robot.sector; closePanels(); $('interaction').hidden = true;
   document.body.dataset.chat = 'true'; $('chat').hidden = false;
   document.querySelectorAll('.hud-top,.hud-bottom,.overlay').forEach(el => el.inert = true);
-  $('chat-name').textContent = robot.name; $('chat-sector').textContent = name(robot.sector);
+  $('chat-name').textContent = robotName(robot); $('chat-sector').textContent = name(robot.sector);
   $('chat-status').textContent = $('connection').dataset.state === 'offline' ? 'Dados desatualizados' : robot.status_label;
   $('chat-kind').textContent = KINDS[robot.kind];
-  if (!histories.has(id)) histories.set(id,[{role:'robot',text:`Olá! Sou ${robot.name}. ${robot.description || robot.detail}${robot.parent_id ? `\nExecução pai: ${robot.parent_id}` : ''}`,source:robot.source,when:state.now}]);
+  if (!histories.has(id)) histories.set(id,[{role:'robot',text:`Olá! Sou ${robotName(robot)}. ${robot.description || robot.detail}${robot.parent_id ? `\nExecução pai: ${robot.parent_id}` : ''}`,source:robot.source,when:state.now}]);
   messages(); chatMode('local'); $('chat-close').focus({preventScroll:true});
 }
 function closeChat() {

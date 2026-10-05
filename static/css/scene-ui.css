@@ -11,3 +11,9 @@
 .speech-card strong,.speech-anchor.user .speech-card strong{font-size:10px;letter-spacing:1.8px;color:#9ee3ff;border:0;padding:0 0 8px;margin:0;display:block;overflow-wrap:anywhere}.speech-card strong:after{content:'';display:block;width:26px;height:2px;border-radius:2px;background:currentColor;opacity:.4;margin-top:8px}.speech-text{font-size:16px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;margin-top:0;color:#e5f2f7}.speech-anchor.user .speech-card{background:#18302d70;border-color:#c2f0d582}.speech-anchor.user .speech-card strong{color:#c2f0d5}.speech-anchor.user .speech-card:after{background:#18302d70;border-color:#c2f0d582}.speech-anchor.user .speech-text{color:#e2f4e9}
 @media(max-width:700px){.speech-card,.speech-anchor.user .speech-card{padding:12px 14px;border-radius:22px 20px 23px 18px}.speech-card strong,.speech-anchor.user .speech-card strong{font-size:9px}.speech-text{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.speech-card{animation:none!important}}
+.bubble-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:7px}
+.copy-button{display:grid;place-items:center;width:32px;height:32px;padding:6px;margin-left:auto;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer;flex-shrink:0}
+.copy-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.copy-button:hover,.copy-button[data-copied=true]{background:#ffffff14}
+.speech-text,#lab .message,#lab #chat-input{user-select:text;-webkit-user-select:text}
+.copy-button,#lab .message small{user-select:none;-webkit-user-select:none}

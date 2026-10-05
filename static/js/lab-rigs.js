@@ -15,8 +15,8 @@ export function createRigFactory(art) {
     const head = bone(spine, 'head', 0, type === 'avatar' ? .84 : 0, 0);
     return {type, root, hips, spine, head, arms: [], legs: [], eyes: [], move: 0, attention: 0, work: .6, phase: 0, greeting: 0, gaitPhase: 0, steps: 0, blink: 0, lids: []};
   }
-  function robot({core=false}={}) {
-    const rig = base('robot');rig.core=core;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
+  function robot({core=false,floating=false}={}) {
+    const rig = base('robot');rig.core=core;rig.floating=floating;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
     const signal=core?'#ffad4a':'#65d5ff';
     const shell=mat('#e3e8df',.42,.3),mechanism=mat('#344751',.82,.27),fingerMetal=mat('#b8c7cd',.85,.27);
     sphere(rig.spine, .54, shell, 0, 0, 0, [1.08, core?1.55:.96, .98]);
@@ -75,6 +75,17 @@ export function createRigFactory(art) {
     for(let i=0;i<3;i++)box(rig.spine,.035,.05,.04,glow(i===2?'#f2bc61':'#5ee6ee'),-.07+i*.07,-.34,.422);
 
     for (const side of [-1, 1]) {
+      if(floating){
+        const upper=bone(rig.spine,side<0?'flipper_L':'flipper_R',side*.58,-.025,0);
+        const shape=geo('smooth-flipper',()=>new T.LatheGeometry([
+          new T.Vector2(0,-.77),new T.Vector2(.04,-.73),new T.Vector2(.075,-.63),
+          new T.Vector2(.105,-.48),new T.Vector2(.125,-.30),new T.Vector2(.12,-.15),
+          new T.Vector2(.09,-.035),new T.Vector2(.045,.02),new T.Vector2(0,.03)
+        ],24));
+        const flipper=mesh(upper,shape,shell);flipper.scale.z=.56;flipper.name='smooth-arm';
+        const lower=bone(upper,'flipper-tip',0,-.77,0);
+        rig.arms.push({upper,lower,side});continue;
+      }
       box(rig.spine, .13, .47, .3, '#c7d3c7', side * .53, .045, -.045).rotation.z = side * -.2;
       const arm = bone(rig.spine, side < 0 ? 'shoulder_L' : 'shoulder_R', side * .71, -.04, 0);
       sphere(arm, .125, mat('#24343f',.8,.23));
@@ -122,8 +133,15 @@ export function createRigFactory(art) {
       rod(leg,[side*.1,-.035,-.04],[side*.1,-.2,-.04],.018,mat('#b2c1c7',.9,.22));
       rig.legs.push({upper: leg, lower: knee, ankle, toe, side});
     }
-    rod(rig.spine, [.15, .43, -.12], [.22, .75, -.12], .022, mat('#5a7264'));
-    rig.indicator = sphere(rig.spine, .06, glow('#779d8a'), .22, .75, -.12);
+    if(floating){
+      const base=sphere(rig.spine,.32,mechanism,0,-.53,0,[1,.22,1]);base.name='magnetic-core';
+      ring(rig.spine,.28,.015,opticRim,0,-.59,0,true).name='magnetic-emitter';
+      rig.field=ring(rig.hips,.34,.009,new T.MeshBasicMaterial({color:signal,transparent:true,opacity:.3,depthWrite:false,toneMapped:false}),0,-.28,0,true);
+      rig.field.name='magnetic-field';
+    }else{
+      rod(rig.spine, [.15, .43, -.12], [.22, .75, -.12], .022, mat('#5a7264'));
+      rig.indicator = sphere(rig.spine, .06, glow('#779d8a'), .22, .75, -.12);
+    }
     rig.root.rotation.y = Math.PI;
     batchRobot(rig);
     return rig;
@@ -166,6 +184,7 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
   const workPose=rig.work*(i===inspect%2?1.55:1.35)+idleCheck,talkPose=talk?(i? .35+.12*Math.sin(phase*3):.2):0;
   upper.rotation.x=damp(upper.rotation.x,-stride*side*.42*move*(carrying?0:1)-workPose-talkPose-(carrying?.75:0),dt,10);
   upper.rotation.z=damp(upper.rotation.z,side*(.2+.025*breath*idle)+(i===1?wave*.95:0),dt,8);
+  if(rig.floating)continue;
   lower.rotation.x=damp(lower.rotation.x,-.16-Math.max(0,-stride*side)*.24*move*(carrying?0:1)-rig.work*(.45+tap*.07)-(carrying?.4:0)-wave*.4,dt,10);
   lower.rotation.z=wave*Math.sin(phase*8)*.12;
   wrist.rotation.x=damp(wrist.rotation.x,-rig.work*.22-(carrying?.25:0),dt,8);

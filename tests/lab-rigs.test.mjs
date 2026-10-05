@@ -63,3 +63,15 @@ test('jointed hands and toes survive batching and reuse meshes through animation
   assert.ok(rig.arms[0].fingers[0].tip.rotation.x<-.55);
  }
 });
+
+test('floating companion has solid smooth arms, no legs or antenna and clears the tube',()=>{
+ const rig=robotFactory().robot({floating:true});assert.equal(rig.legs.length,0);assert.equal(rig.indicator,undefined);
+ assert.ok(rig.root.getObjectByName('magnetic-core'));assert.ok(rig.root.getObjectByName('magnetic-emitter'));assert.ok(rig.root.getObjectByName('magnetic-field'));
+ for(const arm of rig.arms){assert.equal(arm.upper.children.filter(o=>o.isMesh).length,1);assert.equal(arm.fingers,undefined);assert.equal(arm.wrist,undefined);}
+ const meshes=[];rig.root.traverse(o=>{if(o.isMesh)meshes.push([o,o.geometry]);});
+ for(let time=0;time<12;time+=.1)poseRig(rig,time,.1,{attention:1,talk:time>6});
+ const after=[];rig.root.traverse(o=>{if(o.isMesh)after.push([o,o.geometry]);});assert.deepEqual(after,meshes);
+ rig.root.rotation.set(0,.12,0);for(const arm of rig.arms)arm.upper.rotation.set(0,0,arm.side*.025);rig.root.updateMatrixWorld(true);
+ let radius=0;for(const arm of rig.arms)arm.upper.traverse(mesh=>{if(!mesh.isMesh)return;const positions=mesh.geometry.getAttribute('position');for(let i=0;i<positions.count;i++){const p=new T.Vector3().fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld);radius=Math.max(radius,Math.hypot(p.x,p.z));}});
+ assert.ok(radius<1.08*.93,`folded arm radius ${radius} must clear the chute mouth`);
+});

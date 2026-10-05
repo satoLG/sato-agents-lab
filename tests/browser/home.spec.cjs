@@ -24,7 +24,7 @@ test('root greets with one robot, real chat protocol and a glass history',async(
  expect(await page.locator('#home').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png')});
  await page.locator('#home-input').fill('O que a VM sabe sobre MCP?');await page.locator('#home-send').click();
- await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech')).toContainText('Deixa eu pensar');
+ await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-indicator svg use')).toHaveAttribute('href',/#loader-circle$/);
  expect(chat.submitted).toEqual({robot_id:'guide:hermes',question:'O que a VM sabe sobre MCP?'});expect(chat.csrfSeen).toBe(true);
  chat.jobs[0].status='done';chat.jobs[0].answer='MCP conecta o Hermes aos serviços configurados na VM.';
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});
@@ -55,7 +55,7 @@ test('touch reactions differ and the composer stays usable in a short viewport',
 test('robot announces each destination before navigation',async({page})=>{
  await chatRoutes(page);await ready(page);
  for(const [path,name] of [['/dashboard','dashboard'],['/lab','laboratório']]){
-  await page.locator(`.home-nav a[href="${path}"]`).click();await expect(page.locator('#home-speech')).toContainText(`Vou te levar ao ${name}`);expect(new URL(page.url()).pathname).toBe('/');await expect(page).toHaveURL(new RegExp(`${path}$`));if(path==='/dashboard')await ready(page);
+  await page.locator(`.home-nav a[href="${path}"]`).click();await expect(page.locator('#home-speech')).toContainText(`Vou te levar ao ${name}`);expect(new URL(page.url()).pathname).toBe('/');await expect(page).toHaveURL(new RegExp(`${path}$`),{timeout:15000});if(path==='/dashboard')await ready(page);
  }
 });
 
@@ -87,7 +87,18 @@ test('long previews open full chat bubbles without spilling into the scene',asyn
 });
 
 async function instrumentScene(page){
- await page.route('**/js/home-scene.js',async route=>{const response=await route.fetch(),source=await response.text();await route.fulfill({response,body:source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace('renderer.render(world,camera);report();\n }','renderer.render(world,camera);report();if(window.__companionFrames)window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,body:rig.root.rotation.y,arm:rig.arms[0].upper.rotation.x});\n }')});});
+ await page.route('**/js/home-scene.js',async route=>{
+  const response=await route.fetch(),source=await response.text();
+  const sample=`if(window.__companionFrames){
+   let tubeArmRadius=0;
+   if(container.dataset.arrival==='fall')for(const arm of rig.arms)arm.upper.traverse(mesh=>{
+    if(!mesh.isMesh)return;const positions=mesh.geometry.getAttribute('position');
+    for(let i=0;i<positions.count;i++){const p=new T.Vector3().fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld);if(p.y>=chute.position.y)tubeArmRadius=Math.max(tubeArmRadius,Math.hypot(p.x,p.z));}
+   });
+   window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,body:rig.root.rotation.y,arm:rig.arms[0].upper.rotation.x,tubeArmRadius});
+  }`;
+  await route.fulfill({response,body:source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`)});
+ });
 }
 
 test('settings lazily reuse miniature lab and forest with smooth scenario changes',async({page},testInfo)=>{
@@ -107,10 +118,63 @@ test('tube arrival lands, says ouch, rises and dance makes complete turns',async
  try{
   await chatRoutes(page);await instrumentScene(page);await page.addInitScript(()=>{window.__companionFrames=[];});await page.goto('/');
   await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','tube',{timeout:10000});await expect(page.locator('#home-loading')).toBeHidden();await page.waitForTimeout(1100);await page.screenshot({path:testInfo.outputPath('home-tube.png')});
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','fall',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-exit.png')});
   await expect(page.locator('#home-speech')).toContainText('Ouch!',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-ouch.png')});await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:15000});
   const stages=await page.evaluate(()=>[...new Set(__companionFrames.map(f=>f.stage))]);expect(stages).toEqual(expect.arrayContaining(['tube','fall','ouch','rise','settled']));
+  const radius=await page.evaluate(()=>Math.max(...__companionFrames.map(f=>f.tubeArmRadius)));expect(radius).toBeGreaterThan(.5);expect(radius).toBeLessThan(1.08*.93);
   const gap=await page.evaluate(()=>{const robot=document.getElementById('robot-touch').getBoundingClientRect(),chat=document.getElementById('home-chat').getBoundingClientRect();return chat.top-robot.bottom;});expect(gap).toBeGreaterThanOrEqual(0);expect(gap).toBeLessThan(70);
   for(let i=0;i<3;i++)await page.locator('#robot-touch').tap();await expect(page.locator('#home-scene')).toHaveAttribute('data-reaction','dance');await page.waitForTimeout(4400);
   const turns=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='dance');return {body:Math.max(...f.map(v=>v.body))-Math.min(...f.map(v=>v.body)),arm:Math.max(...f.map(v=>v.arm))-Math.min(...f.map(v=>v.arm)),last:__companionQA.rig.arms[0].upper.rotation.x};});expect(turns.body).toBeGreaterThan(6);expect(turns.arm).toBeGreaterThan(12);expect(Math.abs(turns.last)).toBeLessThan(.6);
+  await page.evaluate(()=>window.__companionFrames=[]);await page.waitForTimeout(4000);
+  const hover=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='idle');return Math.max(...f.map(v=>v.y))-Math.min(...f.map(v=>v.y));});expect(hover).toBeGreaterThan(.075);expect(hover).toBeLessThan(.10);
  }finally{await context.close();}
+});
+
+test('copy preserves complete previews and history, and thinking SVG changes then stops',async({page,context})=>{
+ await context.grantPermissions(['clipboard-read','clipboard-write']);const chat=await chatRoutes(page);await ready(page);
+ const question='Uma pergunta longa. '.repeat(30),answer='Texto completo, com quebras de linha.\n'.repeat(40)+'Fim da resposta.';
+ await page.locator('#home-input').fill(question);await page.locator('#home-send').click();
+ await expect(page.locator('#home-speech .thinking-indicator svg')).toBeVisible();const before=await page.locator('#home-speech .thinking-indicator').innerText();
+ await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+10000;});await expect(page.locator('#home-speech .thinking-indicator')).not.toHaveText(before,{timeout:10000});
+ await page.locator('#question-copy').click();expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe(question.trim());
+ chat.jobs[0].status='done';chat.jobs[0].answer=answer;
+ await expect(page.locator('#home-speech .thinking-indicator')).toHaveCount(0,{timeout:10000});await expect(page.locator('#speech-more')).toBeVisible();
+ await page.locator('#home-speech .copy-button').click();expect((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n')).toBe(answer);
+ await page.locator('#speech-more').click();
+ await page.locator('.history-question .copy-button').click();expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe(question.trim());
+ await page.locator('.history-answer .copy-button').click();expect((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n')).toBe(answer);
+ await expect(page.locator('#home-messages')).not.toContainText('HERMES');
+});
+
+test('themes are legible across skyboxes, scene is not selectable and sound SVG is centered',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);await instrumentScene(page);
+ chat.jobs.push({id:'palette',question:'Como funciona a flutuação?',answer:'A base magnética mantém o Sato Agent flutuando.',status:'done',created_at:Date.now()/1000});await ready(page);
+ await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});await expect(page.locator('.composer-heading')).toHaveCount(0);
+ await expect(page.locator('#home-chat-status')).toHaveCSS('position','absolute');
+ const selection=await page.evaluate(()=>['#home','#home-scene canvas','.home-nav','#home-speech .speech-text','#last-question-text','#home-input'].map(selector=>getComputedStyle(document.querySelector(selector)).userSelect));expect(selection).toEqual(['none','none','none','text','text','text']);
+ await page.locator('#home-settings-toggle').click();await expect(page.locator('#settings-title')).toHaveText('Configurações');
+ for(const kind of ['black','lab','forest']){
+  await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);
+  for(const theme of ['cyan','mint','violet','amber']){
+   await page.locator(`[name="home-theme"][value="${theme}"]`).check();
+   const ratios=await page.evaluate(()=>{
+    const rgb=value=>value.match(/[\d.]+/g).map(Number),luminance=values=>values.slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+    return ['.speech-card','.history-question','.history-answer','#last-question'].map(selector=>{
+     const el=document.querySelector(selector),text=el.querySelector('p,.speech-text,#last-question-text'),style=getComputedStyle(el),bg=rgb(style.backgroundColor),ink=luminance(rgb(getComputedStyle(text).color));
+     return [0,255].map(scene=>{const back=luminance(bg.map((v,i)=>i<3?v*(bg[3]??1)+scene*(1-(bg[3]??1)):v));return (Math.max(ink,back)+.05)/(Math.min(ink,back)+.05);});
+    }).flat();
+   });expect(Math.min(...ratios)).toBeGreaterThan(4.5);
+  }
+  await page.locator('[name="home-theme"][value="cyan"]').check();await page.locator('#settings-close').click();
+  await page.screenshot({path:testInfo.outputPath(`verified-${kind}.png`)});await page.locator('#home-settings-toggle').click();
+ }
+ await page.locator('[name="home-theme"][value="violet"]').check();
+ for(const active of [false,true]){
+  if(active)await page.locator('#home-sound').click();
+  const offset=await page.locator('#home-sound').evaluate(button=>{const b=button.getBoundingClientRect(),svg=[...button.querySelectorAll('svg')].find(svg=>svg.getBoundingClientRect().width),s=svg.getBoundingClientRect();return Math.hypot(b.x+b.width/2-s.x-s.width/2,b.y+b.height/2-s.y-s.height/2);});expect(offset).toBeLessThan(.5);
+ }
+ await page.screenshot({path:testInfo.outputPath('verified-settings.png')});await page.locator('#settings-close').click();await page.locator('#home-history-toggle').click();await page.screenshot({path:testInfo.outputPath('verified-history.png')});
+ const blur=await page.locator('#home-history').evaluate(el=>getComputedStyle(el).backdropFilter);expect(blur).toBe('blur(1px)');
+ const terrain=await page.evaluate(()=>{const mesh=__companionQA.world.getObjectByName('forest-terrain');const positions=mesh.geometry.getAttribute('position');return {texture:!!mesh.material.map,variation:Math.max(...Array.from({length:positions.count},(_,i)=>positions.getY(i)))-Math.min(...Array.from({length:positions.count},(_,i)=>positions.getY(i))),sky:__companionQA.world.getObjectByName('forest-skybox').visible};});expect(terrain.texture).toBe(true);expect(terrain.variation).toBeGreaterThan(.1);expect(terrain.sky).toBe(true);
+ await page.reload();await expect(page.locator('#home')).toHaveAttribute('data-theme','violet');
 });
