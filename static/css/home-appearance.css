@@ -41,8 +41,12 @@
 .copy-button svg{width:16px;height:16px}
 .copy-button:hover,.copy-button[data-copied=true]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
 .history-turn footer .copy-button{margin-right:auto;margin-left:-6px}
-.thinking-indicator{display:inline-flex;align-items:center;gap:9px;vertical-align:middle;color:var(--accent);font-size:13px;line-height:1.6;white-space:normal}
-.thinking-indicator svg{width:18px;height:18px;animation:thinking-spin 1.1s linear infinite}
+.thinking-indicator{display:inline;vertical-align:middle;color:var(--accent);font-size:13px;line-height:1.6;white-space:normal}
+.thinking-indicator .thinking-dots{display:inline-block;vertical-align:middle;margin-left:5px;width:24px;height:8px;fill:currentColor;stroke:none}
+.thinking-dots circle{animation:thinking-dot 1.2s ease-in-out infinite;transform-origin:center}
+.thinking-dots circle:nth-child(2){animation-delay:.16s}.thinking-dots circle:nth-child(3){animation-delay:.32s}
+.history-more{margin-right:auto;padding:2px 0;font-size:12px;font-weight:800;color:var(--accent)}
+.history-turn p[data-collapsed=true]{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;max-height:8.25em}
 #home .speech-text:has(.thinking-indicator){display:block;max-height:none}
 #home-settings{background:var(--surface)!important;color:var(--ink);padding:24px}
 #home-settings::backdrop{background:#0004;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
@@ -67,5 +71,5 @@
 #home-sound .sound-muted,#home-sound[aria-pressed=true] .sound-waves{display:grid}
 #home-sound .sound-waves,#home-sound[aria-pressed=true] .sound-muted{display:none}
 #home-sound svg{display:block;width:22px;height:22px}
-@keyframes thinking-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.thinking-indicator svg{animation:none}}
+@keyframes thinking-dot{0%,70%,100%{opacity:.3}35%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.thinking-dots circle{animation:none;opacity:1}}

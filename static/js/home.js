@@ -17,7 +17,7 @@ function inputState(){const canSend=authenticated&&!requesting&&!navigating;$('h
 function layoutViewport(){
  const viewport=window.visualViewport;document.documentElement.style.setProperty('--viewport-height',`${viewport?.height||innerHeight}px`);document.documentElement.style.setProperty('--viewport-top',`${viewport?.offsetTop||0}px`);layoutComposer();
 }
-function layoutComposer(){const chat=$('home-chat');if(chat.hidden)return;document.documentElement.style.setProperty('--composer-height',`${chat.offsetHeight+parseFloat(getComputedStyle(chat).bottom)}px`);placeSpeech();}
+function layoutComposer(){const chat=$('home-chat');if(chat.hidden)return;const height=`${chat.offsetHeight+parseFloat(getComputedStyle(chat).bottom)}px`;if(document.documentElement.style.getPropertyValue('--composer-height')!==height){document.documentElement.style.setProperty('--composer-height',height);scene?.resize();}placeSpeech();}
 function placeSpeech(){
  if(!pose)return;
  const {head,body} = pose,root=$('home').getBoundingClientRect(),touch=$('robot-touch');
@@ -28,8 +28,10 @@ function placeSpeech(){
  speech.style.left=`${Math.max(speech.offsetWidth/2+15,Math.min(root.width-speech.offsetWidth/2-15,head.x))}px`;speech.style.top=`${top}px`;
 }
 function say(text,{reaction,sound=true,pending=false}={}){
- if(disposed||!text)return;lastSpoken=text;speechPending=pending;bubble.setText(preview(text,420),'SATO AGENT',text);bubble.copy.hidden=pending;
- if(pending)bubble.body.replaceChildren(thinkingIndicator(text));
+ if(disposed||!text)return;const indicator=pending&&speechPending?bubble.body.querySelector('.thinking-indicator'):null;lastSpoken=text;speechPending=pending;
+ if(indicator){if(indicator.firstChild.nodeValue!==text)indicator.firstChild.nodeValue=text;}
+ else{bubble.setText(preview(text,420),'SATO AGENT',text,{animate:!pending});if(pending)bubble.body.replaceChildren(thinkingIndicator(text));}
+ bubble.copy.hidden=pending;
  $('home-speech').hidden=false;measurePreviews();placeSpeech();if(!pending)scene?.speak(Math.min(6,Math.max(2,text.length/35)));if(reaction)scene?.react(reaction);if(sound)audio.cue(reaction||'hello');
 }
 function measurePreviews(){speechMore.hidden=speechPending||!(lastSpoken.length>420||bubble.body.scrollHeight>bubble.body.clientHeight+2);const q=$('last-question-text');$('question-more').hidden=!(currentQuestion.length>180||q.scrollHeight>q.clientHeight+2);}
@@ -48,20 +50,47 @@ function setSession(data){
  else status('Chat conectado.');
  layoutComposer();
 }
-function showQuestion(question){currentQuestion=question||'';$('last-question').hidden=!question;$('last-question-text').textContent=preview(currentQuestion,180);measurePreviews();layoutComposer();}
+function showQuestion(question){currentQuestion=question||'';$('last-question').hidden=!question;const text=preview(currentQuestion,180);if($('last-question-text').textContent!==text)$('last-question-text').textContent=text;measurePreviews();layoutComposer();}
+const historyEntries=new Map(),historyDays=new Map(),expandedMessages=new Set();
 function historyEntry(job){
- const entry=document.createElement('article');entry.className='history-turn';entry.dataset.job=job.id;
- const question=document.createElement('div');question.className='history-question';const qName=document.createElement('h3'),qText=document.createElement('p');qName.textContent='VOCÊ';qText.textContent=job.question;question.append(qName,qText);
- const answer=document.createElement('div');answer.className='history-answer';const aName=document.createElement('h3'),aText=document.createElement('p');aName.textContent='SATO AGENT';const pending=['queued','running'].includes(job.status);aText.textContent=job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');if(pending){aText.className='history-pending';aText.append(thinkingIndicator(thinkingPhrase(job.id)));}answer.append(aName,aText);
- for(const [node,timestamp]of [[question,job.created_at],[answer,job.updated_at||job.created_at]]){const footer=document.createElement('footer'),time=document.createElement('time');if(node===question||!pending)footer.append(copyMessageButton(()=>node===question?job.question:aText.textContent,node===question?'Copiar pergunta':'Copiar resposta'));if(timestamp){const date=new Date(timestamp*1000);if(!Number.isNaN(date.getTime())){time.dateTime=date.toISOString();time.textContent=date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});footer.append(time);}}if(node===question)footer.append(chatIcon('check-check'));node.append(footer);}
- entry.append(question,answer);return entry;
+ const entry=document.createElement('article');entry.className='history-turn';entry.dataset.job=job.id;entry.views={};
+ for(const role of ['question','answer']){
+  const node=document.createElement('div'),name=document.createElement('h3'),text=document.createElement('p'),footer=document.createElement('footer'),time=document.createElement('time'),more=document.createElement('button');
+  node.className=`history-${role}`;name.textContent=role==='question'?'VOCÊ':'SATO AGENT';more.type='button';more.className='history-more';more.hidden=true;
+  const view={node,text,time,more,fullText:'',pending:false};view.copy=copyMessageButton(()=>view.fullText,role==='question'?'Copiar pergunta':'Copiar resposta');
+  more.addEventListener('click',()=>{const key=`${job.id}:${role}`;if(expandedMessages.has(key))expandedMessages.delete(key);else expandedMessages.add(key);updateHistoryText(view,job.id,role);historyScroll();});
+  footer.append(more,view.copy,time);if(role==='question')footer.append(chatIcon('check-check'));node.append(name,text,footer);entry.append(node);entry.views[role]=view;
+ }
+ return entry;
 }
-let historySignature='';
+function updateHistoryText(view,id,role){
+ const expanded=expandedMessages.has(`${id}:${role}`),limit=role==='question'?180:420;
+ if(view.pending){
+  const phrase=thinkingPhrase(id),indicator=view.text.querySelector('.thinking-indicator');
+  if(indicator){if(indicator.firstChild.nodeValue!==phrase)indicator.firstChild.nodeValue=phrase;}else view.text.replaceChildren(thinkingIndicator(phrase));
+ }else{
+  const value=expanded?view.fullText:preview(view.fullText.split('\n').slice(0,5).join('\n'),limit);if(view.text.textContent!==value)view.text.textContent=value;
+ }
+ view.text.classList.toggle('history-pending',view.pending);view.text.dataset.collapsed=String(!expanded&&!view.pending);view.copy.hidden=view.pending;
+ const label=expanded?'Ver menos':'Ver mais';if(view.more.textContent!==label)view.more.textContent=label;view.more.setAttribute('aria-expanded',String(expanded));
+ view.more.hidden=view.pending||!(expanded||view.fullText.length>limit||view.fullText.split('\n').length>5||view.text.scrollHeight>view.text.clientHeight+2);
+}
+function updateHistoryEntry(entry,job){
+ for(const role of ['question','answer']){
+  const view=entry.views[role];view.pending=role==='answer'&&['queued','running'].includes(job.status);view.fullText=role==='question'?job.question||'':job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');updateHistoryText(view,job.id,role);
+  // Pending updates must not change the clock or recreate footer icons.
+  const timestamp=role==='question'||view.pending?job.created_at:job.updated_at||job.created_at;
+  if(view.timestamp!==timestamp){view.timestamp=timestamp;const date=new Date(timestamp*1000);view.time.hidden=!timestamp||Number.isNaN(date.getTime());if(!view.time.hidden){view.time.dateTime=date.toISOString();view.time.textContent=date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}}
+ }
+}
 function renderHistory(){
- const log=$('home-messages'),signature=JSON.stringify(jobs.map(j=>[j.id,j.question,j.status,j.answer,j.error,['queued','running'].includes(j.status)?thinkingPhrase(j.id):'']));if(signature===historySignature)return;historySignature=signature;
+ const log=$('home-messages');
  const atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<40,scrollTop=log.scrollTop,anchor=[...log.querySelectorAll('.history-turn')].find(el=>el.offsetTop+el.offsetHeight>scrollTop),offset=anchor?scrollTop-anchor.offsetTop:0;
- const entries=[];let previousDay='';for(const job of jobs){const date=new Date((job.created_at||0)*1000),day=job.created_at&&!Number.isNaN(date.getTime())?date.toLocaleDateString('pt-BR',{day:'numeric',month:'long'}):'';if(day&&day!==previousDay){const label=document.createElement('p');label.className='history-day';label.textContent=day;entries.push(label);previousDay=day;}entries.push(historyEntry(job));}
- log.replaceChildren(...entries);if(!jobs.length){const empty=document.createElement('p');empty.className='history-empty';empty.textContent='Sua conversa aparece aqui.';log.append(empty);}if(atEnd)log.scrollTop=log.scrollHeight;else{const retained=[...log.querySelectorAll('.history-turn')].find(el=>el.dataset.job===anchor?.dataset.job);log.scrollTop=retained?retained.offsetTop+offset:scrollTop;}historyScroll();
+ const entries=[],keep=new Set();let previousDay='';for(const job of jobs){const date=new Date((job.created_at||0)*1000),day=job.created_at&&!Number.isNaN(date.getTime())?date.toLocaleDateString('pt-BR',{day:'numeric',month:'long'}):'';if(day&&day!==previousDay){if(!historyDays.has(day)){const label=document.createElement('p');label.className='history-day';label.textContent=day;historyDays.set(day,label);}entries.push(historyDays.get(day));previousDay=day;}if(!historyEntries.has(job.id))historyEntries.set(job.id,historyEntry(job));const entry=historyEntries.get(job.id);updateHistoryEntry(entry,job);entries.push(entry);keep.add(job.id);}
+ if(!jobs.length){const empty=log.querySelector('.history-empty')||document.createElement('p');empty.className='history-empty';empty.textContent='Sua conversa aparece aqui.';entries.push(empty);}
+ let cursor=log.firstChild;for(const entry of entries){if(entry===cursor)cursor=cursor.nextSibling;else log.insertBefore(entry,cursor);}while(cursor){const next=cursor.nextSibling;cursor.remove();cursor=next;}
+ for(const id of historyEntries.keys())if(!keep.has(id))historyEntries.delete(id);
+ if(atEnd)log.scrollTop=log.scrollHeight;else{const retained=historyEntries.get(anchor?.dataset.job);log.scrollTop=retained?retained.offsetTop+offset:scrollTop;}historyScroll();
 }
 function showLatest(){
  renderHistory();const latest=jobs.at(-1);if(!latest)return;
@@ -79,7 +108,7 @@ async function refresh(){
 }
 async function initializeChat(){try{setSession(await api('session'));if(authenticated)await refresh();}catch{status('Não consegui conectar ao chat. Recarregue para tentar novamente.',true);}}
 function historyScroll(){const log=$('home-messages');$('history-bottom').hidden=log.scrollHeight-log.scrollTop-log.clientHeight<120;}
-function historyOpen(open,role){$('home-history').hidden=!open;$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');layoutComposer();if(open){renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else $('home-history-toggle').focus({preventScroll:true});}
+function historyOpen(open,role){$('home-history').hidden=!open;$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');layoutComposer();if(open){if(role&&jobs.length)expandedMessages.add(`${jobs.at(-1).id}:${role}`);renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else $('home-history-toggle').focus({preventScroll:true});}
 speechMore.addEventListener('click',()=>historyOpen(true,'answer'));$('question-more').addEventListener('click',()=>historyOpen(true,'question'));
 $('home-messages').addEventListener('scroll',historyScroll);$('history-bottom').addEventListener('click',()=>{$('home-messages').scrollTo({top:$('home-messages').scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
 $('home-history-toggle').addEventListener('click',()=>historyOpen($('home-history').hidden));$('history-close').addEventListener('click',()=>historyOpen(false));document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('home-history').hidden)historyOpen(false);});
@@ -104,7 +133,7 @@ $('robot-touch').addEventListener('click',()=>{if(navigating)return;const reacti
 $('home-sound').addEventListener('click',()=>audio.toggle());
 const settings=$('home-settings');let settingsRevision=0;
 $('home-settings-toggle').addEventListener('click',()=>settings.showModal());$('settings-close').addEventListener('click',()=>settings.close());settings.addEventListener('click',event=>{if(event.target!==settings)return;const r=settings.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)settings.close();});settings.addEventListener('close',()=>{$('home-settings-toggle').focus({preventScroll:true});});
-async function changeScenario(kind){const revision=++settingsRevision;$('settings-status').textContent='Carregando cenário…';try{if(!scene)throw new Error('O cenário precisa de WebGL 2.');const applied=await scene.setScenario(kind);if(applied&&revision===settingsRevision){try{localStorage.setItem('sato-home-scenario',kind);}catch{}$('settings-status').textContent='';}}catch(error){if(revision===settingsRevision){$('settings-status').textContent=error.message;const current=$('home-scene').dataset.scenario||'black';document.querySelector(`[name="home-scenario"][value="${current}"]`).checked=true;}}}
+async function changeScenario(kind,options){const revision=++settingsRevision;$('settings-status').textContent='Carregando cenário…';try{if(!scene)throw new Error('O cenário precisa de WebGL 2.');const applied=await scene.setScenario(kind,options);if(applied&&revision===settingsRevision){try{localStorage.setItem('sato-home-scenario',kind);}catch{}$('settings-status').textContent='';}}catch(error){if(revision===settingsRevision){$('settings-status').textContent=error.message;const current=$('home-scene').dataset.scenario||'black';document.querySelector(`[name="home-scenario"][value="${current}"]`).checked=true;}}}
 document.querySelectorAll('[name="home-scenario"]').forEach(input=>input.addEventListener('change',()=>changeScenario(input.value)));
 function changeTheme(theme){if(!['cyan','mint','violet','amber'].includes(theme))return;$('home').dataset.theme=theme;document.querySelector(`[name="home-theme"][value="${theme}"]`).checked=true;try{localStorage.setItem('sato-home-theme',theme);}catch{}}
 document.querySelectorAll('[name="home-theme"]').forEach(input=>input.addEventListener('change',()=>changeTheme(input.value)));
@@ -119,11 +148,13 @@ new ResizeObserver(layoutComposer).observe($('home-chat'));new ResizeObserver(()
 function progress(value,text){$('home-progress').value=value;$('home-loading-stage').textContent=text;}
 async function start(){
  welcomeUntil=Infinity;const chatReady=initializeChat();
- try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onArrival(stage){if(stage==='ouch')say('Ouch! Acho que a entrega foi um pouco rápida…',{sound:false});}});}
+ try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onScenario:kind=>audio.setScenario(kind),onArrival(stage){if(stage==='ouch')say('Ouch! Acho que a entrega foi um pouco rápida…',{sound:false});}});
+  let saved;try{saved=localStorage.getItem('sato-home-scenario');}catch{}if(['lab','forest'].includes(saved)){progress(85,'Preparando cenário…');document.querySelector(`[name="home-scenario"][value="${saved}"]`).checked=true;await changeScenario(saved,{immediate:true});}
+ }
  catch(error){console.warn('Companion scene unavailable',error);$('home-fallback').hidden=false;}
  if(disposed)return;progress(100,'Pronto!');$('home-chat').hidden=false;layoutComposer();
- await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));$('home-loading').hidden=true;
- if(scene){let saved;try{saved=localStorage.getItem('sato-home-scenario');}catch{}if(['lab','forest'].includes(saved)){document.querySelector(`[name="home-scenario"][value="${saved}"]`).checked=true;changeScenario(saved);}await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
+ await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));$('home-loading').hidden=true;$('home').dataset.sceneReady='true';
+ if(scene){await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
  await chatReady;if(disposed)return;document.body.dataset.ready='true';welcomeUntil=Date.now()+3500;say('Hello, im a Sato Agent',{reaction:'hello'});
  setTimeout(()=>{if(!disposed&&jobs.length)showLatest();},3550);
 }

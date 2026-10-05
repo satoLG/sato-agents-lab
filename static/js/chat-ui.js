@@ -32,5 +32,8 @@ export function thinkingPhrase(id){
 }
 export function forgetThinking(id){pending.delete(id);}
 export function thinkingIndicator(text){
- const span=document.createElement('span');span.className='thinking-indicator';span.append(chatIcon('loader-circle'),document.createTextNode(text));return span;
+ const span=document.createElement('span');span.className='thinking-indicator';
+ const dots=document.createElementNS('http://www.w3.org/2000/svg','svg');dots.setAttribute('viewBox','0 0 24 8');dots.setAttribute('aria-hidden','true');dots.classList.add('thinking-dots');
+ for(let i=0;i<3;i++){const dot=document.createElementNS(dots.namespaceURI,'circle');dot.setAttribute('cx',String(4+i*8));dot.setAttribute('cy','4');dot.setAttribute('r','2');dots.append(dot);}
+ span.append(document.createTextNode(text),dots);return span;
 }

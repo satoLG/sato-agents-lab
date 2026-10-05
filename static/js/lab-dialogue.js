@@ -5,11 +5,11 @@ export function createSpeechBubble({role='robot',label='Resposta do robô'}={}){
  const card=document.createElement('div');card.className='speech-card';const title=document.createElement('strong'),body=document.createElement('div');body.className='speech-text';body.tabIndex=0;card.append(title,body);el.append(card);
  const actions=document.createElement('div');actions.className='bubble-actions';let fullText='';const copy=copyMessageButton(()=>fullText);actions.append(copy);card.append(actions);
  let animation;
- return {el,card,body,actions,copy,setText(text,name='SATO AGENT',completeText=text){
+ return {el,card,body,actions,copy,setText(text,name='SATO AGENT',completeText=text,{animate=true}={}){
   fullText=completeText;
   if(body.textContent===text&&title.textContent===name)return;
   title.textContent=name;body.textContent=text;body.scrollTop=0;animation?.cancel();
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)animation=card.animate([{opacity:0,transform:'translateY(8px) scale(.84) rotate(-1.5deg)'},{opacity:1,transform:'translateY(-2px) scale(1.025) rotate(.4deg)',offset:.65},{opacity:1,transform:'translateY(0) scale(1) rotate(0)'}],{duration:420,easing:'cubic-bezier(.22,.7,.3,1)'});
+  if(animate&&!matchMedia('(prefers-reduced-motion: reduce)').matches)animation=card.animate([{opacity:0,transform:'translateY(8px) scale(.84) rotate(-1.5deg)'},{opacity:1,transform:'translateY(-2px) scale(1.025) rotate(.4deg)',offset:.65},{opacity:1,transform:'translateY(0) scale(1) rotate(0)'}],{duration:420,easing:'cubic-bezier(.22,.7,.3,1)'});
  }};
 }
 
