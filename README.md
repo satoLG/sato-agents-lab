@@ -31,6 +31,10 @@ respostas têm uma prévia de até cinco linhas/420 caracteres, e perguntas de
 duas linhas/180 caracteres. **Ver mais** abre a mensagem integral no histórico.
 Cada balão tem um botão para copiar a mensagem completa, incluindo as prévias
 cortadas. Somente o conteúdo do chat e os campos de texto podem ser selecionados.
+No histórico, mensagens longas também começam resumidas; **Ver mais** expande
+somente o balão escolhido. A expansão permanece ao atualizar ou reabrir o
+histórico nesta página. Ícones, horários e balões já respondidos são preservados
+durante a espera por outra resposta.
 O histórico usa blur de 1 px, mantendo a cena visível. Os botões usam SVGs oficiais do
 Lucide, servidos localmente; licença e revisão em `static/icons/README.md`.
 O layout acompanha o viewport disponível quando o teclado móvel abre e respeita
@@ -42,11 +46,18 @@ Todos os fundos têm desenhos vetoriais suaves de robôs. O laboratório tem um
 skybox cinza claro; a floresta tem céu azul com nuvens e terreno irregular com
 a textura local de solo. Os cenários são carregados uma vez, sob demanda, no
 mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. A cena
+preenche todo o viewport, inclusive atrás do chat. O cenário salvo é preparado
+durante o loading e revelado suavemente. Com o som ativo, laboratório e floresta
+tocam os mesmos loops locais de equipamentos e natureza usados no lab.
+Mudanças de altura do chat alteram o enquadramento sem redimensionar o canvas;
+resizes reais são agrupados no frame que já desenha a cena.
 limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
-O Sato Agent da raiz tem braços lisos, sem mãos, pernas ou antena, e uma base
-magnética com flutuação leve no idle. Os braços ficam recolhidos até a carcaça
-inteira sair pela boca aberta do tubo. A óptica é compartilhada com o lab.
-Durante a espera, o chat alterna frases e exibe um SVG Lucide animado; o indicador
+O Sato Agent da raiz tem corpo esférico com três linhas de encaixe, olho recuado
+em uma área mecânica escura e braços lisos, sem mãos ou pernas. Corpo e braços
+mantêm suas dimensões durante os gestos. Uma pequena antena gira e pisca na cor
+do olho; a base magnética menor emite três anéis que descem, encolhem e somem.
+Os braços ficam recolhidos até a carcaça inteira sair pela boca aberta do tubo.
+Durante a espera, o chat alterna frases e exibe três pontos SVG animados ao fim do texto; o indicador
 some quando a resposta ou o erro chega. Movimento reduzido desativa a animação.
 
 A raiz usa a mesma autenticação, fila persistente e processo Hermes isolado do

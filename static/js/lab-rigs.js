@@ -19,11 +19,27 @@ export function createRigFactory(art) {
     const rig = base('robot');rig.core=core;rig.floating=floating;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
     const signal=core?'#ffad4a':'#65d5ff';
     const shell=mat('#e3e8df',.42,.3),mechanism=mat('#344751',.82,.27),fingerMetal=mat('#b8c7cd',.85,.27);
-    sphere(rig.spine, .54, shell, 0, 0, 0, [1.08, core?1.55:.96, .98]);
-    ring(rig.spine, .535, .043, '#61736c', 0, 0, 0, true);
-    ring(rig.spine, .53, .028, '#81928a', 0, 0, 0);
+    if(floating){
+      // Cut the optic aperture out of a sphere; the lens sits inside the hull.
+      const hull=mesh(rig.spine,geo('companion-spherical-hull',()=>{
+        const profile=[];for(let i=0;i<=64;i++){const a=.60+(Math.PI-.60)*i/64;profile.push(new T.Vector2(.54*Math.sin(a),.54*Math.cos(a)));}
+        return new T.LatheGeometry(profile.reverse(),64).rotateX(Math.PI/2);
+      }),shell);hull.name='spherical-hull';hull.userData.dynamic=true;
+      const seamFinish=mat('#36464c',.7,.4);
+      for(const [i,angle]of [Math.PI/2,7*Math.PI/6,11*Math.PI/6].entries()){
+        const points=[];for(let j=0;j<=64;j++){const a=.60+(Math.PI-.60)*j/64;points.push(new T.Vector3(.54*Math.sin(a)*Math.cos(angle),.54*Math.sin(a)*Math.sin(angle),.54*Math.cos(a)));}
+        const seam=mesh(rig.spine,geo(`companion-seam-${i}`,()=>new T.TubeGeometry(new T.CatmullRomCurve3(points),64,.006,6,false)),seamFinish);seam.name=`shell-seam-${i}`;seam.userData.dynamic=true;
+      }
+      rig.head.position.z=-.215;
+    }else{
+      sphere(rig.spine, .54, shell, 0, 0, 0, [1.08, core?1.55:.96, .98]);
+      ring(rig.spine, .535, .043, '#61736c', 0, 0, 0, true);
+      ring(rig.spine, .53, .028, '#81928a', 0, 0, 0);
+    }
     // Independent gimbal inside the shell keeps eye tracking separate from the torso.
-    sphere(rig.head, .31, '#253d3c', 0, .015, .445, [1.2, 1, .5]);
+    if(floating){
+      const backing=mesh(rig.spine,geo('companion-optic-backing',()=>new T.CircleGeometry(.306,48)),mat('#0c151d',.65,.3),0,.015,.393);backing.name='optic-recess';backing.userData.dynamic=true;
+    }else sphere(rig.head, .31, '#253d3c', 0, .015, .445, [1.2, 1, .5]);
     ring(rig.head, .18, .015, core?new T.MeshBasicMaterial({color:signal,toneMapped:false}):opticRim, 0, .015, .6);
     const pupilMaterial = new T.MeshBasicMaterial({color:core?'#251909':'#061925',toneMapped:false});
     rig.pupil = mesh(rig.head,geo('optic-disc',()=>new T.CircleGeometry(.043,24)),pupilMaterial,0,.015,.611,false);
@@ -50,12 +66,16 @@ export function createRigFactory(art) {
     rig.eyes.push(rig.pupil);
     // A bevelled white socket sits ahead of the shutter and hides its outer
     // edges. Leaves rotate behind that socket, like a camera diaphragm.
-    mesh(rig.head,geo('optic-white-socket',()=>{
-      const radii=[.183,.197,.223,.313,.34],depths=[.038,.043,.039,.036,-.13],positions=[],indices=[],segments=40;
+    const socket=mesh(floating?rig.spine:rig.head,geo(floating?'companion-mechanical-socket':'optic-white-socket',()=>{
+      const radii=floating?[.183,.197,.223,.293,.306]:[.183,.197,.223,.313,.34],depths=floating?[.038,.043,.029,.017,-.002]:[.038,.043,.039,.036,-.13],positions=[],indices=[],segments=40;
       for(let band=0;band<radii.length;band++)for(let i=0;i<=segments;i++){const a=i*Math.PI*2/segments;positions.push(Math.cos(a)*radii[band],Math.sin(a)*radii[band],depths[band]);}
       for(let band=0;band<radii.length-1;band++)for(let i=0;i<segments;i++){const a=band*(segments+1)+i,b=a+1,c=a+segments+1,d=c+1;indices.push(a,c,b,b,c,d);}
       const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return g;
-    }),shell,0,.015,.61).name='optic-white-socket';
+    }),floating?mechanism:shell,0,.015,floating?.42:.61);socket.name=floating?'optic-mechanical-socket':'optic-white-socket';socket.userData.dynamic=floating;
+    if(floating){
+      ring(rig.spine,.196,.009,mat('#b8c7cd',.85,.23),0,.015,.465);
+      for(let i=0;i<8;i++){const a=i*Math.PI/4; sphere(rig.spine,.012,mat('#9aa8ae',.9,.25),Math.cos(a)*.262,.015+Math.sin(a)*.262,.445);}
+    }
     const shutterGeometry=geo('optic-iris-leaf',()=>{
       const shape=new T.Shape();shape.moveTo(-.19,.015);shape.lineTo(-.06,-.135);shape.lineTo(.08,-.09);shape.lineTo(.09,-.015);shape.closePath();return new T.ShapeGeometry(shape);
     });
@@ -66,9 +86,9 @@ export function createRigFactory(art) {
     setRigBlink(rig,0);
     // Exposed service hardware: cooling ribs, power rails, shell seam and bolts.
     for(const side of [-1,1]){
-      box(rig.spine,.14,.38,.2,mat('#24333c',.72,.3),side*.47,.04,-.27);
-      for(let i=0;i<5;i++)box(rig.spine,.15,.022,.23,mat('#9caeb6',.8,.25),side*.47,-.1+i*.055,-.27);
-      rod(rig.spine,[side*.38,-.23,.35],[side*.4,.22,.34],.012,glow(core?signal:'#3eafd0'));
+      if(!floating){box(rig.spine,.14,.38,.2,mat('#24333c',.72,.3),side*.47,.04,-.27);
+      for(let i=0;i<5;i++)box(rig.spine,.15,.022,.23,mat('#9caeb6',.8,.25),side*.47,-.1+i*.055,-.27);}
+      if(!floating)rod(rig.spine,[side*.38,-.23,.35],[side*.4,.22,.34],.012,glow(core?signal:'#3eafd0'));
       for(const y of [-.25,.26])sphere(rig.spine,.025,mat('#31404a',.9,.2),side*.32,y,.4);
     }
     box(rig.spine,.23,.12,.035,mat('#26333e',.7,.25),0,-.34,.4);
@@ -134,10 +154,14 @@ export function createRigFactory(art) {
       rig.legs.push({upper: leg, lower: knee, ankle, toe, side});
     }
     if(floating){
-      const base=sphere(rig.spine,.32,mechanism,0,-.53,0,[1,.22,1]);base.name='magnetic-core';
-      ring(rig.spine,.28,.015,opticRim,0,-.59,0,true).name='magnetic-emitter';
-      rig.field=ring(rig.hips,.34,.009,new T.MeshBasicMaterial({color:signal,transparent:true,opacity:.3,depthWrite:false,toneMapped:false}),0,-.28,0,true);
-      rig.field.name='magnetic-field';
+      const base=sphere(rig.spine,.20,mechanism,0,-.535,0,[1,.17,1]);base.name='magnetic-core';base.userData.dynamic=true;
+      const emitter=ring(rig.spine,.173,.009,opticRim,0,-.572,0,true);emitter.name='magnetic-emitter';emitter.userData.dynamic=true;
+      rig.field=new T.Group();rig.field.name='magnetic-field';rig.spine.add(rig.field);rig.flux=[];
+      for(let i=0;i<3;i++){const pulse=ring(rig.field,.174,.006,new T.MeshBasicMaterial({color:signal,transparent:true,opacity:0,depthWrite:false,toneMapped:false}),0,-.60,0,true);pulse.name=`magnetic-pulse-${i}`;rig.flux.push(pulse);}
+      rig.antenna=bone(rig.spine,'antenna-swivel',.35,.32,-.08);
+      const blade=mesh(rig.antenna,geo('smooth-flipper'),shell);blade.scale.set(.42,.40,.24);blade.rotation.z=Math.PI;blade.name='antenna-blade';
+      const tipFinish=new T.MeshStandardMaterial({color:signal,emissive:signal,emissiveIntensity:.25,roughness:.3});
+      rig.indicator=sphere(rig.antenna,.023,tipFinish,0,.298,0);rig.indicator.name='antenna-tip';rig.indicator.userData.dynamic=true;
     }else{
       rod(rig.spine, [.15, .43, -.12], [.22, .75, -.12], .022, mat('#5a7264'));
       rig.indicator = sphere(rig.spine, .06, glow('#779d8a'), .22, .75, -.12);
@@ -172,10 +196,20 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  rig.spine.rotation.y=stride*.045*move+Math.sin(phase*.55)*.025*idle;
  rig.spine.rotation.z=-rig.hips.rotation.z*.65;
  const glance=Math.sin(phase*.45)*.18+Math.sin(phase*.17)*.1;
- rig.head.rotation.y=damp(rig.head.rotation.y,lookYaw*rig.attention+glance*idle*(1-rig.attention),dt);
- rig.head.rotation.x=damp(rig.head.rotation.x,talk?Math.sin(phase*5.2)*.055:rig.work*.06+Math.sin(phase*.8)*.025,dt);
+ if(rig.floating)rig.head.rotation.set(0,0,0);
+ else{
+  rig.head.rotation.y=damp(rig.head.rotation.y,lookYaw*rig.attention+glance*idle*(1-rig.attention),dt);
+  rig.head.rotation.x=damp(rig.head.rotation.x,talk?Math.sin(phase*5.2)*.055:rig.work*.06+Math.sin(phase*.8)*.025,dt);
+ }
  rig.pupil.position.x=damp(rig.pupil.position.x,T.MathUtils.clamp((rig.attention?lookYaw:glance)*.045,-.012,.012),dt);
  rig.opticMaterial.opacity=talk?.7+Math.sin(phase*12)*.18:.62;
+ if(rig.floating){
+  rig.antenna.rotation.y=reduced?0:t*.55;rig.antenna.rotation.z=-.18;
+  const blinkAt=t%5.8,flash=!reduced&&(blinkAt<.16||(blinkAt>.34&&blinkAt<.50));rig.indicator.material.emissiveIntensity=flash?3:.18;
+  for(const [i,pulse]of rig.flux.entries()){
+   const p=reduced?(i+.5)/3:(t/1.7+i/3)%1;pulse.position.y=-.60-p*.50;pulse.scale.setScalar(1-.84*p);pulse.material.opacity=.65*Math.sin(Math.min(1,p/.12)*Math.PI/2)*Math.pow(1-p,1.4);
+  }
+ }
  for(let i=0;i<rig.arms.length;i++){
   const {upper,lower,wrist,fingers,thumb,side}=rig.arms[i],wave=!reduced&&t<rig.greeting&&i===1?Math.sin(Math.min(1,rig.greeting-t)*Math.PI/2):0;
   const tap=Math.sin(phase*(i?5.6:4.4)+i*1.8);

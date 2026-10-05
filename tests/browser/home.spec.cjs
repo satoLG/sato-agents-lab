@@ -24,7 +24,8 @@ test('root greets with one robot, real chat protocol and a glass history',async(
  expect(await page.locator('#home').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png')});
  await page.locator('#home-input').fill('O que a VM sabe sobre MCP?');await page.locator('#home-send').click();
- await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-indicator svg use')).toHaveAttribute('href',/#loader-circle$/);
+ await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-dots circle')).toHaveCount(3);
+ expect(await page.locator('#home-speech .thinking-indicator').evaluate(el=>el.lastChild.classList.contains('thinking-dots'))).toBe(true);
  expect(chat.submitted).toEqual({robot_id:'guide:hermes',question:'O que a VM sabe sobre MCP?'});expect(chat.csrfSeen).toBe(true);
  chat.jobs[0].status='done';chat.jobs[0].answer='MCP conecta o Hermes aos serviços configurados na VM.';
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});
@@ -53,6 +54,8 @@ test('touch reactions differ and the composer stays usable in a short viewport',
 });
 
 test('robot announces each destination before navigation',async({page})=>{
+ // Exercise the home redirect independently of the destination's asset loading.
+ for(const path of ['/dashboard','/lab'])await page.route(`**${path}`,route=>route.fulfill({contentType:'text/html',body:`<title>${path}</title>`}));
  await chatRoutes(page);await ready(page);
  for(const [path,name] of [['/dashboard','dashboard'],['/lab','laboratório']]){
   await page.locator(`.home-nav a[href="${path}"]`).click();await expect(page.locator('#home-speech')).toContainText(`Vou te levar ao ${name}`);expect(new URL(page.url()).pathname).toBe('/');await expect(page).toHaveURL(new RegExp(`${path}$`),{timeout:15000});if(path==='/dashboard')await ready(page);
@@ -177,4 +180,59 @@ test('themes are legible across skyboxes, scene is not selectable and sound SVG 
  const blur=await page.locator('#home-history').evaluate(el=>getComputedStyle(el).backdropFilter);expect(blur).toBe('blur(1px)');
  const terrain=await page.evaluate(()=>{const mesh=__companionQA.world.getObjectByName('forest-terrain');const positions=mesh.geometry.getAttribute('position');return {texture:!!mesh.material.map,variation:Math.max(...Array.from({length:positions.count},(_,i)=>positions.getY(i)))-Math.min(...Array.from({length:positions.count},(_,i)=>positions.getY(i))),sky:__companionQA.world.getObjectByName('forest-skybox').visible};});expect(terrain.texture).toBe(true);expect(terrain.variation).toBeGreaterThan(.1);expect(terrain.sky).toBe(true);
  await page.reload();await expect(page.locator('#home')).toHaveAttribute('data-theme','violet');
+});
+
+test('history collapses long messages by default and keeps completed footers during thinking',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);
+ const answer='Detalhes importantes desta resposta.\n'.repeat(50),question='Uma pergunta longa para o histórico. '.repeat(20);
+ chat.jobs.push({id:'completed',question,answer,status:'done',created_at:Date.now()/1000},{id:'pending',question:'Outra pergunta',status:'running',created_at:Date.now()/1000});
+ await ready(page);await page.locator('#home-history-toggle').click();const completed=page.locator('[data-job="completed"]');
+ for(const role of ['question','answer']){await expect(completed.locator(`.history-${role} .history-more`)).toHaveText('Ver mais');expect((await completed.locator(`.history-${role} p`).innerText()).length).toBeLessThan(role==='question'?question.length:answer.length);}
+ await page.screenshot({path:testInfo.outputPath('history-collapsed.png')});
+ await completed.locator('.history-answer .history-more').click();await expect(completed.locator('.history-answer p')).toHaveText(answer);
+ await page.evaluate(()=>{const article=document.querySelector('[data-job="completed"]');window.__retainedFooterNodes=[...article.querySelectorAll('footer,footer *')];window.__completedChanges=[];window.__completedObserver=new MutationObserver(records=>__completedChanges.push(...records.map(record=>record.type)));__completedObserver.observe(article,{childList:true,subtree:true});const now=Date.now;Date.now=()=>now()+10000;});
+ await page.waitForTimeout(2200);
+ expect(await page.evaluate(()=>__retainedFooterNodes.every(node=>node.isConnected)&&__completedChanges.length===0)).toBe(true);await expect(completed.locator('.history-answer p')).toHaveText(answer);
+ chat.jobs[1].status='done';chat.jobs[1].answer='A segunda resposta chegou.';await expect(page.locator('[data-job="pending"] .history-answer p')).toHaveText(chat.jobs[1].answer,{timeout:10000});
+ expect(await page.evaluate(()=>__retainedFooterNodes.every(node=>node.isConnected)&&__completedChanges.length===0)).toBe(true);
+ await page.locator('#history-close').click();await page.locator('#home-history-toggle').click();await expect(completed.locator('.history-answer p')).toHaveText(answer);
+ await completed.locator('.history-answer .history-more').click();await expect(completed.locator('.history-answer .history-more')).toHaveText('Ver mais');
+ await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#home-history-toggle').click();await expect(completed.locator('.history-answer .history-more')).toHaveText('Ver mais');
+});
+
+test('full viewport backgrounds keep one canvas and resize only inside a rendered frame',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);await instrumentScene(page);await ready(page);
+ await page.evaluate(()=>{window.__canvas=document.querySelector('#home-scene canvas');window.__drawingEvents=[];const renderer=__companionQA.renderer;for(const name of ['setSize','render']){const original=renderer[name].bind(renderer);renderer[name]=(...args)=>{__drawingEvents.push(name);return original(...args);};}});
+ await page.locator('#home-input').fill('Uma pergunta para variar a altura do chat.');await page.locator('#home-send').click();await page.waitForTimeout(350);
+ expect(await page.evaluate(()=>__drawingEvents.filter(event=>event==='setSize').length)).toBe(0);
+ await page.setViewportSize({width:393,height:640});await page.waitForTimeout(300);
+ const events=await page.evaluate(()=>__drawingEvents);expect(events.filter(event=>event==='setSize').length).toBe(1);expect(events[events.indexOf('setSize')+1]).toBe('render');
+ for(const kind of ['lab','forest']){
+  await page.locator('#home-settings-toggle').click();await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();
+  const background=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {same:__canvas===renderer.domElement,height:renderer.domElement.getBoundingClientRect().height,pixel:[...pixel]};});expect(background.same).toBe(true);expect(background.height).toBe(640);expect(background.pixel.slice(0,3).reduce((sum,n)=>sum+n,0)).toBeGreaterThan(100);
+  await page.screenshot({path:testInfo.outputPath(`full-background-${kind}.png`)});
+ }
+ await page.route('**/js/home-environments.js',async route=>{await new Promise(resolve=>setTimeout(resolve,600));await route.continue();});await page.reload();await expect(page.locator('#home-loading')).toBeVisible();await expect(page.locator('#home-scene')).toHaveCSS('opacity','0');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home')).toHaveAttribute('data-scenario','forest');
+});
+
+test('robot touch never stretches the sphere or arms',async({browser},testInfo)=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  await chatRoutes(page);await instrumentScene(page);await ready(page);
+  await page.locator('#robot-touch').click();await page.waitForTimeout(400);await page.locator('#robot-touch').click();await page.waitForTimeout(650);
+  const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(1);expect(scale[1]).toBeCloseTo(1);expect(scale[2]).toBeCloseTo(.56);}
+  await page.screenshot({path:testInfo.outputPath('rigid-boop.png')});
+  await page.locator('#robot-touch').click();await page.waitForTimeout(2100);await page.screenshot({path:testInfo.outputPath('robot-back.png')});
+ }finally{await context.close();}
+});
+
+test('ambient audio follows the scenario, mutes and resumes without duplicate loops',async({page})=>{
+ await chatRoutes(page);await page.route('**/js/home-audio.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {cue(','window.__homeAudioQA={loops,buffers,context:()=>context};return {cue(')});});await ready(page);await page.locator('#home-settings-toggle').click();
+ for(const [scenario,kind]of [['lab','hum'],['forest','nature']]){
+  await page.locator(`[name="home-scenario"][value="${scenario}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',scenario);await page.waitForFunction(kind=>__homeAudioQA.loops.has(kind),kind);
+  expect(await page.evaluate(kind=>{const {loops,context}=__homeAudioQA,voice=loops.get(kind);return {size:loops.size,loop:voice.source.loop,state:context().state,buffer:!!voice.source.buffer};},kind)).toEqual({size:1,loop:true,state:'running',buffer:true});
+ }
+ await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','true');await page.locator('#home-sound').click();await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','false');expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(0);
+ await page.locator('#home-sound').click();await page.waitForFunction(()=>__homeAudioQA.loops.has('nature'));expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(1);
+ await page.locator('[name="home-scenario"][value="black"]').check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(0);
 });

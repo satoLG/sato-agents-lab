@@ -64,13 +64,23 @@ test('jointed hands and toes survive batching and reuse meshes through animation
  }
 });
 
-test('floating companion has solid smooth arms, no legs or antenna and clears the tube',()=>{
- const rig=robotFactory().robot({floating:true});assert.equal(rig.legs.length,0);assert.equal(rig.indicator,undefined);
+test('floating companion has a recessed optic, spherical shell, rigid arms and a rotating antenna',()=>{
+ const rig=robotFactory().robot({floating:true});assert.equal(rig.legs.length,0);assert.equal(rig.indicator.name,'antenna-tip');assert.equal(rig.antenna.name,'antenna-swivel');
+ const hull=rig.root.getObjectByName('spherical-hull'),vertices=hull.geometry.getAttribute('position');
+ for(let i=0;i<vertices.count;i++)assert.ok(Math.abs(Math.hypot(vertices.getX(i),vertices.getY(i),vertices.getZ(i))-.54)<1e-6);
+ const normals=hull.geometry.getAttribute('normal');for(let i=0;i<vertices.count;i++)assert.ok(new T.Vector3().fromBufferAttribute(vertices,i).dot(new T.Vector3().fromBufferAttribute(normals,i))>0);
+ assert.equal(rig.head.position.z,-.215);assert.ok(rig.pupil.position.z+rig.head.position.z<.54);
+ assert.ok(rig.root.getObjectByName('optic-mechanical-socket'));for(let i=0;i<3;i++)assert.ok(rig.root.getObjectByName(`shell-seam-${i}`));
+ for(const amount of [0,.5,1]){setRigBlink(rig,amount);for(const {mesh:lid}of rig.lids){lid.updateMatrix();const positions=lid.geometry.getAttribute('position');for(let i=0;i<positions.count;i++){const p=new T.Vector3().fromBufferAttribute(positions,i).applyMatrix4(lid.matrix).add(rig.head.position);assert.ok(p.length()<.54,'shutter must stay inside the spherical hull');}}}
  assert.ok(rig.root.getObjectByName('magnetic-core'));assert.ok(rig.root.getObjectByName('magnetic-emitter'));assert.ok(rig.root.getObjectByName('magnetic-field'));
  for(const arm of rig.arms){assert.equal(arm.upper.children.filter(o=>o.isMesh).length,1);assert.equal(arm.fingers,undefined);assert.equal(arm.wrist,undefined);}
  const meshes=[];rig.root.traverse(o=>{if(o.isMesh)meshes.push([o,o.geometry]);});
+ const rigid=[hull,...rig.arms.map(arm=>arm.upper.getObjectByName('smooth-arm'))],scales=rigid.map(mesh=>mesh.getWorldScale(new T.Vector3()).toArray());
  for(let time=0;time<12;time+=.1)poseRig(rig,time,.1,{attention:1,talk:time>6});
  const after=[];rig.root.traverse(o=>{if(o.isMesh)after.push([o,o.geometry]);});assert.deepEqual(after,meshes);
+ rigid.forEach((mesh,i)=>mesh.getWorldScale(new T.Vector3()).toArray().forEach((value,j)=>assert.ok(Math.abs(value-scales[i][j])<1e-6)));
+ assert.ok(rig.antenna.rotation.y>6);assert.equal(rig.flux.length,3);
+ poseRig(rig,.25,.1);const pulse=rig.flux[0],start={y:pulse.position.y,scale:pulse.scale.x,opacity:pulse.material.opacity};poseRig(rig,1.4,.1);assert.ok(pulse.position.y<start.y);assert.ok(pulse.scale.x<start.scale);assert.ok(pulse.material.opacity<start.opacity);
  rig.root.rotation.set(0,.12,0);for(const arm of rig.arms)arm.upper.rotation.set(0,0,arm.side*.025);rig.root.updateMatrixWorld(true);
  let radius=0;for(const arm of rig.arms)arm.upper.traverse(mesh=>{if(!mesh.isMesh)return;const positions=mesh.geometry.getAttribute('position');for(let i=0;i<positions.count;i++){const p=new T.Vector3().fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld);radius=Math.max(radius,Math.hypot(p.x,p.z));}});
  assert.ok(radius<1.08*.93,`folded arm radius ${radius} must clear the chute mouth`);
