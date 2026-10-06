@@ -10,7 +10,7 @@
 #home[data-scenario=lab] .brand img,#home[data-scenario=forest] .brand img{filter:url('#home-logo-ink')}
 #home-scene,#home-scene canvas{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #home-art{position:absolute;inset:0;z-index:1;pointer-events:none;background:url('../images/robot-doodles.svg') center/380px repeat;opacity:.10;mask-image:radial-gradient(ellipse at 50% 66%,#0004,#000 76%);-webkit-mask-image:radial-gradient(ellipse at 50% 66%,#0004,#000 76%)}
-#home[data-scenario=lab] #home-art,#home[data-scenario=forest] #home-art{opacity:.065;mix-blend-mode:multiply;filter:invert(1)}
+#home[data-scenario=forest] #home-art,#home[data-scenario=lab] #home-art{opacity:0}
 #home .glass,#home .speech-card{background:var(--surface);color:var(--ink);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 #home .speech-card{background:var(--answer)}
 #home .speech-card strong,#home .history-turn h3,#home .text-button{color:var(--accent)}

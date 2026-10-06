@@ -1,4 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
+import {createTreeGrove} from './scene-grove.js';
+import {windMaterial} from './nature-motion.js';
 
 // Shared authored surfaces keep the indoor garden and exterior forest consistent.
 let foliage,bark,stone;
@@ -13,7 +15,7 @@ export function createFoliageMaterial(){
     ctx.strokeStyle='#c4ce852b';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(x-3*Math.cos(angle),y-3*Math.sin(angle));ctx.lineTo(x+3*Math.cos(angle),y+3*Math.sin(angle));ctx.stroke();
   }
   const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
-  foliage=new T.MeshStandardMaterial({map,alphaTest:.45,alphaToCoverage:true,side:T.DoubleSide,roughness:.95,color:'#b3c295'});
+  foliage=windMaterial(new T.MeshStandardMaterial({map,alphaTest:.45,alphaToCoverage:true,side:T.DoubleSide,roughness:.95,color:'#b3c295'}),{strength:.09,anchored:true});
   return foliage;
 }
 export function createBarkMaterial(){
@@ -51,19 +53,8 @@ export function createRockMaterial(){
 }
 
 export function createGardenTree(parent,art,{x,z,y,height=3.5,radius=1.25,vines=false,random=randomSequence(44)}){
-  const {mesh,rod}=art,tree=new T.Group();tree.name=vines?'garden-tree-vines':'garden-tree';tree.position.set(x,y,z);parent.add(tree);
-  const trunk=mesh(tree,new T.CylinderGeometry(vines?.19:.11,vines?.36:.2,height,12,5),createBarkMaterial(),0,height/2,0);trunk.name='textured-tree-trunk';
-  for(let i=0;i<5;i++){
-    const angle=i*Math.PI*2/5;rod(tree,[0,.12,0],[Math.sin(angle)*(vines?.7:.38),.02,Math.cos(angle)*(vines?.7:.38)],vines?.095:.06,createBarkMaterial());
-    rod(tree,[0,height*.48,0],[Math.sin(angle)*radius*.6,height*.81,Math.cos(angle)*radius*.6],vines?.09:.055,createBarkMaterial());
-  }
-  const leaves=new T.InstancedMesh(new T.PlaneGeometry(1,1),createFoliageMaterial(),36),dummy=new T.Object3D();
-  for(let i=0;i<36;i++){
-    const angle=random()*Math.PI*2,r=Math.sqrt(random())*radius;
-    dummy.position.set(Math.cos(angle)*r,height*.76+random()*radius*.85,Math.sin(angle)*r);
-    dummy.rotation.set((random()-.5)*1.5,random()*Math.PI*2,(random()-.5)*.8);dummy.scale.set(radius*1.3,radius*1.05,1);dummy.updateMatrix();leaves.setMatrixAt(i,dummy.matrix);leaves.setColorAt(i,new T.Color().setHSL(.2+random()*.06,.25,.45+random()*.2));
-  }
-  leaves.castShadow=true;leaves.receiveShadow=true;tree.add(leaves);
+  const {mesh}=art,tree=new T.Group();tree.name=vines?'garden-tree-vines':'garden-tree';tree.position.set(x,y,z);parent.add(tree);
+  createTreeGrove(tree,[{x:0,y:0,z:0,height,radius}],{seed:Math.round(random()*100000)+1});
   if(vines)for(let i=0;i<5;i++){
     const a=i*1.35,r=radius*.64,start=height*.86,end=start-1.4-random()*1.1;
     const curve=new T.CatmullRomCurve3([new T.Vector3(Math.cos(a)*r,start,Math.sin(a)*r),new T.Vector3(Math.cos(a)*r+.12,(start+end)/2,Math.sin(a)*r+.15),new T.Vector3(Math.cos(a)*r-.06,end,Math.sin(a)*r)]);

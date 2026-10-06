@@ -4,6 +4,8 @@ import * as T from '../vendor/three.module.min.js';
 import {createCampus,createParcelFlow,ZONES,slotsFor,CAMPUS_SCALE,FLOOR,groundHeight} from './lab-campus.js';
 import {createChamberMaterials,createHallReveal} from './lab-chamber-materials.js';
 import {createLabBiome} from './lab-biome.js';
+import {updateNature} from './nature-motion.js';
+import {loadFoliageTexture} from './folio-foliage.js';
 import {createAreaFloors,createEnergyLines,gridPlacement,BUILDING} from './lab-layout.js';
 import {loadSectorIcons,createSectorSign} from './lab-signage.js';
 import {loadEnvironment} from './lab-environment.js';
@@ -23,13 +25,13 @@ const NAMES=Object.fromEntries(Object.entries(ZONES).map(([id,z])=>[id,z.name]))
 
 export async function createLabScene(container, callbacks) {
   await document.fonts.load('700 48px Nunito');callbacks.onLoadProgress?.(18,'PREPARANDO PERSONAGEM');
-  const [hero,sectorIcons] = await Promise.all([loadSatoAvatar(),loadSectorIcons()]);callbacks.onLoadProgress?.(37,'CARREGANDO AMBIENTE');
+  const [hero,sectorIcons] = await Promise.all([loadSatoAvatar(),loadSectorIcons(),loadFoliageTexture()]);callbacks.onLoadProgress?.(37,'CARREGANDO AMBIENTE');
   const renderer = new T.WebGLRenderer({antialias: true, alpha: false, powerPreference: 'high-performance'});
   let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
   renderer.setPixelRatio(pixelRatio);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.shadowMap.autoUpdate = true;
-  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
   container.append(renderer.domElement);
   const audio=createLabAudio(),dialogue=createDialogue(container);
   const world = new T.Scene(); world.background = new T.Color('#c5dde4');
@@ -103,12 +105,12 @@ export async function createLabScene(container, callbacks) {
     const plane = mesh(parent, new T.PlaneGeometry(width, height), material, x, y, z, false);
     if (floor) plane.rotation.x = -Math.PI / 2; return plane;
   }
-  world.add(new T.HemisphereLight('#e5f6ff', '#687772', 1.8));
-  const sunlight = new T.DirectionalLight('#fff0d8', 2.2); sunlight.position.set(-25, 65, 30); sunlight.castShadow = true;
+  world.add(new T.HemisphereLight('#e5f6ff', '#637457', 1.25));
+  const sunlight = new T.DirectionalLight('#ffe7c4', 2.65); sunlight.position.set(-25, 65, 30); sunlight.castShadow = true;
   sunlight.shadow.mapSize.set(1024, 1024); Object.assign(sunlight.shadow.camera, {left: -60, right: 60, top: 60, bottom: -60, far: 140});
   sunlight.shadow.normalBias = .045; sunlight.shadow.bias = -.0001; world.add(sunlight);
-  const fill = new T.DirectionalLight('#b2edff', 2.0); fill.position.set(13, 9, -10); world.add(fill);
-  const rim=new T.DirectionalLight('#f9d9a7',1.1);rim.position.set(-20,12,-28);world.add(rim);
+  const fill = new T.DirectionalLight('#b2d9ed', .75); fill.position.set(13, 9, -10); world.add(fill);
+  const rim=new T.DirectionalLight('#f9d9a7',.7);rim.position.set(-20,12,-28);world.add(rim);
 
   const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
   const campus=createCampus(world,art,obstacles,environment,chamber,hall,sectorIcons);
@@ -432,7 +434,7 @@ export async function createLabScene(container, callbacks) {
     container.dataset.environment=interior>.5?'interior':'exterior';
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
     // Shadow maps update on every rendered frame, including idle and turns.
-    energy.tick(animationTime);biome.tick(animationTime);
+    energy.tick(animationTime);biome.tick(animationTime);updateNature(animationTime,paused);
     const levels=ambienceLevels(interior,hallLight);
     audio.ambient([{id:'outdoor-nature',kind:'nature',bed:true,position:null,volume:levels.nature},{id:'laboratory-hum',kind:'hum',bed:true,position:null,volume:levels.equipment},...Array.from(zones,([id,zone])=>({id:`machine:${id}`,kind:['vm','mcp','rag'].includes(id)?'machineFan':'machineMotor',position:zone.group.position,volume:id==='gateway'?0:.07*hallLight,range:14})),{id:'stream',kind:'stream',position:biome.streamAt(avatar.position),volume:levels.stream,range:7}],started);
     if(started&&!paused&&hallLight>.5){const pulse=energy.nearbyPulse(avatar.position,animationTime);if(pulse)audio.cue('energy',pulse,'energy-route');}installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera,dt,paused);
