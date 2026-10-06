@@ -42,7 +42,8 @@ duas linhas/180 caracteres. **Ver mais** abre a mensagem integral no histórico.
 Cada balão tem um botão para copiar a mensagem completa, incluindo as prévias
 cortadas. **Ver mais** fica à esquerda; copiar e horário ficam juntos à direita.
 Respostas que chegam usam o pacote oficial `typewriter-effect` 2.22.0 (MIT),
-com texto literal, até o limite da prévia. Um loop discreto de teclado acompanha
+com texto literal, até o trecho que cabe nas linhas visíveis da prévia. A largura
+real e o limite de linhas são medidos antes de iniciar a digitação. Um loop discreto de teclado acompanha
 a digitação e para ao terminar, silenciar, trocar de conversa ou ocultar a aba.
 Histórico retomado e movimento reduzido mostram o texto completo da prévia
 imediatamente. O bundle e a licença são locais; para regenerar, execute
@@ -58,9 +59,19 @@ Lucide, servidos localmente; licença e revisão em `static/icons/README.md`.
 O layout acompanha o viewport disponível quando o teclado móvel abre e respeita
 a preferência por movimento reduzido. Sem WebGL, chat e navegação continuam.
 
-As configurações oferecem preto, laboratório e floresta, além de quatro cores
+Os últimos balões recolhem após cinco segundos de leitura para um ícone de chat
+acima do robô. Clicar revela ambos novamente e reinicia o ciclo. Durante a
+resposta pendente, digitação ou interação nos balões, a leitura permanece
+visível. As transições respeitam movimento reduzido. O título fica no histórico,
+sem uma segunda cópia solta acima da pergunta.
+
+As configurações oferecem Padrão, laboratório e floresta, além de quatro cores
 de chat: azul, verde, violeta e âmbar. As escolhas ficam salvas neste navegador.
-Todos os fundos têm desenhos vetoriais suaves de robôs. O laboratório tem um
+O fundo Padrão é cinza escuro, com desenhos do SVG Repo de robôs e videogames
+com tamanhos, rotações e posições variados, sem alinhamento em grade nem
+sobreposição. O canvas transparente fica acima dos
+desenhos: nenhum deles cobre os modelos 3D. Laboratório e floresta não exibem
+esses desenhos. Fontes e licenças: `static/images/doodles/README.md`. O laboratório tem um
 skybox cinza claro, piso amplo e parede ao fundo, com câmera em perspectiva;
 a floresta tem céu azul com nuvens, terreno contínuo, várias camadas de árvores,
 rio e silhuetas distantes suaves sob névoa azul. Os cenários ultrapassam as
@@ -72,7 +83,8 @@ tocam loops locais: o laboratório usa o arquivo `amb_machinery_factory_lp_01.wa
 enviado pelo usuário, convertido para Ogg e em volume baixo. A floresta mantém
 o loop de natureza com volume menor e filtro suave nas frequências agudas,
 reduzindo o destaque dos pássaros. O controle de som também silencia a digitação.
-Mudanças de altura do chat alteram o enquadramento sem redimensionar o canvas;
+A câmera depende somente do viewport: perguntas, balões e histórico não alteram
+o zoom, a distância nem as proporções da cena;
 resizes reais são agrupados no frame que já desenha a cena.
 A cena limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
 O Sato Agent da raiz tem corpo esférico com três linhas de encaixe, olho recuado
