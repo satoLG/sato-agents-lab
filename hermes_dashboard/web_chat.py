@@ -33,6 +33,7 @@ LOGIN_ATTEMPTS = defaultdict(deque)
 LOGIN_LOCK = threading.Lock()
 WORKER_LOCK = threading.Lock()
 WORKER_STARTED = False
+LEGACY_CONVERSATION = "00000000000000000000000000000001"
 
 
 def configure(app):
@@ -61,6 +62,24 @@ def _connection():
         kind TEXT NOT NULL, text TEXT NOT NULL, created_at REAL NOT NULL
     )""")
     conn.execute("CREATE INDEX IF NOT EXISTS progress_job ON progress(job_id, id)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, title TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+    )""")
+    conn.commit()
+    # Serialize the additive migration across worker and web processes.
+    if "conversation_id" not in {column[1] for column in conn.execute("PRAGMA table_info(jobs)")}:
+        conn.execute("BEGIN IMMEDIATE")
+        if "conversation_id" not in {column[1] for column in conn.execute("PRAGMA table_info(jobs)")}:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN conversation_id TEXT NOT NULL DEFAULT '{LEGACY_CONVERSATION}'")
+            previous = conn.execute("SELECT * FROM jobs ORDER BY created_at LIMIT 1").fetchone()
+            if previous:
+                updated = conn.execute("SELECT MAX(updated_at) FROM jobs").fetchone()[0]
+                conn.execute("INSERT INTO conversations VALUES (?,?,?,?,?)",
+                             (LEGACY_CONVERSATION, previous["robot_id"], "Conversa anterior", previous["created_at"], updated))
+                conn.execute("UPDATE jobs SET conversation_id=?", (LEGACY_CONVERSATION,))
+        conn.commit()
+    conn.execute("CREATE INDEX IF NOT EXISTS jobs_conversation ON jobs(conversation_id, created_at, id)")
     conn.commit()
     if DB_PATH.exists():
         os.chmod(DB_PATH, 0o600)
@@ -133,6 +152,15 @@ def _question_ok(value):
     return isinstance(value, str) and 1 <= len(value.strip()) <= 4000 and not any(ord(c) < 32 and c not in '\n\t' for c in value)
 
 
+def _conversation_id(value):
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value)
+
+
+def _conversation_title(question):
+    title = " ".join(question.split())
+    return title if len(title) <= 90 else title[:87].rstrip() + "…"
+
+
 def submit():
     denied = _private(write=True)
     if denied:
@@ -146,6 +174,10 @@ def submit():
         return jsonify({"error": "Conversa livre disponível apenas no líder do Núcleo."}), 400
     if not _question_ok(question):
         return jsonify({"error": "Envie uma mensagem de até 4000 caracteres."}), 400
+    conversation_id = data.get("conversation_id", LEGACY_CONVERSATION)
+    job_id = data.get("request_id", uuid.uuid4().hex)
+    if not _conversation_id(conversation_id) or not _conversation_id(job_id):
+        return jsonify({"error": "Conversa ou mensagem inválida."}), 400
     context = _context(robot_id, question=question)
     if not context:
         return jsonify({"error": "Robô não encontrado no estado atual."}), 404
@@ -153,22 +185,31 @@ def submit():
     conn = _connection()
     try:
         conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if existing:
+            if existing["conversation_id"] != conversation_id or existing["question"] != question.strip():
+                return jsonify({"error": "Identificador de mensagem já utilizado."}), 409
+            return jsonify({"id": job_id, "status": existing["status"], "conversation_id": conversation_id,
+                            "job": _public_job(existing, conn)}), 202
         waiting = conn.execute("SELECT count(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
         if waiting >= 30:
             conn.rollback()
             return jsonify({"error": "Fila cheia. Tente novamente em alguns minutos."}), 429
-        job_id = uuid.uuid4().hex
-        conn.execute("INSERT INTO jobs (id,robot_id,question,context,status,due_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
-                     (job_id, robot_id, question.strip(), json.dumps(context, ensure_ascii=False), "queued", now, now, now))
+        conn.execute("INSERT OR IGNORE INTO conversations VALUES (?,?,?,?,?)",
+                     (conversation_id, robot_id, _conversation_title(question), now, now))
+        conn.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now, conversation_id))
+        conn.execute("INSERT INTO jobs (id,robot_id,question,context,status,due_at,created_at,updated_at,conversation_id) VALUES (?,?,?,?,?,?,?,?,?)",
+                     (job_id, robot_id, question.strip(), json.dumps(context, ensure_ascii=False), "queued", now, now, now, conversation_id))
         conn.commit()
         _progress(job_id, "queued", "Mensagem salva na fila. Aguardando Hermes.")
+        accepted = _public_job(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone(), conn)
     finally:
         conn.close()
-    return jsonify({"id": job_id, "status": "queued"}), 202
+    return jsonify({"id": job_id, "status": "queued", "conversation_id": conversation_id, "job": accepted}), 202
 
 
 def _public_job(row, conn=None):
-    value = {key: row[key] for key in ("id", "robot_id", "question", "status", "answer", "error", "attempts", "created_at", "updated_at")}
+    value = {key: row[key] for key in ("id", "robot_id", "conversation_id", "question", "status", "answer", "error", "attempts", "created_at", "updated_at")}
     owned = conn is None
     conn = conn or _connection()
     try:
@@ -188,11 +229,20 @@ def _progress(job_id, kind, text):
         conn.close()
 
 
-def _history_payload(robot_id):
+def _history_payload(robot_id, conversation_id=None, before=None):
     conn = _connection()
     try:
-        rows = conn.execute("SELECT * FROM jobs WHERE robot_id=? ORDER BY created_at DESC LIMIT 40", (robot_id,)).fetchall()
-        return {"jobs": [_public_job(row, conn) for row in reversed(rows)]}
+        query, params = "SELECT * FROM jobs WHERE robot_id=?", [robot_id]
+        if conversation_id is not None:
+            query += " AND conversation_id=?"
+            params.append(conversation_id)
+        if before:
+            cursor = conn.execute("SELECT created_at,id FROM jobs WHERE id=? AND conversation_id=?", (before, conversation_id)).fetchone()
+            if cursor:
+                query += " AND (created_at,id)<(?,?)"
+                params.extend(cursor)
+        rows = conn.execute(query + " ORDER BY created_at DESC,id DESC LIMIT 41", params).fetchall()
+        return {"jobs": [_public_job(row, conn) for row in reversed(rows[:40])], "has_more": len(rows) > 40}
     finally:
         conn.close()
 
@@ -204,11 +254,14 @@ def stream():
     robot_id = request.args.get("robot_id", "")
     if robot_id != "guide:hermes":
         return jsonify({"error": "Robô inválido."}), 400
+    conversation_id = request.args.get("conversation_id")
+    if conversation_id is not None and not _conversation_id(conversation_id):
+        return jsonify({"error": "Conversa inválida."}), 400
     def messages():
         previous = None
         heartbeat = time.monotonic()
         while True:
-            payload = json.dumps(_history_payload(robot_id), ensure_ascii=False)
+            payload = json.dumps(_history_payload(robot_id, conversation_id), ensure_ascii=False)
             if payload != previous:
                 yield f"event: history\ndata: {payload}\n\n"
                 previous = payload
@@ -240,10 +293,33 @@ def history():
     robot_id = request.args.get("robot_id", "")
     if len(robot_id) > 100:
         return jsonify({"error": "Robô inválido."}), 400
+    conversation_id = request.args.get("conversation_id")
+    before = request.args.get("before")
+    if conversation_id is not None and not _conversation_id(conversation_id):
+        return jsonify({"error": "Conversa inválida."}), 400
+    if before is not None and (not conversation_id or not _conversation_id(before)):
+        return jsonify({"error": "Mensagem inválida."}), 400
+    return jsonify(_history_payload(robot_id, conversation_id, before))
+
+
+def conversations():
+    denied = _private()
+    if denied:
+        return denied
     conn = _connection()
     try:
-        rows = conn.execute("SELECT * FROM jobs WHERE robot_id=? ORDER BY created_at DESC LIMIT 40", (robot_id,)).fetchall()
-        return jsonify({"jobs": [_public_job(row, conn) for row in reversed(rows)]})
+        # An older binary can still insert jobs using the column's default
+        # during a rollback. Make those records discoverable on the next list.
+        conn.execute("""INSERT OR IGNORE INTO conversations
+                        SELECT ?, 'guide:hermes', 'Conversa anterior', MIN(created_at), MAX(updated_at)
+                        FROM jobs WHERE conversation_id=? HAVING COUNT(*)>0""",
+                     (LEGACY_CONVERSATION, LEGACY_CONVERSATION))
+        conn.commit()
+        rows = conn.execute("""SELECT c.id,c.title,c.created_at,MAX(c.updated_at,MAX(j.updated_at)) AS updated_at,
+                               COUNT(j.id) AS messages, SUM(j.status IN ('queued','running')) AS pending
+                               FROM conversations c JOIN jobs j ON j.conversation_id=c.id
+                               WHERE c.robot_id='guide:hermes' GROUP BY c.id ORDER BY updated_at DESC,c.id""").fetchall()
+        return jsonify({"conversations": [dict(row) for row in rows]})
     finally:
         conn.close()
 
@@ -293,7 +369,7 @@ def _answer(row):
               "\nPergunta JSON:\n" + json.dumps(row["question"], ensure_ascii=False))
     conn = _connection()
     try:
-        past = conn.execute("SELECT question,answer FROM jobs WHERE robot_id=? AND status='done' AND created_at<? ORDER BY created_at DESC LIMIT 8", (row["robot_id"], row["created_at"])).fetchall()
+        past = conn.execute("SELECT question,answer FROM jobs WHERE robot_id=? AND conversation_id=? AND status='done' AND created_at<? ORDER BY created_at DESC LIMIT 8", (row["robot_id"], row["conversation_id"], row["created_at"])).fetchall()
     finally:
         conn.close()
     history = []

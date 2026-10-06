@@ -4,6 +4,7 @@ import os
 import time
 import io
 import json
+from collections import defaultdict, deque
 
 import pytest
 from werkzeug.security import generate_password_hash
@@ -14,6 +15,7 @@ from hermes_dashboard import web_chat
 
 @pytest.fixture
 def private_chat(tmp_path, monkeypatch):
+    monkeypatch.setattr(web_chat, "LOGIN_ATTEMPTS", defaultdict(deque))
     monkeypatch.setattr(web_chat, "ENABLED", True)
     monkeypatch.setattr(web_chat, "PASSWORD_HASH", generate_password_hash("senha-forte-de-teste"))
     monkeypatch.setattr(web_chat, "DB_PATH", tmp_path / "private" / "queue.db")

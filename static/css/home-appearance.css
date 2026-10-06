@@ -40,7 +40,25 @@
 .copy-button{display:grid;place-items:center;width:32px;height:32px;padding:6px;border-radius:10px;color:var(--muted);margin-left:auto;flex-shrink:0}
 .copy-button svg{width:16px;height:16px}
 .copy-button:hover,.copy-button[data-copied=true]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
-.history-turn footer .copy-button{margin-right:auto;margin-left:-6px}
+.bubble-meta{display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;font-size:10px;color:var(--muted)}
+.bubble-meta .copy-button,.history-turn footer .copy-button{margin:0}
+.history-turn footer .bubble-meta{margin-left:auto}
+.bubble-actions{justify-content:flex-start}
+.bubble-actions .text-button,.history-more{margin-right:auto}
+.conversation-title{color:var(--muted);font-size:11px;font-weight:800;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;margin:0 20px 8px;text-align:center}
+#home[data-history=true] #conversation-title{display:none}
+.history-header>div{min-width:0;flex:1}
+.history-header h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#history-new{padding:10px 12px;flex-shrink:0;margin:0;font-size:11px}
+#home-sessions{position:absolute;left:50%;transform:translateX(-50%);width:min(640px,100%);top:calc(max(12px,env(safe-area-inset-top)) + 76px);bottom:calc(var(--composer-height) + 16px);padding:0 16px 18px;overflow:auto;overscroll-behavior:contain}
+.session-card{display:block;width:100%;text-align:left;border-radius:22px;margin-bottom:10px;padding:18px 20px;background:var(--surface);color:var(--ink)}
+.session-card:hover{background:var(--question)}
+.session-card strong{display:block;overflow-wrap:anywhere;font-size:15px;line-height:1.4}
+.session-card small{display:block;margin-top:7px;color:var(--muted);font-size:11px}
+#history-earlier{position:absolute;z-index:1;top:calc(max(12px,env(safe-area-inset-top)) + 70px);left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:20px;font-size:11px;white-space:nowrap}
+#history-thread:has(#history-earlier:not([hidden])) #home-messages{top:calc(max(12px,env(safe-area-inset-top)) + 112px)}
+.speech-text[data-typing=true]{min-height:1.55em}
+.Typewriter__cursor{display:none}
 .thinking-indicator{display:inline;vertical-align:middle;color:var(--accent);font-size:13px;line-height:1.6;white-space:normal}
 .thinking-indicator .thinking-dots{display:inline-block;vertical-align:middle;margin-left:5px;width:24px;height:8px;fill:currentColor;stroke:none}
 .thinking-dots circle{animation:thinking-dot 1.2s ease-in-out infinite;transform-origin:center}

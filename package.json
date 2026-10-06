@@ -7,6 +7,7 @@
     "test:browser": "playwright test",
     "build:three": "node tools/build-three.mjs",
     "build:sato": "node tools/build-sato.mjs",
+    "build:typewriter": "node tools/build-typewriter.mjs",
     "test:avatar": "node --test tests/lab-avatar.test.mjs",
     "test:rigs": "node --test tests/lab-rigs.test.mjs tests/lab-batch.test.mjs",
     "test:controls": "node --test tests/lab-controls.test.mjs"
@@ -14,6 +15,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "esbuild": "0.28.2",
-    "three": "0.180.0"
+    "three": "0.180.0",
+    "typewriter-effect": "2.22.0"
   }
 }
