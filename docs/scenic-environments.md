@@ -32,9 +32,10 @@ does not use shiny wave normals or pretend to reflect the scene.
 
 ## Performance and lifecycle
 
-- Two instanced draws per tree stand: trunks and leaf clouds. Distant lab
-  stands use 20 cards per cloud; nearby stands use 80. Geometry/materials are
-  shared across stands while bounds permit frustum culling.
+- Two draws per tree stand: merged wood and instanced leaf clouds. Trunks have
+  continuous curves, tapered branches and a small base flare. Distant lab stands
+  use 20 cards per cloud; nearby stands use 80. Foliage geometry and materials
+  are shared across stands while bounds permit frustum culling.
 - Water is one opaque draw per scene. It needs no reflection camera, extra
   framebuffer or transmissive material. Shoreline widths are in world units.
 - Wind and water update a time uniform; instance matrices remain static.
@@ -47,11 +48,12 @@ does not use shiny wave normals or pretend to reflect the scene.
 
 Measured on Intel UHD Graphics / ANGLE D3D11, 1440×1000, DPR 1, 35 warmed
 synchronous renders with `gl.finish()` (render-only measurement, not full-app
-FPS): home draw calls decreased from 260 to 46, median render time from 1.0 to
-0.5 ms. Triangles increased from 52,816 to 149,713 for leaf clouds and grass;
+FPS): home draw calls decreased from 260 to 46, median render time from 0.9 to
+0.3 ms. Triangles increased from 52,816 to 150,805 for leaf clouds and grass;
 uploaded geometries decreased from 81 to 29 and textures from 13 to 10.
-The sampled lab exterior changed from 2,209 to 2,217 calls and 1.14M to 1.20M
-triangles; median render time was 57.5 versus 50.7 ms. These are local samples,
+The sampled lab exterior changed from 2,209 to 2,215 calls and 1.14M to 1.21M
+triangles; median render time was 57.5 versus 51.9 ms. Its geometry count changed
+from 854 to 874 because continuous wood is merged per stand. These are local samples,
 not a guarantee for other GPUs. The lab's existing equipment/shadow workload
 still dominates its rendering cost.
 
