@@ -19,7 +19,7 @@ async function chatRoutes(page,{loggedIn=true}={}){
  return {jobs,get submitted(){return submitted;},get csrfSeen(){return csrfSeen;}};
 }
 async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:15000});await expect(page.locator('#home-loading')).toBeHidden();}
-async function chooseSession(page){await expect(page.locator('.session-card').first()).toBeVisible();await page.locator('.session-card').first().click();await expect(page.locator('.history-turn').first()).toBeVisible();}
+async function chooseSession(page){if(await page.locator('#home-sessions').isVisible()){await expect(page.locator('.session-card').first()).toBeVisible();await page.locator('.session-card').first().click();}await expect(page.locator('.history-turn').first()).toBeVisible();}
 async function resumeSeeded(page){await page.locator('#home-history-toggle').click();await chooseSession(page);await page.keyboard.press('Escape');}
 
 test('root starts empty with one robot, real chat protocol and a glass history',async({page},testInfo)=>{
@@ -199,7 +199,7 @@ test('history collapses long messages by default and keeps completed footers dur
  expect(await page.evaluate(()=>__retainedFooterNodes.every(node=>node.isConnected)&&__completedChanges.length===0)).toBe(true);await expect(completed.locator('.history-answer p')).toHaveText(answer);
  chat.jobs[1].status='done';chat.jobs[1].answer='A segunda resposta chegou.';await expect(page.locator('[data-job="pending"] .history-answer p')).toHaveText(chat.jobs[1].answer,{timeout:10000});
  expect(await page.evaluate(()=>__retainedFooterNodes.every(node=>node.isConnected)&&__completedChanges.length===0)).toBe(true);
- await page.locator('#history-close').click();await chooseSession(page);await expect(completed.locator('.history-answer p')).toHaveText(answer);
+ await page.locator('#history-sessions').click();await chooseSession(page);await expect(completed.locator('.history-answer p')).toHaveText(answer);
  await completed.locator('.history-answer .history-more').click();await expect(completed.locator('.history-answer .history-more')).toHaveText('Ver mais');
  await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(completed.locator('.history-answer .history-more')).toHaveText('Ver mais');
 });
@@ -260,7 +260,7 @@ test('failed sends restore the draft and reuse the message ID on retry',async({p
 test('sessions start empty, resume independently and keep their title after a reload',async({page},testInfo)=>{
  const chat=await chatRoutes(page);await ready(page);await expect(page.locator('#last-question')).toBeHidden();await expect(page.locator('#home-speech')).toBeHidden();
  await page.locator('#home-input').fill('Planejamento da floresta');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();const first=chat.jobs[0].conversation_id;
- await page.locator('#home-history-toggle').click();await expect(page.locator('#home-sessions')).toBeVisible();await expect(page.locator('#history-thread')).toBeHidden();await page.locator('#history-new').click();await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();
+ await page.locator('#home-history-toggle').click();await expect(page.locator('#history-thread')).toBeVisible();await expect(page.locator('#home-sessions')).toBeHidden();await expect(page.locator('#history-new')).toBeHidden();await expect(page.locator('#history-sessions')).toHaveText('Lista de sessões');await page.locator('#history-close').click();await expect(page.locator('#home-history')).toBeHidden();await page.locator('#home-history-toggle').click();await expect(page.locator('#history-title')).toHaveText('Planejamento da floresta');await page.locator('#history-sessions').click();await expect(page.locator('#home-sessions')).toBeVisible();await expect(page.locator('#history-sessions')).toBeHidden();await page.locator('#history-new').click();await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();
  await page.locator('#home-input').fill('Equipamentos do laboratório');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();const second=chat.jobs[1].conversation_id;expect(first).not.toBe(second);
  chat.jobs[0].status='done';chat.jobs[0].answer='Resposta sobre a floresta.';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(page.locator('#last-question')).toContainText('Equipamentos');await expect(page.locator('#home-speech')).not.toContainText('Resposta sobre a floresta');
  await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();await page.locator('#home-history-toggle').click();await expect(page.locator('.session-card')).toHaveCount(2);await page.screenshot({path:testInfo.outputPath('session-list-desktop.png')});
@@ -316,7 +316,7 @@ test('latest messages fold above the robot, reopen and fold again without losing
   const head=await page.locator('#robot-touch').boundingBox(),peek=await page.locator('#chat-peek').boundingBox();expect(peek.y+peek.height/2).toBeLessThan(head.y);await expect(page.locator('#home-speech')).toHaveCSS('opacity','0');
   await page.screenshot({path:testInfo.outputPath('collapsed-mobile.png')});await page.locator('#chat-peek').click();await page.mouse.move(0,0);await expect(page.locator('#home-speech')).toHaveCSS('opacity','1');await expect(page.locator('#last-question')).toContainText('Última pergunta');
   await page.screenshot({path:testInfo.outputPath('revealed-mobile.png')});await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});
-  await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText('Última resposta salva.');await page.locator('#history-new').click();await expect(page.locator('#chat-peek')).toBeHidden();
+  await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText('Última resposta salva.');await page.locator('#history-sessions').click();await page.locator('#history-new').click();await expect(page.locator('#chat-peek')).toBeHidden();
  }finally{await context.close();}
 });
 

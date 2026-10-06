@@ -28,7 +28,7 @@
   <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Carregando robô…</small></div>
   <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>
   <section id="home-history" aria-label="Histórico da conversa" hidden>
-    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2 id="history-title">Conversas</h2><span id="history-subtitle">Seu histórico com Sato Agent</span></div><button id="history-new" class="text-button" type="button">Nova conversa</button></header>
+    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2 id="history-title">Conversas</h2><span id="history-subtitle">Seu histórico com Sato Agent</span></div><button id="history-new" class="text-button" type="button">Nova conversa</button><button id="history-sessions" class="text-button" type="button" hidden>Lista de sessões</button></header>
     <div id="home-sessions" aria-label="Sessões de conversa"></div>
     <div id="history-thread" hidden><button id="history-earlier" class="text-button glass" type="button" hidden>Carregar mensagens anteriores</button><div id="home-messages" role="log" aria-live="polite" aria-relevant="additions text"></div></div>
     <button id="history-bottom" class="icon-button glass" type="button" aria-label="Ir para a mensagem mais recente" hidden>{{ icon('chevron-down') }}</button>
