@@ -1,6 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 import {createRigFactory,poseRig,setRigBlink} from './lab-rigs.js';
 import {createDeliveryChute} from './lab-chute.js';
+import {updateNature} from './nature-motion.js';
 
 function robotArt(){
  const materials=new Map(),geometries=new Map();
@@ -20,10 +21,11 @@ const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 
 export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario}={}){
  const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
- renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+ let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
+ renderer.setPixelRatio(pixelRatio);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  container.append(renderer.domElement);onProgress?.(40,'Montando o robô…');
  const world=new T.Scene();world.background=new T.Color('#000');
- world.add(new T.HemisphereLight('#e3f4ff','#536775',1.9));
+ const hemisphere=new T.HemisphereLight('#e3f4ff','#536775',1.9);world.add(hemisphere);
  const key=new T.DirectionalLight('#fff3e5',3.4);key.position.set(-3,5,4);world.add(key);
  const fill=new T.DirectionalLight('#95ceff',2.2);fill.position.set(4,2,1);world.add(fill);
  const rim=new T.DirectionalLight('#79c6ff',3);rim.position.set(1,3,-4);world.add(rim);
@@ -112,7 +114,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   sets.get(currentScenario)?.setLevel(level);
   if(out&&level===0){sets.get(currentScenario)?.setLevel(0);activateScenario(desiredScenario);}
  }
- function activateScenario(kind){currentScenario=kind;world.fog=kind==='black'?null:new T.FogExp2(kind==='forest'?'#aac8dd':'#d5e2ec',kind==='forest'?.031:.024);container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;onScenario?.(kind);}
+ function activateScenario(kind){currentScenario=kind;const forest=kind==='forest',lab=kind==='lab';hemisphere.intensity=forest?1.15:lab?1.4:1.9;hemisphere.groundColor.set(forest?'#435a39':'#536775');key.color.set(forest?'#ffe6ba':'#fff3e5');key.intensity=forest?2.7:lab?2.6:3.4;fill.intensity=forest?.45:lab?.8:2.2;rim.intensity=forest?.75:lab?1:3;renderer.toneMappingExposure=forest?1.08:lab?1.1:1.2;world.fog=kind==='black'?null:new T.FogExp2(kind==='forest'?'#a8c8cf':'#c0d2df',kind==='forest'?.037:.017);container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;onScenario?.(kind);}
  async function setScenario(kind,{immediate=false}={}){
   if(!['black','lab','forest'].includes(kind))throw new Error('Cenário inválido.');
   const revision=++scenarioRevision;
@@ -132,7 +134,11 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function render(stamp){
   if(disposed)return;frame=requestAnimationFrame(render);if(document.hidden){last=stamp;return;}
   if(stamp-last<1000/30&&!resizePending)return;const dt=Math.min(.06,(stamp-last)/1000||.033);last=stamp;time+=dt;
-  if(resizePending)applyResize();pose(dt);updateScenario(dt);renderer.render(world,camera);report();
+  if(resizePending)applyResize();pose(dt);updateScenario(dt);updateNature(time,reduced.matches);sets.get(currentScenario)?.tick(reduced.matches?0:time);
+  // Adapt fill resolution only after sustained slow frames, never the CSS size.
+  qualityElapsed+=Math.min(.25,(stamp-(render.previousStamp||stamp))/1000);render.previousStamp=stamp;
+  if(++qualityFrames>=60){if(qualityElapsed/qualityFrames>.055&&pixelRatio>1){pixelRatio=Math.max(1,pixelRatio-.25);renderer.setPixelRatio(pixelRatio);}qualityFrames=0;qualityElapsed=0;}
+  renderer.render(world,camera);report();
  }
  function react(kind='wave'){if(reaction?.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};container.dataset.reaction=kind;}
  function look(event){const bounds=container.getBoundingClientRect();lookYaw=Math.max(-.3,Math.min(.3,((event.clientX-bounds.left)/bounds.width-.5)*.5));}

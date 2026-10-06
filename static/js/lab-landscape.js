@@ -1,5 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
-import {createFoliageMaterial,createBarkMaterial} from './lab-nature.js';
+import {createTreeGrove,createMeadow,createGroveResources} from './scene-grove.js';
 
 const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 const hash=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
@@ -86,7 +86,6 @@ export function createLandscape(world,art,obstacles,materials){
     for(let k=0;k<5;k++)box(world,.51,.008,.035,'#a7b2a6',x,.087,z-.32+k*.16);
   }
   let seed=761;const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  const leafMaterial=createFoliageMaterial().clone();leafMaterial.fog=false;
   const trees=[],shrubs=[];
   function island(x,z,w,d){
     const curbShape=rounded(w,d,Math.min(w,d)/2-.1),geometry=new T.ExtrudeGeometry(curbShape,{depth:.22,bevelEnabled:false,curveSegments:12});geometry.rotateX(-Math.PI/2);
@@ -110,20 +109,11 @@ export function createLandscape(world,art,obstacles,materials){
     if(random()<.12)continue;
     trees.push({x:px,z:pz,y:terrainHeight(px,pz),h:8+random()*8,r:2.5+random()*2});
   }
-  const trunks=new T.InstancedMesh(new T.CylinderGeometry(.12,.24,1,12),createBarkMaterial(),trees.length*4);
-  const foliage=new T.InstancedMesh(new T.PlaneGeometry(1,1),leafMaterial,trees.length*24+shrubs.length*3);
-  const dummy=new T.Object3D(),up=new T.Vector3(0,1,0);let ti=0,li=0;
-  const segment=(a,b,r)=>{const delta=b.clone().sub(a);dummy.position.copy(a).add(b).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(up,delta.clone().normalize());dummy.scale.set(r,delta.length(),r);dummy.updateMatrix();trunks.setMatrixAt(ti++,dummy.matrix);};
-  const leaves=(x,y,z,w,h)=>{dummy.position.set(x,y,z);dummy.rotation.set((random()-.5)*1.5,random()*Math.PI*2,(random()-.5)*.8);dummy.scale.set(w,h,1);dummy.updateMatrix();foliage.setMatrixAt(li,dummy.matrix);foliage.setColorAt(li++,new T.Color().setHSL(.2+random()*.06,.25,.45+random()*.2));};
-  for(const tree of trees){
-    const {x,y,z,h,r}=tree;segment(new T.Vector3(x,y,z),new T.Vector3(x,y+h*.85,z),tree.garden?1:1.3);
-    for(let k=0;k<3;k++){const a=k*2.1;segment(new T.Vector3(x,y+h*.42,z),new T.Vector3(x+Math.cos(a)*r*.7,y+h*.8,z+Math.sin(a)*r*.7),.55);}
-    for(let k=0;k<(Math.hypot(x,z)<100?24:14);k++){const a=random()*Math.PI*2,radius=Math.sqrt(random())*r;leaves(x+Math.cos(a)*radius,y+h*.72+random()*r*1.2,z+Math.sin(a)*radius,r*1.35,r*1.1);}
-  }
-  for(const shrub of shrubs)for(let k=0;k<3;k++)leaves(shrub.x,shrub.y+shrub.h*.5,shrub.z,shrub.h*1.1,shrub.h);
-  trunks.material=trunks.material.clone();trunks.material.fog=false;
-  trunks.count=ti;foliage.count=li;trunks.castShadow=true;foliage.castShadow=true;foliage.receiveShadow=true;
-  trunks.computeBoundingSphere();foliage.computeBoundingSphere();world.add(trunks,foliage);
+  const stands=new Map();
+  for(const tree of trees){const key=`${Math.floor(tree.x/48)}:${Math.floor(tree.z/48)}`;if(!stands.has(key))stands.set(key,[]);stands.get(key).push(tree);}
+  let standSeed=93;const groveResources=[createGroveResources(false),createGroveResources(true)];
+  for(const stand of stands.values()){const near=stand.some(t=>Math.hypot(t.x,t.z)<95);createTreeGrove(world,stand,{seed:++standSeed,detail:near,shadows:near,resources:groveResources[Number(near)]});}
+  createMeadow(world,shrubs.map(s=>({...s,size:s.h})));
   for(const x of [-10,11])for(const z of [34,52]){cylinder(world,.075,1.3,'#405149',x,.71,z);box(world,.2,.09,.2,glow('#fff1cd'),x,1.4,z);}
   return {terrain,treeCount:trees.length,gardenCount:4};
 }
