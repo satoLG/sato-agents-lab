@@ -9,7 +9,7 @@
 #home .brand img{filter:url('#home-logo-ink') invert(1);mix-blend-mode:normal}
 #home[data-scenario=lab] .brand img,#home[data-scenario=forest] .brand img{filter:url('#home-logo-ink')}
 #home-scene,#home-scene canvas{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-#home-art{position:absolute;inset:0;z-index:1;pointer-events:none;background:url('../images/robot-doodles.svg') center/380px repeat;opacity:.10;mask-image:radial-gradient(ellipse at 50% 66%,#0004,#000 76%);-webkit-mask-image:radial-gradient(ellipse at 50% 66%,#0004,#000 76%)}
+#home-art{position:absolute;inset:0;z-index:0;pointer-events:none;background:url('../images/robot-doodles.svg') center/540px repeat;opacity:.16;transition:opacity .45s ease}
 #home[data-scenario=forest] #home-art,#home[data-scenario=lab] #home-art{opacity:0}
 #home .glass,#home .speech-card{background:var(--surface);color:var(--ink);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 #home .speech-card{background:var(--answer)}
@@ -45,8 +45,6 @@
 .history-turn footer .bubble-meta{margin-left:auto}
 .bubble-actions{justify-content:flex-start}
 .bubble-actions .text-button,.history-more{margin-right:auto}
-.conversation-title{color:var(--muted);font-size:11px;font-weight:800;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;margin:0 20px 8px;text-align:center}
-#home[data-history=true] #conversation-title{display:none}
 .history-header>div{min-width:0;flex:1}
 .history-header h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #history-new{padding:10px 12px;flex-shrink:0;margin:0;font-size:11px}
@@ -91,3 +89,18 @@
 #home-sound svg{display:block;width:22px;height:22px}
 @keyframes thinking-dot{0%,70%,100%{opacity:.3}35%{opacity:1}}
 @media(prefers-reduced-motion:reduce){.thinking-dots circle{animation:none;opacity:1}}
+
+/* A transparent canvas places every 3D mesh above the wallpaper. */
+html,body,#home{background:#111b21}
+#home-scene{z-index:1}
+.preview-black{background:#111b21}
+#chat-peek{position:absolute;z-index:3;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:var(--accent);opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(.65);transition:opacity .55s ease,transform .7s cubic-bezier(.22,.8,.25,1)}
+#home-speech{transform-origin:50% 50%;transition:opacity .55s ease,transform .7s cubic-bezier(.22,.8,.25,1)}
+#last-question{transform-origin:50% 50%;transition:opacity .55s ease,transform .7s cubic-bezier(.22,.8,.25,1)}
+#home[data-preview-collapsed=true] #home-speech{opacity:0;transform:translate(-50%,var(--collapse-y,0px)) scale(.08);pointer-events:none}
+#home[data-preview-collapsed=true] #last-question{opacity:0;transform:translate(var(--collapse-x,0px),var(--collapse-y,0px)) scale(.08);pointer-events:none}
+#home[data-preview-collapsed=true] #chat-peek{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+#home[data-history=true] #chat-peek{visibility:hidden}
+/* Indicate keyboard focus with a tint; button outlines are never displayed. */
+#home button:focus,#home button:focus-visible,#home a:focus,#home a:focus-visible{outline:none!important}
+#home button:focus-visible,#home a:focus-visible{background-color:color-mix(in srgb,var(--accent) 16%,var(--surface))}

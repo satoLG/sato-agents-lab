@@ -25,7 +25,7 @@ async function resumeSeeded(page){await page.locator('#home-history-toggle').cli
 test('root starts empty with one robot, real chat protocol and a glass history',async({page},testInfo)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const chat=await chatRoutes(page);
  await ready(page);await expect(page.locator('#home-scene canvas')).toHaveCount(1);await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#home-progress')).toHaveAttribute('value','100');
- expect(await page.locator('#home').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
+ expect(await page.locator('#home').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(17, 27, 33)');
  await page.screenshot({path:testInfo.outputPath('home-desktop.png')});
  await page.locator('#home-input').fill('O que a VM sabe sobre MCP?');await page.locator('#home-send').click();
  await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-dots circle')).toHaveCount(3);
@@ -287,7 +287,7 @@ test('official typewriter renders literal text once and stops keyboard sound on 
   const chat=await chatRoutes(page);await page.route('**/js/home-audio.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {startTyping,stopTyping,','window.__typingAudio=()=>typingVoice;return {startTyping,stopTyping,')});});
   await ready(page);await page.locator('#home-input').fill('Responda com texto literal');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();chat.jobs[0].status='done';chat.jobs[0].answer='<img src=x onerror=alert(1)> Texto ^99999 `código` & emoji 👩🏽‍💻. '.repeat(10);await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
   const text=page.locator('#home-speech .speech-text');await expect(text).toHaveAttribute('data-typing','true',{timeout:10000});await page.waitForFunction(()=>!!__typingAudio());const partial=await text.textContent();expect(partial.length).toBeLessThan(421);expect(chat.jobs[0].answer.startsWith(partial)).toBe(true);await expect(text.locator('img')).toHaveCount(0);
-  await page.locator('#home-settings-toggle').click();await page.locator('#home-sound').click();expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();await page.locator('#settings-close').click();await expect(text).not.toHaveAttribute('data-typing','true',{timeout:15000});await expect(text).toHaveText(Array.from(chat.jobs[0].answer).slice(0,420).join('').trimEnd()+'…');expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();
+  await page.locator('#home-settings-toggle').click();await page.locator('#home-sound').click();expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();await page.locator('#settings-close').click();await expect(text).not.toHaveAttribute('data-typing','true',{timeout:15000});const excerpt=await text.textContent();expect(excerpt.endsWith('…')).toBe(true);expect(chat.jobs[0].answer.startsWith(excerpt.slice(0,-1))).toBe(true);expect(excerpt.length).toBeLessThan(421);expect(await text.evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBe(true);expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();
   await page.waitForTimeout(2200);await expect(text).not.toHaveAttribute('data-typing','true');await expect(text.locator('img')).toHaveCount(0);
  }finally{await context.close();}
 });
@@ -304,4 +304,50 @@ test('a history request started before submission cannot remove the newly regist
  await page.route('**/api/lab/hermes-chat/history?**',async route=>{const snapshot=JSON.parse(JSON.stringify(chat.jobs));await new Promise(resolve=>release=resolve);await route.fulfill({json:{jobs:snapshot}});});
  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect.poll(()=>!!release).toBe(true);
  await page.locator('#home-input').fill('Nova mensagem durante o refresh');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();release();await expect(page.locator('#last-question')).toContainText('Nova mensagem durante o refresh');await expect(page.locator('#home-input')).toHaveValue('');await expect(page.locator('.history-turn')).toHaveCount(2);
+});
+
+test('latest messages fold above the robot, reopen and fold again without losing the conversation',async({browser},testInfo)=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const chat=await chatRoutes(page);chat.jobs.push({id:'peek',question:'Última pergunta',answer:'Última resposta salva.',status:'done',created_at:Date.now()/1000});
+  await ready(page);await resumeSeeded(page);await page.mouse.move(0,0);
+  await expect(page.locator('#home-speech')).toContainText('Última resposta salva.');await expect(page.locator('#conversation-title')).toHaveCount(0);
+  await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});await expect(page.locator('#chat-peek')).toHaveCSS('opacity','1');
+  const head=await page.locator('#robot-touch').boundingBox(),peek=await page.locator('#chat-peek').boundingBox();expect(peek.y+peek.height/2).toBeLessThan(head.y);await expect(page.locator('#home-speech')).toHaveCSS('opacity','0');
+  await page.screenshot({path:testInfo.outputPath('collapsed-mobile.png')});await page.locator('#chat-peek').click();await page.mouse.move(0,0);await expect(page.locator('#home-speech')).toHaveCSS('opacity','1');await expect(page.locator('#last-question')).toContainText('Última pergunta');
+  await page.screenshot({path:testInfo.outputPath('revealed-mobile.png')});await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});
+  await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText('Última resposta salva.');await page.locator('#history-new').click();await expect(page.locator('#chat-peek')).toBeHidden();
+ }finally{await context.close();}
+});
+
+for(const viewport of [{width:393,height:852},{width:1440,height:1000}])test(`camera stays fixed across messages, preview and history ${viewport.width}`,async({page})=>{
+ await page.setViewportSize(viewport);await chatRoutes(page);await instrumentScene(page);await ready(page);
+ const camera=()=>page.evaluate(()=>({projection:__companionQA.camera.projectionMatrix.toArray(),position:__companionQA.camera.position.toArray(),canvas:[__companionQA.renderer.domElement.clientWidth,__companionQA.renderer.domElement.clientHeight]}));
+ for(const kind of ['black','lab','forest']){
+  await page.locator('#home-settings-toggle').click();await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.locator('#settings-close').click();const before=await camera();
+  await page.locator('#home-input').fill(('Pergunta longa sobre a cena. ').repeat(15));await page.locator('#home-send').click();await expect(page.locator('#last-question')).toBeVisible();expect(await camera()).toEqual(before);
+  await page.locator('#home-history-toggle').click();await chooseSession(page);expect(await camera()).toEqual(before);await page.keyboard.press('Escape');expect(await camera()).toEqual(before);
+  await page.locator('#home-input').fill('Linha\n'.repeat(8));await expect(page.locator('#home-input')).toHaveValue('Linha\n'.repeat(8));expect(await camera()).toEqual(before);await page.locator('#home-input').fill('');
+ }
+});
+
+test('default wallpaper sits behind the transparent canvas and is absent in lab and forest',async({page},testInfo)=>{
+ await chatRoutes(page);await instrumentScene(page);await ready(page);
+ const layer=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {art:Number(getComputedStyle(document.getElementById('home-art')).zIndex),scene:Number(getComputedStyle(document.getElementById('home-scene')).zIndex),alpha:pixel[3]};});expect(layer.scene).toBeGreaterThan(layer.art);expect(layer.alpha).toBe(0);
+ for(const button of await page.locator('#home button,#home a').all()){if(await button.isVisible()){await button.evaluate(el=>el.focus());await expect(button).toHaveCSS('outline-style','none');}}
+ await page.keyboard.press('Tab');expect(await page.evaluate(()=>getComputedStyle(document.activeElement).outlineStyle)).toBe('none');
+ await page.screenshot({path:testInfo.outputPath('default-wallpaper.png')});await page.locator('#home-settings-toggle').click();await expect(page.locator('.scene-option').first()).toContainText('Padrão');
+ for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await expect(page.locator('#home-art')).toHaveCSS('opacity','0');}
+});
+
+for(const viewport of [{width:393,height:852},{width:393,height:480}])test(`typing sound ends at the visible preview without muting ${viewport.height}`,async({browser})=>{
+ const context=await browser.newContext({viewport,reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const chat=await chatRoutes(page);await page.route('**/js/home-audio.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {startTyping,stopTyping,','window.__typingAudio=()=>typingVoice;return {startTyping,stopTyping,')});});
+  await ready(page);await page.locator('#home-input').fill('Resposta extensa');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();
+  const answer='Detalhes extensos 👾 sobre videogames, robôs e seus cenários. '.repeat(25);chat.jobs[0].status='done';chat.jobs[0].answer=answer;await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+  const text=page.locator('#home-speech .speech-text');await expect(text).toHaveAttribute('data-typing','true',{timeout:10000});await page.waitForFunction(()=>!!__typingAudio());await expect(text).not.toHaveAttribute('data-typing','true',{timeout:10000});
+  const excerpt=await text.textContent();expect(answer.startsWith(excerpt.slice(0,-1))).toBe(true);expect(excerpt.endsWith('…')).toBe(true);expect(excerpt.length).toBeLessThan(420);expect(await text.evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBe(true);expect(await page.evaluate(()=>!!__typingAudio())).toBe(false);await expect(page.locator('#speech-more')).toBeVisible();
+  await page.waitForTimeout(1200);expect(await text.textContent()).toBe(excerpt);expect(await page.evaluate(()=>!!__typingAudio())).toBe(false);
+ }finally{await context.close();}
 });

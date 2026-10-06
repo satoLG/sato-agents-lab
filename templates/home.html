@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#111b21">
   <meta name="color-scheme" content="dark">
   <title>Sato Agent</title>
   <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" type="image/png">
@@ -22,6 +22,7 @@
   </header>
   <div id="home-scene" aria-hidden="true"></div>
   <div id="home-art" aria-hidden="true"></div>
+  <button id="chat-peek" class="glass" type="button" aria-label="Mostrar últimas mensagens" aria-expanded="true" aria-controls="home-speech last-question" hidden>{{ icon('history') }}</button>
   <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
   <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
   <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Carregando robô…</small></div>
@@ -33,7 +34,6 @@
     <button id="history-bottom" class="icon-button glass" type="button" aria-label="Ir para a mensagem mais recente" hidden>{{ icon('chevron-down') }}</button>
   </section>
   <section id="home-chat" aria-label="Chat com Sato Agent" hidden>
-    <p id="conversation-title" class="conversation-title" hidden></p>
     <div id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span><div class="bubble-actions"><button id="question-more" class="text-button" type="button" hidden><span>Ver mais</span></button><span class="bubble-meta"><button id="question-copy" class="copy-button" type="button" aria-label="Copiar pergunta" title="Copiar pergunta">{{ icon('copy') }}</button><time id="question-time"></time></span></div></div>
     <div class="home-composer glass">
       <p id="home-chat-status" class="sr-only" role="status">Conectando…</p>
@@ -48,7 +48,7 @@
   <dialog id="home-settings" class="glass" aria-labelledby="settings-title">
     <header><h2 id="settings-title">Configurações</h2><button id="settings-close" class="icon-button" type="button" aria-label="Fechar configurações">{{ icon('x') }}</button></header>
     <fieldset><legend>Cenário</legend><div class="scene-options">
-      <label class="scene-option"><input type="radio" name="home-scenario" value="black" checked><span class="scene-preview preview-black">{{ icon('circle') }}</span><span>Preto</span></label>
+      <label class="scene-option"><input type="radio" name="home-scenario" value="black" checked><span class="scene-preview preview-black">{{ icon('circle') }}</span><span>Padrão</span></label>
       <label class="scene-option"><input type="radio" name="home-scenario" value="lab"><span class="scene-preview preview-lab">{{ icon('flask-conical') }}</span><span>Laboratório</span></label>
       <label class="scene-option"><input type="radio" name="home-scenario" value="forest"><span class="scene-preview preview-forest">{{ icon('trees') }}</span><span>Floresta</span></label>
     </div></fieldset>

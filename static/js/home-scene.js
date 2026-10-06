@@ -20,11 +20,11 @@ function robotArt(){
 const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 
 export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario}={}){
- const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
+ const renderer=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
  let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
  renderer.setPixelRatio(pixelRatio);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  container.append(renderer.domElement);onProgress?.(40,'Montando o robô…');
- const world=new T.Scene();world.background=new T.Color('#000');
+ const world=new T.Scene();renderer.setClearColor('#111b21',0);
  const hemisphere=new T.HemisphereLight('#e3f4ff','#536775',1.9);world.add(hemisphere);
  const key=new T.DirectionalLight('#fff3e5',3.4);key.position.set(-3,5,4);world.add(key);
  const fill=new T.DirectionalLight('#95ceff',2.2);fill.position.set(4,2,1);world.add(fill);
@@ -45,9 +45,8 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function applyResize(){
   resizePending=false;
   const bounds=container.getBoundingClientRect();width=Math.max(1,Math.round(bounds.width));height=Math.max(1,Math.round(bounds.height));
-  // Reserve room through framing, while the skybox continues behind the input.
-  const composer=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--composer-height'))||88;
-  const stageHeight=Math.max(height*.35,height-composer-10),span=width<600?5.4:5.6,aspect=width/stageHeight,aim=span/2-.13;
+  // Framing depends only on the viewport, never on message or history height.
+  const stageHeight=Math.max(height*.35,height-98),span=width<600?5.4:5.6,aspect=width/stageHeight,aim=span/2-.13;
   camera.fov=T.MathUtils.radToDeg(2*Math.atan(span/(2*Math.hypot(7,.6))));camera.aspect=aspect;
   camera.setViewOffset(width,stageHeight,0,0,width,height);
   camera.position.set(.45,aim+.6,7);camera.lookAt(0,aim,0);camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
