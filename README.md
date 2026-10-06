@@ -29,8 +29,11 @@ O campo fica compacto no rodapé e expande ao digitar. A pergunta aparece no
 balão e o input é limpo imediatamente, mesmo com a confirmação do servidor
 demorada. Em uma falha, o texto volta ao campo; um ID de mensagem permite
 reconciliar confirmações perdidas e repetir o envio sem duplicar a pergunta.
-O histórico abre primeiro a lista de sessões salvas, com o título baseado na
-primeira pergunta, e permite continuar uma delas ou iniciar uma nova. O título
+Sem conversa ativa, o histórico abre a lista de sessões salvas, com o título baseado
+na primeira pergunta, e permite continuar uma delas ou iniciar uma nova. Depois de
+selecionar uma sessão ou enviar uma mensagem, o botão abre o histórico dessa conversa.
+Nesse histórico, **Lista de sessões** retorna à lista; **Nova conversa** aparece
+somente na lista. A seta fecha o painel em ambas as telas. O título
 permanece no header da conversa. Cada sessão tem histórico e contexto do modelo
 próprios. Recarregar a página começa uma nova conversa vazia; as sessões anteriores
 continuam disponíveis no histórico. Mensagens anteriores à migração ficam em
