@@ -27,12 +27,14 @@
   <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Carregando robô…</small></div>
   <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>
   <section id="home-history" aria-label="Histórico da conversa" hidden>
-    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2>Sato Agent</h2><span id="history-subtitle">Conversa</span></div><span class="history-avatar">{{ icon('sparkles') }}</span></header>
-    <div id="home-messages" role="log" aria-live="polite" aria-relevant="additions text"><p class="history-empty">Sua conversa aparece aqui.</p></div>
+    <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2 id="history-title">Conversas</h2><span id="history-subtitle">Seu histórico com Sato Agent</span></div><button id="history-new" class="text-button" type="button">Nova conversa</button></header>
+    <div id="home-sessions" aria-label="Sessões de conversa"></div>
+    <div id="history-thread" hidden><button id="history-earlier" class="text-button glass" type="button" hidden>Carregar mensagens anteriores</button><div id="home-messages" role="log" aria-live="polite" aria-relevant="additions text"></div></div>
     <button id="history-bottom" class="icon-button glass" type="button" aria-label="Ir para a mensagem mais recente" hidden>{{ icon('chevron-down') }}</button>
   </section>
   <section id="home-chat" aria-label="Chat com Sato Agent" hidden>
-    <div id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span><div class="bubble-actions"><button id="question-more" class="text-button" type="button" hidden><span>Ver mais</span></button><button id="question-copy" class="copy-button" type="button" aria-label="Copiar pergunta" title="Copiar pergunta">{{ icon('copy') }}</button></div></div>
+    <p id="conversation-title" class="conversation-title" hidden></p>
+    <div id="last-question" class="glass" hidden><span>Você</span><span id="last-question-text"></span><div class="bubble-actions"><button id="question-more" class="text-button" type="button" hidden><span>Ver mais</span></button><span class="bubble-meta"><button id="question-copy" class="copy-button" type="button" aria-label="Copiar pergunta" title="Copiar pergunta">{{ icon('copy') }}</button><time id="question-time"></time></span></div></div>
     <div class="home-composer glass">
       <p id="home-chat-status" class="sr-only" role="status">Conectando…</p>
       <form id="home-login" hidden><label for="home-password">Entre para conversar com Sato Agent</label><div><input id="home-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button class="icon-button" type="submit" aria-label="Entrar no chat" title="Entrar">{{ icon('log-in') }}</button></div></form>

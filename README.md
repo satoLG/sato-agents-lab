@@ -15,8 +15,8 @@ Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explora
 ## Sato Agent na raiz
 
 `/` apresenta um robô do laboratório próximo ao campo de mensagem. Após o
-carregamento, o tubo da recepção desce, entrega o robô e recolhe; ele cai, diz
-**Ouch!** e volta a flutuar antes da saudação **Hello, im a Sato Agent**. Ele pisca,
+carregamento, o tubo da recepção desce, entrega o robô e recolhe; ele cai e
+volta a flutuar. A conversa começa vazia, sem balões de saudação. Ele pisca,
 acompanha o ponteiro e alterna entre aceno, cócegas, dança e timidez ao receber
 toques. A dança dá uma volta completa no corpo e duas voltas nos braços.
 Navegadores que bloqueiam autoplay liberam os bips sintetizados no primeiro
@@ -25,16 +25,34 @@ Dashboard e Lab ficam no canto superior direito: o robô anuncia o destino antes
 de navegar. A antiga página de estatísticas públicas foi removida; os indicadores
 continuam em `/dashboard` e `/api/stats`.
 
-O campo fica compacto no rodapé e expande ao digitar. O histórico abre uma
-conversa com balões, datas e horários, mantendo o input disponível. Na cena,
+O campo fica compacto no rodapé e expande ao digitar. A pergunta aparece no
+balão e o input é limpo imediatamente, mesmo com a confirmação do servidor
+demorada. Em uma falha, o texto volta ao campo; um ID de mensagem permite
+reconciliar confirmações perdidas e repetir o envio sem duplicar a pergunta.
+O histórico abre primeiro a lista de sessões salvas, com o título baseado na
+primeira pergunta, e permite continuar uma delas ou iniciar uma nova. O título
+permanece no header da conversa. Cada sessão tem histórico e contexto do modelo
+próprios. Recarregar a página começa uma nova conversa vazia; as sessões anteriores
+continuam disponíveis no histórico. Mensagens anteriores à migração ficam em
+**Conversa anterior**. A migração SQLite adiciona uma coluna e uma tabela sem
+remover dados; voltar ao código anterior é possível mantendo esse schema.
+O chat do Lab mantém os campos e endpoints anteriores. Na cena,
 respostas têm uma prévia de até cinco linhas/420 caracteres, e perguntas de
 duas linhas/180 caracteres. **Ver mais** abre a mensagem integral no histórico.
 Cada balão tem um botão para copiar a mensagem completa, incluindo as prévias
-cortadas. Somente o conteúdo do chat e os campos de texto podem ser selecionados.
+cortadas. **Ver mais** fica à esquerda; copiar e horário ficam juntos à direita.
+Respostas que chegam usam o pacote oficial `typewriter-effect` 2.22.0 (MIT),
+com texto literal, até o limite da prévia. Um loop discreto de teclado acompanha
+a digitação e para ao terminar, silenciar, trocar de conversa ou ocultar a aba.
+Histórico retomado e movimento reduzido mostram o texto completo da prévia
+imediatamente. O bundle e a licença são locais; para regenerar, execute
+`npm ci && npm run build:typewriter`.
+Somente o conteúdo do chat e os campos de texto podem ser selecionados.
 No histórico, mensagens longas também começam resumidas; **Ver mais** expande
 somente o balão escolhido. A expansão permanece ao atualizar ou reabrir o
 histórico nesta página. Ícones, horários e balões já respondidos são preservados
-durante a espera por outra resposta.
+durante a espera por outra resposta. Conversas extensas carregam mensagens
+anteriores em páginas de 40, preservando o que já foi carregado.
 O histórico usa blur de 1 px, mantendo a cena visível. Os botões usam SVGs oficiais do
 Lucide, servidos localmente; licença e revisão em `static/icons/README.md`.
 O layout acompanha o viewport disponível quando o teclado móvel abre e respeita
@@ -43,15 +61,20 @@ a preferência por movimento reduzido. Sem WebGL, chat e navegação continuam.
 As configurações oferecem preto, laboratório e floresta, além de quatro cores
 de chat: azul, verde, violeta e âmbar. As escolhas ficam salvas neste navegador.
 Todos os fundos têm desenhos vetoriais suaves de robôs. O laboratório tem um
-skybox cinza claro; a floresta tem céu azul com nuvens e terreno irregular com
-a textura local de solo. Os cenários são carregados uma vez, sob demanda, no
+skybox cinza claro, piso amplo e parede ao fundo, com câmera em perspectiva;
+a floresta tem céu azul com nuvens, terreno contínuo, várias camadas de árvores,
+rio e silhuetas distantes suaves sob névoa azul. Os cenários ultrapassam as
+laterais do celular. São carregados uma vez, sob demanda, no
 mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. A cena
 preenche todo o viewport, inclusive atrás do chat. O cenário salvo é preparado
 durante o loading e revelado suavemente. Com o som ativo, laboratório e floresta
-tocam os mesmos loops locais de equipamentos e natureza usados no lab.
+tocam loops locais: o laboratório usa o arquivo `amb_machinery_factory_lp_01.wav`
+enviado pelo usuário, convertido para Ogg e em volume baixo. A floresta mantém
+o loop de natureza com volume menor e filtro suave nas frequências agudas,
+reduzindo o destaque dos pássaros. O controle de som também silencia a digitação.
 Mudanças de altura do chat alteram o enquadramento sem redimensionar o canvas;
 resizes reais são agrupados no frame que já desenha a cena.
-limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
+A cena limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
 O Sato Agent da raiz tem corpo esférico com três linhas de encaixe, olho recuado
 em uma área mecânica escura e braços lisos, sem mãos ou pernas. Corpo e braços
 mantêm suas dimensões durante os gestos. Uma pequena antena gira e pisca na cor

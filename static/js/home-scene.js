@@ -27,7 +27,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const key=new T.DirectionalLight('#fff3e5',3.4);key.position.set(-3,5,4);world.add(key);
  const fill=new T.DirectionalLight('#95ceff',2.2);fill.position.set(4,2,1);world.add(fill);
  const rim=new T.DirectionalLight('#79c6ff',3);rim.position.set(1,3,-4);world.add(rim);
- const camera=new T.OrthographicCamera(-3,3,3,-3,.1,30),art=robotArt();
+ const camera=new T.PerspectiveCamera(42,1,.1,160),art=robotArt();
  const rig=createRigFactory(art).robot({floating:true});rig.root.name='sato-companion';rig.root.rotation.y=.12;rig.root.visible=false;world.add(rig.root);
  const chute=createDeliveryChute(world,art,{height:8,radius:1.08});chute.visible=false;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),sets=new Map(),pendingSets=new Map();
@@ -46,7 +46,8 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   // Reserve room through framing, while the skybox continues behind the input.
   const composer=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--composer-height'))||88;
   const stageHeight=Math.max(height*.35,height-composer-10),span=width<600?5.4:5.6,aspect=width/stageHeight,aim=span/2-.13;
-  camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=span/2-span*height/stageHeight;
+  camera.fov=T.MathUtils.radToDeg(2*Math.atan(span/(2*Math.hypot(7,.6))));camera.aspect=aspect;
+  camera.setViewOffset(width,stageHeight,0,0,width,height);
   camera.position.set(.45,aim+.6,7);camera.lookAt(0,aim,0);camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
   if(bufferWidth!==width||bufferHeight!==height){renderer.setSize(width,height,false);bufferWidth=width;bufferHeight=height;}
   const neutral=new T.Matrix4().makeRotationY(.12),corners=bodyCorners.map(v=>v.clone().applyMatrix4(neutral).project(camera)),xs=corners.map(p=>(p.x+1)*width/2),ys=corners.map(p=>(1-p.y)*height/2);
@@ -111,7 +112,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   sets.get(currentScenario)?.setLevel(level);
   if(out&&level===0){sets.get(currentScenario)?.setLevel(0);activateScenario(desiredScenario);}
  }
- function activateScenario(kind){currentScenario=kind;container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;onScenario?.(kind);}
+ function activateScenario(kind){currentScenario=kind;world.fog=kind==='black'?null:new T.FogExp2(kind==='forest'?'#aac8dd':'#d5e2ec',kind==='forest'?.031:.024);container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;onScenario?.(kind);}
  async function setScenario(kind,{immediate=false}={}){
   if(!['black','lab','forest'].includes(kind))throw new Error('Cenário inválido.');
   const revision=++scenarioRevision;

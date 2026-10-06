@@ -159,6 +159,11 @@ def api_hermes_chat_job(job_id):
 def api_hermes_chat_history():
     return web_chat.history()
 
+
+@app.get("/api/lab/hermes-chat/conversations")
+def api_hermes_chat_conversations():
+    return web_chat.conversations()
+
 @app.route("/api/activity/heatmap")
 def api_heatmap():
     days = max(30, min(731, request.args.get("days", 365, type=int)))
