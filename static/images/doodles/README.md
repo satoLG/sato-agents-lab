@@ -1,34 +1,24 @@
 # Chat wallpaper sources
 
-The active home wallpaper uses 30 original SVGs from the
+The active home wallpaper uses every currently listed generic design from the
 [Popsy Hand Drawn Icons collection](https://www.svgrepo.com/collection/popsy-hand-drawn-icons/)
-on SVG Repo. SVG Repo lists CC0 for these assets (for example,
-[Coding](https://www.svgrepo.com/svg/474334/coding)). Original files are kept in
-`popsy/`; `popsy/manifest.json` records all source IDs.
+and [page 2](https://www.svgrepo.com/collection/popsy-hand-drawn-icons/2): 32 icons.
+Site and platform logos (including YouTube, Slack, social networks, app stores,
+Airbnb and PayPal) are excluded. The collection advertises 57 items, but its two
+pages currently expose 45 downloadable designs; 13 are platform logos.
 
-Technology and digital media: coding, desktop, phone, camera, messages, Google
-Play, App Store, Slack, Reddit, Messenger, YouTube, Spotify, Instagram, Twitter,
-Facebook, Pinterest and music. The collection has no robot or game-controller
-icon; the other 13 drawings add the spontaneous mix requested for the wallpaper.
+SVG Repo lists CC0 for these assets (for example,
+[Coding](https://www.svgrepo.com/svg/474334/coding)). Original files are preserved
+in `popsy/`. `popsy/manifest.json` records the active source IDs and the measured
+bounds of their SVG paths, so blank margins can be cropped without editing paths.
 
-## Original sources
+## Active original sources
 
 - [coding](https://www.svgrepo.com/svg/474334/coding)
 - [desktop](https://www.svgrepo.com/svg/474346/desktop)
 - [phone](https://www.svgrepo.com/svg/474341/phone)
 - [camera](https://www.svgrepo.com/svg/474342/camera)
 - [messages](https://www.svgrepo.com/svg/474337/messages)
-- [google-play](https://www.svgrepo.com/svg/474332/google-play)
-- [app-store](https://www.svgrepo.com/svg/474331/app-store)
-- [slack](https://www.svgrepo.com/svg/474329/slack)
-- [reddit](https://www.svgrepo.com/svg/474328/reddit)
-- [messenger](https://www.svgrepo.com/svg/474325/messenger)
-- [youtube](https://www.svgrepo.com/svg/474326/youtube)
-- [spotify](https://www.svgrepo.com/svg/474327/spotify)
-- [instagram](https://www.svgrepo.com/svg/474324/instagram)
-- [twitter](https://www.svgrepo.com/svg/474323/twitter)
-- [facebook](https://www.svgrepo.com/svg/474322/facebook)
-- [pinterest](https://www.svgrepo.com/svg/474330/pinterest)
 - [music](https://www.svgrepo.com/svg/474340/music)
 - [star-black](https://www.svgrepo.com/svg/474335/star-black)
 - [fire](https://www.svgrepo.com/svg/474336/fire)
@@ -43,20 +33,40 @@ icon; the other 13 drawings add the spontaneous mix requested for the wallpaper.
 - [piggy-bank](https://www.svgrepo.com/svg/474298/piggy-bank)
 - [heart](https://www.svgrepo.com/svg/474319/heart)
 - [heart-glasses](https://www.svgrepo.com/svg/474321/heart-glasses)
+- [chef-hat](https://www.svgrepo.com/svg/474300/chef-hat)
+- [pisces](https://www.svgrepo.com/svg/474313/pisces)
+- [tie](https://www.svgrepo.com/svg/474314/tie)
+- [aquarius](https://www.svgrepo.com/svg/474315/aquarius)
+- [aries](https://www.svgrepo.com/svg/474316/aries)
+- [cancer](https://www.svgrepo.com/svg/474317/cancer)
+- [christmas-ornament](https://www.svgrepo.com/svg/474318/christmas-ornament)
+- [christmas-tree](https://www.svgrepo.com/svg/474320/christmas-tree)
+- [buy](https://www.svgrepo.com/svg/474344/buy)
+- [shopping-cart](https://www.svgrepo.com/svg/474345/shopping-cart)
+- [24](https://www.svgrepo.com/svg/474347/24)
+- [dollar](https://www.svgrepo.com/svg/474348/dollar)
+- [euro](https://www.svgrepo.com/svg/474349/euro)
 
 ## Composition
 
-Regenerate with `node tools/build-chat-wallpaper.mjs`. Each of the 30 designs
-appears four times per 600px tile, shuffled into stable scattered positions.
-The SVG boxes are 22–35px (about 20–32px at the CSS repeat size), with modest
-random rotations. Conservative collision checks keep a 6px gap between rotated
-bounds, including across repeat edges and corners. The original irregular paths
-are preserved without a displacement filter. Black ink is recolored to muted
-green and white interiors match the default background. Assets are local;
-there are no requests to SVG Repo at runtime.
+Regenerate with `node tools/build-chat-wallpaper.mjs`. A 600px tile holds 400
+compact slots on an equal 30px pitch. At the existing 540px CSS repeat size,
+centers are 27px apart, with a minimum separation of approximately 1px between
+conservative rotated bounds. Blank source margins are removed using cached
+original path bounds. All shapes retain their original proportions and paths;
+modest seeded rotations keep the hand-drawn feel. Narrow designs tilt more to
+fill the slots. Shuffled complete decks give every active design a balanced
+frequency. There are no random placement gaps or displacement filters.
 
-The previous nine SVGs remain available in this directory but are not used by
-the wallpaper. Their SVG Repo sources, listed as CC0 when acquired:
+The generator checks every pair of rotated bounds, including repeat seams and
+corners, verifies that all designs are used, rejects platform names, and requires
+at least 70% of the tile to be occupied by drawing bounds. This is footprint
+coverage, rather than the fraction of filled ink inside the outline drawings.
+Black ink is recolored to muted green, with white interiors matching the default
+background. Assets are local; no SVG Repo request occurs at runtime.
+
+Retired source files remain available but are not used in the wallpaper. Earlier
+non-Popsy sources, listed as CC0 when acquired:
 
 - https://www.svgrepo.com/svg/452661/robot-neutral
 - https://www.svgrepo.com/svg/452659/robot-love
