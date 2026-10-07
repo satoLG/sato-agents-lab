@@ -70,10 +70,10 @@ sem uma segunda cópia solta acima da pergunta.
 
 As configurações oferecem Padrão, laboratório e floresta, além de quatro cores
 de chat: azul, verde, violeta e âmbar. As escolhas ficam salvas neste navegador.
-O fundo Padrão é cinza escuro, com 30 desenhos originais Popsy Hand Drawn do SVG Repo,
-priorizando tecnologia e mídia digital, completados por desenhos variados. Os ícones
-são pequenos e próximos, sem alinhamento em grade nem sobreposição, inclusive nas
-emendas do padrão. O canvas transparente fica acima dos
+O fundo Padrão é cinza escuro, com os 32 desenhos genéricos disponíveis da coleção
+Popsy Hand Drawn do SVG Repo, sem marcas de sites ou plataformas. Os ícones pequenos
+preenchem uma malha compacta de espaçamento uniforme, com cerca de 1px de separação
+mínima, sem sobreposição inclusive nas emendas do padrão. O canvas transparente fica acima dos
 desenhos: nenhum deles cobre os modelos 3D. Laboratório e floresta não exibem
 esses desenhos. Fontes e licenças: `static/images/doodles/README.md`. O laboratório tem um
 skybox cinza claro, piso amplo e parede ao fundo, com câmera em perspectiva;
