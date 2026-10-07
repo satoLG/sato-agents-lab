@@ -22,6 +22,8 @@
   </header>
   <div id="home-scene" aria-hidden="true"></div>
   <div id="home-art" aria-hidden="true"></div>
+  <div id="home-joystick" aria-hidden="true" hidden><span></span></div>
+  <p id="home-explore-hint" role="status" hidden>WASD ou setas · arraste para girar · Esc para sair</p>
   <button id="chat-peek" class="glass" type="button" aria-label="Mostrar últimas mensagens" aria-expanded="true" aria-controls="home-speech last-question" hidden>{{ icon('history') }}</button>
   <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
   <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
@@ -41,6 +43,7 @@
       <div class="composer-row">
         <button id="home-history-toggle" class="icon-button" type="button" aria-label="Abrir histórico da conversa" title="Histórico" aria-expanded="false" aria-controls="home-history">{{ icon('history') }}</button>
         <form id="home-form"><label class="sr-only" for="home-input">Sua mensagem para Sato Agent</label><textarea id="home-input" rows="1" maxlength="4000" placeholder="Mensagem…" autocomplete="off" required disabled></textarea><button id="home-send" class="icon-button" type="submit" aria-label="Enviar mensagem" disabled>{{ icon('arrow-up') }}</button></form>
+        <button id="home-explore" class="icon-button" type="button" aria-label="Explorar cenário" title="Explorar cenário" aria-pressed="false" aria-describedby="home-explore-hint" hidden><svg class="explore-play" aria-hidden="true"><path d="m8 5 12 7-12 7Z"/></svg><svg class="explore-stop" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>
         <button id="home-settings-toggle" class="icon-button" type="button" aria-label="Configurações" title="Configurações" aria-haspopup="dialog" aria-controls="home-settings">{{ icon('settings-2') }}</button>
       </div>
     </div>

@@ -108,3 +108,22 @@ html,body,#home{background:#111b21}
 /* Indicate keyboard focus with a tint; button outlines are never displayed. */
 #home button:focus,#home button:focus-visible,#home a:focus,#home a:focus-visible{outline:none!important}
 #home button:focus-visible,#home a:focus-visible{background-color:color-mix(in srgb,var(--accent) 16%,var(--surface))}
+
+/* Drawings are individual SVG springs; the fallback keeps the static wallpaper. */
+#home-art.interactive-wallpaper{background:none}
+#home-art>svg{display:block;width:100%;height:100%;fill:none;stroke:none;overflow:visible}
+#home-art>svg use{stroke:none}
+#home-explore{color:var(--accent)}
+#home-explore .explore-stop{display:none}
+#home-explore[aria-pressed=true] .explore-play{display:none}
+#home-explore[aria-pressed=true] .explore-stop{display:block}
+#home-explore[aria-pressed=true]{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+#home[data-exploring=true]{touch-action:none}
+#home-scene{touch-action:none}
+#home[data-exploring=true] #robot-touch,#home[data-exploring=true] #home-speech,#home[data-exploring=true] #last-question,#home[data-exploring=true] #chat-peek{visibility:hidden}
+#home[data-exploring=true] #home-scene{cursor:grab}
+#home[data-exploring=true] #home-scene:active{cursor:grabbing}
+#home-joystick{position:absolute;z-index:5;width:100px;height:100px;margin:-50px;border-radius:50%;border:1px solid #def7ff66;background:#16354650;backdrop-filter:blur(3px);pointer-events:none}
+#home-joystick span{position:absolute;left:31px;top:31px;width:38px;height:38px;border-radius:50%;background:#d8f5ff90;box-shadow:0 2px 18px #0003}
+#home-explore-hint{position:absolute;z-index:3;bottom:100px;left:50%;transform:translateX(-50%);margin:0;padding:7px 13px;border-radius:18px;background:var(--surface);color:var(--muted);font-size:11px;text-align:center;pointer-events:none;white-space:nowrap}
+@media(pointer:coarse){#home-explore-hint{font-size:0;white-space:normal;width:max-content;max-width:90%}#home-explore-hint:after{content:'Arraste à esquerda para andar · à direita para olhar';font-size:10px}}

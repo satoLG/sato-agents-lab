@@ -4,6 +4,7 @@ import {createSpeechBubble} from './lab-dialogue.js';
 import {chatIcon,copyMessageButton,thinkingPhrase,thinkingIndicator,forgetThinking} from './chat-ui.js';
 import {createChatTypewriter} from './chat-typewriter.js';
 import {fitChatPreview} from './chat-preview.js';
+import {createHomeWallpaper} from './home-wallpaper.js';
 
 const $=id=>document.getElementById(id),API='/api/lab/hermes-chat',ROBOT='guide:hermes';
 const bubble=createSpeechBubble();$('home-speech').append(bubble.el);
@@ -11,12 +12,13 @@ const speechMore=$('question-more').cloneNode(true);speechMore.id='speech-more';
 const speechTime=document.createElement('time'),speechMeta=document.createElement('span');speechMeta.className='bubble-meta';speechMeta.append(bubble.copy,speechTime);bubble.actions.append(speechMeta);
 const preview=(text,limit)=>Array.from(text).length>limit?`${Array.from(text).slice(0,limit).join('').trimEnd()}…`:text;
 const answerPreview=text=>{const lines=text.split('\n').slice(0,5).join('\n'),value=preview(lines,420);return lines!==text&&value===lines?value+'…':value;};
-let scene,pose,csrf=null,authenticated=false,available=false,jobs=[],pollTimer,requesting=false,refreshing=null,navigating=false,disposed=false,lastSpoken='',reactionIndex=0;
+let wallpaper,scene,pose,csrf=null,authenticated=false,available=false,jobs=[],pollTimer,requesting=false,refreshing=null,navigating=false,disposed=false,lastSpoken='',reactionIndex=0;
 let currentQuestion='',speechPending=false,previewTimer;
 let conversations=[],conversationId=null,conversationTitle='',conversationRevision=0,historyView='sessions',hasEarlier=false,loadedEarlier=false,retryMessage=null;
 const awaitingAnswers=new Set(),animatedAnswers=new Set();
 const questionCopy=copyMessageButton(()=>currentQuestion,'Copiar pergunta');questionCopy.id='question-copy';$('question-copy').replaceWith(questionCopy);
 const audio=createCompanionAudio(active=>{$('home-sound').setAttribute('aria-pressed',String(active));$('home-sound').setAttribute('aria-label',active?'Silenciar robô':'Ativar som do robô');});
+createHomeWallpaper($('home'),$('home-art')).then(value=>{if(disposed)value.dispose();else wallpaper=value;}).catch(error=>console.warn('Wallpaper animation unavailable',error));
 const typing=createChatTypewriter(audio,()=>{measurePreviews();placeSpeech();historyScroll();schedulePreviewCollapse();});
 
 function schedulePreviewCollapse(){
@@ -171,7 +173,7 @@ function setHistoryView(view){historyView=view;$('home-sessions').hidden=view!==
 async function openConversation(conversation){if(requesting)return;if(conversation.id!==conversationId)selectConversation(conversation.id,conversation.title);setHistoryView('thread');renderHistory();status('Carregando conversa…');await refresh();}
 function newConversation(){if(requesting)return;selectConversation();historyOpen(false);status('Nova conversa.');schedulePoll();$('home-input').focus({preventScroll:true});}
 function historyScroll(){const log=$('home-messages');$('history-bottom').hidden=historyView!=='thread'||log.scrollHeight-log.scrollTop-log.clientHeight<120;}
-function historyOpen(open,role){clearTimeout(previewTimer);previewTimer=null;$('home-history').hidden=!open;typing.finishAll();$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');setHistoryView(role||conversationId?'thread':'sessions');layoutComposer();if(open){if(role&&jobs.length)expandedMessages.add(`${jobs.at(-1).id}:${role}`);if(historyView==='sessions'&&authenticated)loadConversations().catch(error=>status(error.message,true));renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else{$('home-history-toggle').focus({preventScroll:true});setPreviewCollapsed(false);schedulePreviewCollapse();}}
+function historyOpen(open,role){if(open)scene?.setExploring(false);clearTimeout(previewTimer);previewTimer=null;$('home-history').hidden=!open;typing.finishAll();$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');setHistoryView(role||conversationId?'thread':'sessions');layoutComposer();if(open){if(role&&jobs.length)expandedMessages.add(`${jobs.at(-1).id}:${role}`);if(historyView==='sessions'&&authenticated)loadConversations().catch(error=>status(error.message,true));renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else{$('home-history-toggle').focus({preventScroll:true});setPreviewCollapsed(false);schedulePreviewCollapse();}}
 speechMore.addEventListener('click',()=>historyOpen(true,'answer'));$('question-more').addEventListener('click',()=>historyOpen(true,'question'));
 $('home-messages').addEventListener('scroll',historyScroll);$('history-bottom').addEventListener('click',()=>{$('home-messages').scrollTo({top:$('home-messages').scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
 $('home-history-toggle').addEventListener('click',()=>historyOpen($('home-history').hidden));$('history-close').addEventListener('click',()=>historyOpen(false));$('history-sessions').addEventListener('click',()=>{typing.finishAll();setHistoryView('sessions');loadConversations().catch(error=>status(error.message,true));});$('history-new').addEventListener('click',newConversation);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('home-history').hidden)historyOpen(false);});
@@ -204,8 +206,10 @@ $('home-login').addEventListener('submit',async event=>{
  catch(error){status(error.message,true);}finally{button.disabled=false;}
 });
 const reactions=[{kind:'wave',text:'Oi! Que bom te ver por aqui.'},{kind:'boop',text:'Bip-bip! Acho que você achou meu botão de cócegas.'},{kind:'dance',text:'Um passinho de robô pra alegrar o dia!'}, {kind:'shy',text:'Hehe… agora fiquei tímido.'}];
-$('robot-touch').addEventListener('click',()=>{if(navigating)return;const reaction=reactions[reactionIndex++%reactions.length];say(reaction.text,{reaction:reaction.kind});});
+$('robot-touch').addEventListener('click',()=>{if(navigating||scene?.exploring)return;const reaction=reactions[reactionIndex++%reactions.length];say(reaction.text,{reaction:reaction.kind});});
 $('home-sound').addEventListener('click',()=>audio.toggle());
+function explorationChanged(active){const button=$('home-explore');button.setAttribute('aria-pressed',String(active));button.setAttribute('aria-label',active?'Parar exploração':'Explorar cenário');button.title=active?'Parar exploração':'Explorar cenário';$('home-explore-hint').hidden=!active;}
+$('home-explore').addEventListener('click',()=>scene?.setExploring(!scene.exploring));
 const settings=$('home-settings');let settingsRevision=0;
 $('home-settings-toggle').addEventListener('click',()=>settings.showModal());$('settings-close').addEventListener('click',()=>settings.close());settings.addEventListener('click',event=>{if(event.target!==settings)return;const r=settings.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)settings.close();});settings.addEventListener('close',()=>{$('home-settings-toggle').focus({preventScroll:true});});
 async function changeScenario(kind,options){const revision=++settingsRevision;$('settings-status').textContent='Carregando cenário…';try{if(!scene)throw new Error('O cenário precisa de WebGL 2.');const applied=await scene.setScenario(kind,options);if(applied&&revision===settingsRevision){try{localStorage.setItem('sato-home-scenario',kind);}catch{}$('settings-status').textContent='';}}catch(error){if(revision===settingsRevision){$('settings-status').textContent=error.message;const current=$('home-scene').dataset.scenario||'black';document.querySelector(`[name="home-scenario"][value="${current}"]`).checked=true;}}}
@@ -223,7 +227,7 @@ new ResizeObserver(layoutComposer).observe($('home-chat'));new ResizeObserver(()
 function progress(value,text){$('home-progress').value=value;$('home-loading-stage').textContent=text;}
 async function start(){
  const chatReady=initializeChat();
- try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onScenario:kind=>audio.setScenario(kind)});
+ try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onScenario:kind=>{audio.setScenario(kind);$('home-explore').hidden=kind==='black';},onExplore:explorationChanged});
   let saved;try{saved=localStorage.getItem('sato-home-scenario');}catch{}if(['lab','forest'].includes(saved)){progress(85,'Preparando cenário…');document.querySelector(`[name="home-scenario"][value="${saved}"]`).checked=true;await changeScenario(saved,{immediate:true});}
  }
  catch(error){console.warn('Companion scene unavailable',error);$('home-fallback').hidden=false;}
@@ -232,6 +236,6 @@ async function start(){
  if(scene){await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
  await chatReady;if(disposed)return;document.body.dataset.ready='true';audio.cue('hello');
 }
-window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(navigationTimer);clearTimeout(previewTimer);typing.dispose();scene?.dispose();audio.dispose();});
+window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(navigationTimer);clearTimeout(previewTimer);typing.dispose();scene?.dispose();wallpaper?.dispose();audio.dispose();});
 window.addEventListener('pageshow',event=>{if(event.persisted){navigating=false;inputState();layoutViewport();refresh();}});
 start();

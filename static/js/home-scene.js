@@ -2,6 +2,7 @@ import * as T from '../vendor/three.module.min.js';
 import {createRigFactory,poseRig,setRigBlink} from './lab-rigs.js';
 import {createDeliveryChute} from './lab-chute.js';
 import {updateNature} from './nature-motion.js';
+import {createHomeNavigation} from './home-navigation.js';
 
 function robotArt(){
  const materials=new Map(),geometries=new Map();
@@ -19,7 +20,7 @@ function robotArt(){
 }
 const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 
-export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario}={}){
+export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario,onExplore}={}){
  const renderer=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
  let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
  renderer.setPixelRatio(pixelRatio);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
@@ -34,13 +35,15 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const chute=createDeliveryChute(world,art,{height:8,radius:1.08});chute.visible=false;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),sets=new Map(),pendingSets=new Map();
  let width=1,height=1,frame=0,last=0,time=0,speakingUntil=0,reaction=null,disposed=false,lookYaw=0,body,resizePending=true;
- let bufferWidth=0,bufferHeight=0;
+ let bufferWidth=0,bufferHeight=0,lookPitch=0,frontFov=42;
+ const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
  let arrival=null,arrivalResolve,arrivalPromise,currentScenario='black',desiredScenario='black',level=0,scenarioRevision=0;
  container.dataset.scenario='black';container.dataset.arrival='waiting';
+ const navigation=createHomeNavigation(container,rig,camera,{getEnvironment:()=>sets.get(currentScenario),onChange(active){reaction=null;lookYaw=lookPitch=0;resizePending=true;onExplore?.(active);}});
  const point=new T.Vector3(),bodyCorners=[];
  for(const x of [-1.05,1.05])for(const y of [.26,1.87])for(const z of [-.3,.65])bodyCorners.push(new T.Vector3(x,y,z));
  function project(x,y,z){point.set(x,y,z).applyMatrix4(rig.root.matrixWorld).project(camera);return {x:(point.x+1)*width/2,y:(1-point.y)*height/2};}
- function report(){rig.root.updateMatrixWorld(true);onFrame?.({head:project(0,1.78,.2),body,width,height});}
+ function report(){rig.root.updateMatrixWorld(true);const corners=bodyCorners.map(v=>project(v.x,v.y,v.z)),xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);body={left:Math.max(0,Math.min(...xs)),top:Math.max(0,Math.min(...ys)),right:Math.min(width,Math.max(...xs)),bottom:Math.min(height,Math.max(...ys))};onFrame?.({head:project(0,1.78,.2),body,width,height});}
  function resize(){resizePending=true;}
  function applyResize(){
   resizePending=false;
@@ -48,8 +51,11 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   // Framing depends only on the viewport, never on message or history height.
   const stageHeight=Math.max(height*.35,height-98),span=width<600?5.4:5.6,aspect=width/stageHeight,aim=span/2-.13;
   camera.fov=T.MathUtils.radToDeg(2*Math.atan(span/(2*Math.hypot(7,.6))));camera.aspect=aspect;
+  frontFov=camera.fov;
   camera.setViewOffset(width,stageHeight,0,0,width,height);
-  camera.position.set(.45,aim+.6,7);camera.lookAt(0,aim,0);camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  frontPosition.set(.45,aim+.6,7);frontTarget.set(0,aim,0);
+  if(navigation.active){camera.clearViewOffset();camera.fov=55;camera.aspect=width/height;}else navigation.frameFront(frontPosition,frontTarget,.033,frontFov);
+  camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
   if(bufferWidth!==width||bufferHeight!==height){renderer.setSize(width,height,false);bufferWidth=width;bufferHeight=height;}
   const neutral=new T.Matrix4().makeRotationY(.12),corners=bodyCorners.map(v=>v.clone().applyMatrix4(neutral).project(camera)),xs=corners.map(p=>(p.x+1)*width/2),ys=corners.map(p=>(1-p.y)*height/2);
   body={left:Math.max(0,Math.min(...xs)),top:Math.max(0,Math.min(...ys)),right:Math.min(width,Math.max(...xs)),bottom:Math.min(height,Math.max(...ys))};report();
@@ -84,10 +90,20 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(age>2.65)chute.position.y=3.05+5*smooth((age-2.65)/1.9);
  }
  function pose(dt){
-  poseRig(rig,reduced.matches?0:time,dt,{attention:1,talk:time<speakingUntil,lookYaw,reduced:reduced.matches});
-  rig.root.rotation.set(0,.12,0);rig.root.position.y=0;rig.root.scale.setScalar(1);rig.head.rotation.z=0;
+  poseRig(rig,reduced.matches?0:time,dt,{speed:navigation.speed,attention:1,talk:time<speakingUntil,lookYaw,reduced:reduced.matches});
+  // The complete optic remains fixed in its recess. Only the iris translates,
+  // with radial clearance inside the .183 opening around the .151 iris.
+  const eyeX=navigation.active?0:lookYaw*.09,eyeY=navigation.active?0:lookPitch*.09;
+  const eyeLength=Math.hypot(eyeX,eyeY),eyeLimit=.025/Math.max(.025,eyeLength),eyeEase=1-Math.exp(-dt*12);
+  rig.pupil.position.x+=(eyeX*eyeLimit-rig.pupil.position.x)*eyeEase;
+  rig.pupil.position.y+=(.015+eyeY*eyeLimit-rig.pupil.position.y)*eyeEase;
+  if(!navigation.active&&!navigation.returning)rig.root.rotation.y=navigation.facingYaw;
+  rig.root.rotation.x=rig.root.rotation.z=0;rig.root.scale.setScalar(1);rig.head.rotation.z=0;
   if(arrival){arrivalPose();return;}
-  if(!reduced.matches){rig.root.position.y=Math.sin(time*1.65)*.045;rig.spine.rotation.z+=Math.sin(time*.8)*.025;}
+  const floor=sets.get(currentScenario)?.groundHeight?.(rig.root.position.x,rig.root.position.z)||0;
+  rig.root.position.y=floor;
+  if(!reduced.matches){rig.root.position.y+=Math.sin(time*1.65)*.045;rig.spine.rotation.z+=Math.sin(time*.8)*.025;}
+  if(navigation.active)return;
   if(!reaction)return;
   const elapsed=time-reaction.at,p=Math.min(1,elapsed/reaction.duration),envelope=Math.sin(p*Math.PI);
   if(p>=1){if(reaction.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction=null;container.dataset.reaction='idle';return;}
@@ -99,7 +115,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
    case 'dance':{
     // One complete body turn and two shoulder windmills with eased starts/stops.
     const turn=smooth(p),beat=Math.sin(elapsed*10),spin=turn*Math.PI*4;
-    rig.root.rotation.y=.12+turn*Math.PI*2;rig.hips.rotation.z=beat*.07*envelope;rig.root.position.y=Math.abs(beat)*.055*envelope;
+    rig.root.rotation.y=navigation.facingYaw+turn*Math.PI*2;rig.hips.rotation.z=beat*.07*envelope;rig.root.position.y=Math.abs(beat)*.055*envelope;
     for(const arm of rig.arms){arm.upper.rotation.z=arm.side*(.2+1.05*envelope);arm.upper.rotation.x=spin*arm.side;arm.lower.rotation.x=-.28*envelope;arm.lower.rotation.z=Math.sin(elapsed*10+arm.side)*.12*envelope;if(arm.wrist)arm.wrist.rotation.y=Math.sin(elapsed*10)*.3*envelope;}
     for(const leg of rig.legs){leg.upper.rotation.x=Math.sin(elapsed*10+leg.side)*.15*envelope;leg.ankle.rotation.x=-Math.max(0,beat*leg.side)*.18*envelope;}break;
    }
@@ -113,9 +129,10 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   sets.get(currentScenario)?.setLevel(level);
   if(out&&level===0){sets.get(currentScenario)?.setLevel(0);activateScenario(desiredScenario);}
  }
- function activateScenario(kind){currentScenario=kind;const forest=kind==='forest',lab=kind==='lab';hemisphere.intensity=forest?1.15:lab?1.4:1.9;hemisphere.groundColor.set(forest?'#435a39':'#536775');key.color.set(forest?'#ffe6ba':'#fff3e5');key.intensity=forest?2.7:lab?2.6:3.4;fill.intensity=forest?.45:lab?.8:2.2;rim.intensity=forest?.75:lab?1:3;renderer.toneMappingExposure=forest?1.08:lab?1.1:1.2;world.fog=kind==='black'?null:new T.FogExp2(kind==='forest'?'#a8c8cf':'#c0d2df',kind==='forest'?.037:.017);container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;onScenario?.(kind);}
+ function activateScenario(kind){navigation.setActive(false);navigation.resetFront();rig.root.position.set(0,0,0);rig.root.rotation.y=.12;currentScenario=kind;const forest=kind==='forest',lab=kind==='lab';hemisphere.intensity=forest?1.15:lab?1.4:1.9;hemisphere.groundColor.set(forest?'#435a39':'#536775');key.color.set(forest?'#ffe6ba':'#fff3e5');key.intensity=forest?2.7:lab?2.6:3.4;fill.intensity=forest?.45:lab?.8:2.2;rim.intensity=forest?.75:lab?1:3;renderer.toneMappingExposure=forest?1.08:lab?1.1:1.2;world.fog=kind==='black'?null:new T.FogExp2(kind==='forest'?'#a8c8cf':'#c0d2df',kind==='forest'?.068:.017);container.dataset.scenario=kind;container.closest('#home').dataset.scenario=kind;resizePending=true;onScenario?.(kind);}
  async function setScenario(kind,{immediate=false}={}){
   if(!['black','lab','forest'].includes(kind))throw new Error('Cenário inválido.');
+  navigation.setActive(false);
   const revision=++scenarioRevision;
   if(kind!=='black'&&!sets.has(kind)){
    if(!pendingSets.has(kind))pendingSets.set(kind,(async()=>{
@@ -133,19 +150,19 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function render(stamp){
   if(disposed)return;frame=requestAnimationFrame(render);if(document.hidden){last=stamp;return;}
   if(stamp-last<1000/30&&!resizePending)return;const dt=Math.min(.06,(stamp-last)/1000||.033);last=stamp;time+=dt;
-  if(resizePending)applyResize();pose(dt);updateScenario(dt);updateNature(time,reduced.matches);sets.get(currentScenario)?.tick(reduced.matches?0:time);
+  if(resizePending)applyResize();navigation.update(dt);pose(dt);updateScenario(dt);navigation.frameFront(frontPosition,frontTarget,dt,frontFov);updateNature(time,reduced.matches);sets.get(currentScenario)?.tick(reduced.matches?0:time);
   // Adapt fill resolution only after sustained slow frames, never the CSS size.
   qualityElapsed+=Math.min(.25,(stamp-(render.previousStamp||stamp))/1000);render.previousStamp=stamp;
   if(++qualityFrames>=60){if(qualityElapsed/qualityFrames>.055&&pixelRatio>1){pixelRatio=Math.max(1,pixelRatio-.25);renderer.setPixelRatio(pixelRatio);}qualityFrames=0;qualityElapsed=0;}
   renderer.render(world,camera);report();
  }
  function react(kind='wave'){if(reaction?.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};container.dataset.reaction=kind;}
- function look(event){const bounds=container.getBoundingClientRect();lookYaw=Math.max(-.3,Math.min(.3,((event.clientX-bounds.left)/bounds.width-.5)*.5));}
+ function look(event){if(navigation.active||event.target.closest('dialog'))return;const bounds=container.getBoundingClientRect(),head=project(0,1.2,.4);lookYaw=T.MathUtils.clamp((event.clientX-bounds.left-head.x)/Math.max(100,bounds.width*.4),-.3,.3);lookPitch=T.MathUtils.clamp((head.y-event.clientY+bounds.top)/Math.max(100,bounds.height*.4),-.3,.3);}
  function disposeSet(set){for(const root of [set.root,set.skybox]){root.traverse(o=>{o.geometry?.dispose();for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){for(const value of Object.values(m))if(value?.isTexture)value.dispose();m.dispose();}});root.removeFromParent();}}
- const leave=()=>{lookYaw=0;};container.addEventListener('pointermove',look);container.addEventListener('pointerleave',leave);
+ const leave=()=>{lookYaw=lookPitch=0;};const home=container.closest('#home');home.addEventListener('pointermove',look);home.addEventListener('pointerdown',look);home.addEventListener('pointerleave',leave);
  onProgress?.(75,'Acendendo as luzes…');rig.root.visible=true;chute.visible=true;await renderer.compileAsync(world,camera);rig.root.visible=false;chute.visible=false;renderer.render(world,camera);report();frame=requestAnimationFrame(render);
- return {arrive,react,setScenario,resize,speak(duration=2){speakingUntil=time+duration;},dispose(){
-  disposed=true;arrivalResolve?.();cancelAnimationFrame(frame);observer.disconnect();container.removeEventListener('pointermove',look);container.removeEventListener('pointerleave',leave);
+ return {arrive,react,setScenario,resize,setExploring(value){if(arrival||currentScenario!==desiredScenario)return false;return navigation.setActive(value);},get exploring(){return navigation.active;},speak(duration=2){speakingUntil=time+duration;},dispose(){
+  disposed=true;arrivalResolve?.();cancelAnimationFrame(frame);observer.disconnect();navigation.dispose();home.removeEventListener('pointermove',look);home.removeEventListener('pointerdown',look);home.removeEventListener('pointerleave',leave);
   const geometries=new Set(),materials=new Set(),textures=new Set();world.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});
   geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());renderer.dispose();renderer.domElement.remove();
  }};
