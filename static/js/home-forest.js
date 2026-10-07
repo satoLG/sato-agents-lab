@@ -1,7 +1,8 @@
 import * as T from '../vendor/three.module.min.js';
 import {loadFoliageTexture} from './folio-foliage.js';
-import {createTreeGrove,createMeadow,createContactShadows,seededRandom,createGroveResources,createShrubs} from './scene-grove.js';
+import {createTreeGrove,createContactShadows,seededRandom,createGroveResources,createShrubs} from './scene-grove.js';
 import {createWaterMaterial,waterRibbon} from './scene-water.js';
+import {createHomeGrass} from './home-grass.js';
 
 export const FOREST_WATER_HEIGHT=-.10;
 export function forestWaterProfile(z){
@@ -19,7 +20,7 @@ export function forestGroundHeight(x,z){
 }
 
 export function createForestTerrain(){
- const geometry=new T.PlaneGeometry(76,76,128,128);geometry.rotateX(-Math.PI/2);geometry.translate(0,0,-12);
+ const geometry=new T.PlaneGeometry(120,120,192,192);geometry.rotateX(-Math.PI/2);geometry.translate(0,0,-12);
  const positions=geometry.attributes.position,colors=[],color=new T.Color();
  for(let i=0;i<positions.count;i++){
   const x=positions.getX(i),z=positions.getZ(i);positions.setY(i,forestGroundHeight(x,z));
@@ -59,22 +60,33 @@ export async function createHomeForest(root,art){
   if(Math.abs(x-p.center)<p.width+1.5)continue;
   add(x,z,4.1+random()*6.7,1.3+random()*1.8);
  }
+ // Continue the grove around the clearing, including behind the default camera.
+ for(let i=0;i<68;i++){
+  const angle=i/68*Math.PI*2,radius=13+random()*18,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius,p=forestWaterProfile(z);
+  if(p.width>0&&Math.abs(x-p.center)<p.width+1.5)continue;
+  add(x,z,5+random()*5,1.7+random()*1.7);
+ }
  const resources=createGroveResources(true);
  createTreeGrove(root,trees,{seed:627,detail:true,shadows:false,resources});
  createContactShadows(root,trees);
- const patches=[];
- for(let i=0;i<3600;i++){
-  const x=(random()-.5)*36,z=3-random()*36,p=forestWaterProfile(z),edge=Math.abs(x-p.center)-p.width;
-  if(p.width>0&&edge<.8||Math.hypot(x,z)<1.7||Math.abs(x+.8*Math.sin(z*.4))<.9&&z>-8)continue;
-  patches.push({x,z,y:forestGroundHeight(x,z),size:.14+random()*.28});
- }
- createMeadow(root,patches);
+ const grass=createHomeGrass(root,{heightAt:forestGroundHeight,waterAt:forestWaterProfile});
  const shrubs=[];
  for(let i=0;i<54;i++){
   const z=-2-random()*25,p=forestWaterProfile(z),x=i%3===0?-4-random()*8:p.center+(i%2?1:-1)*(p.width+1.3+random()*2.2);
   if(Math.abs(x)<1.8&&z>-7)continue;
   shrubs.push({x,z,y:forestGroundHeight(x,z),size:.38+random()*.72,tint:['#b4b536','#aaa62a','#d58b37','#c28296'][i%4]});
  }
+ const obstacles=[];
+ // A dense, visible hedge blocks passage well before the fog-hidden terrain edge.
+ for(let i=0;i<76;i++){
+  const angle=i/76*Math.PI*2,x=-2+Math.cos(angle)*9,z=Math.sin(angle)*8.5;
+  const shore=forestWaterProfile(z);if(shore.width>0&&Math.abs(x-shore.center)<shore.width+.55)continue;
+  shrubs.push({x,z,y:forestGroundHeight(x,z),size:1.35+random()*.45,tint:i%3?'#829847':'#b0ae44'});
+  obstacles.push({x,z,radius:.95});
+ }
+ // Shore and trunks inside the playable clearing are solid too.
+ for(const tree of trees)if(tree.x>-12&&tree.x<9&&tree.z>-11&&tree.z<11)obstacles.push({x:tree.x,z:tree.z,radius:.3});
+ for(let z=-9;z<-.7;z+=.35){const p=forestWaterProfile(z);obstacles.push({minX:p.center-p.width-.35,maxX:p.center+p.width+.35,minZ:z-.2,maxZ:z+.2});}
  createShrubs(root,shrubs,resources);
  const stones=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({color:'#89938b',roughness:1,flatShading:true}),68),dummy=new T.Object3D();
  for(let i=0;i<68;i++){
@@ -82,5 +94,5 @@ export async function createHomeForest(root,art){
   dummy.position.set(x,forestGroundHeight(x,z)+r*.25,z);dummy.rotation.set(random()*.6,random()*6,random()*.5);dummy.scale.set(r*1.5,r*.75,r);dummy.updateMatrix();stones.setMatrixAt(i,dummy.matrix);stones.setColorAt(i,color.setHSL(.11+random()*.07,.08,.48+random()*.18));
  }
  stones.name='shore-stones';root.add(stones);
- return {tick(t){water.userData.waterTime.value=t;}};
+ return {navigation:{minX:-11,maxX:7,minZ:-8.5,maxZ:8.5,obstacles},groundHeight:forestGroundHeight,tick(t){water.userData.waterTime.value=t;grass.tick(t);}};
 }

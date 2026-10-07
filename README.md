@@ -75,10 +75,13 @@ Popsy Hand Drawn do SVG Repo, sem marcas de sites ou plataformas. Os ícones peq
 preenchem uma malha compacta de espaçamento uniforme, com cerca de 1px de separação
 mínima, sem sobreposição inclusive nas emendas do padrão. O canvas transparente fica acima dos
 desenhos: nenhum deles cobre os modelos 3D. Laboratório e floresta não exibem
-esses desenhos. Fontes e licenças: `static/images/doodles/README.md`. O laboratório tem um
-skybox cinza claro, piso amplo e parede ao fundo, com câmera em perspectiva;
-a floresta tem céu azul com nuvens, terreno contínuo, várias camadas de árvores,
-rio e silhuetas distantes suaves sob névoa azul. Os cenários ultrapassam as
+esses desenhos. Fontes e licenças: `static/images/doodles/README.md`. No fundo Padrão, cada desenho reage ao cursor ou ao toque com uma mola: cresce,
+empurra os vizinhos e volta ao encaixe quando o contato termina. A interação ignora
+o chat, menus e o robô, e respeita movimento reduzido. O laboratório é uma sala
+fechada com portal de testes, gerador helicoidal, bancadas, racks e equipamentos
+em todas as direções. A floresta tem céu, terreno contínuo, rio, árvores ao redor
+e névoa que encobre o limite externo. A grama procedural adapta a grade irregular,
+os triângulos voltados à câmera e o vento nas pontas de `folio-2025/Grass.js`. Os cenários ultrapassam as
 laterais do celular. São carregados uma vez, sob demanda, no
 mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. A cena
 preenche todo o viewport, inclusive atrás do chat. O cenário salvo é preparado
@@ -87,7 +90,17 @@ tocam loops locais: o laboratório usa o arquivo `amb_machinery_factory_lp_01.wa
 enviado pelo usuário, convertido para Ogg e em volume baixo. A floresta mantém
 o loop de natureza com volume menor e filtro suave nas frequências agudas,
 reduzindo o destaque dos pássaros. O controle de som também silencia a digitação.
-A câmera depende somente do viewport: perguntas, balões e histórico não alteram
+Nos cenários Laboratório e Floresta, o botão Play entre Enviar e Configurações
+assume o controle do robô e vira Stop. No desktop, WASD/setas movem em relação à
+câmera; arrastar o fundo gira a visão; Esc sai. No celular, o primeiro contato
+à esquerda revela um único analógico no local do dedo, ocultado ao soltar. O
+restante do fundo gira a câmera, inclusive com dois dedos simultâneos. Paredes,
+equipamentos, margem do rio e arbustos bloqueiam o robô e encurtam a câmera.
+Ao sair, o robô permanece onde parou e a câmera escolhe uma vista frontal livre,
+sem atravessar a sala. A íris segue cursor/toque nos dois eixos, limitada a 0,025
+unidade dentro da abertura mecânica; o conjunto óptico fica fixo na carcaça.
+
+Fora da exploração, a câmera depende somente do viewport: perguntas, balões e histórico não alteram
 o zoom, a distância nem as proporções da cena;
 resizes reais são agrupados no frame que já desenha a cena.
 A cena limita a 30 fps e DPR 1,75, sem carregar o campus ou mapas HDR.
