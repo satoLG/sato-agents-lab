@@ -155,7 +155,7 @@ def test_model_usage_sem_custo_nem_fallback(vm, client):
 def test_tool_calls_sem_success_nem_error(vm, client):
     vm.db(
         ["CREATE TABLE tool_calls (timestamp TEXT, tool_name TEXT, duration_ms INT)"],
-        [("INSERT INTO tool_calls VALUES (?,?,?)", ("2026-09-09T10:00:00", "mcp__github__x", 30))],
+        [("INSERT INTO tool_calls VALUES (?,?,?)", (datetime.now(timezone.utc).isoformat(), "mcp__github__x", 30))],
     )
     check_all(client, "tool_calls sem success/error")
     t = client.get("/api/tools").get_json()

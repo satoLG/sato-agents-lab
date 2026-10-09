@@ -2,12 +2,63 @@
 import json
 import re
 from collections import Counter
+from pathlib import Path
 
-from . import memory, rag, vm
+from . import config, memory, rag, vm
 from .commit_context import _words, _commit_context
+from .context_cache import SourceCache
 
 TOKEN = re.compile(r"\b(?:sk-[\w-]{16,}|gh[pousr]_[\w]{20,}|github_pat_[\w]{20,})\b")
 SECRET_KEY = re.compile(r"(?:api.?key|token|secret|password|passwd|credential|authorization)", re.I)
+CACHE = SourceCache()
+
+
+def _stamp(path):
+    try:
+        stat = path.stat()
+        return (str(path), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
+    except OSError:
+        return (str(path), None)
+
+
+def _catalog_version():
+    roots = [config.HERMES_HOME / name for name in ('memories', 'contexts', 'skills')]
+    paths = [config.CONFIG_PATH, *(Path.cwd() / name for name in ('AGENTS.md', '.hermes.md', 'CLAUDE.md', 'README.md'))]
+    for root in roots:
+        paths.append(root)
+        if root.is_dir():
+            paths.extend(sorted(root.rglob('*')))
+    return tuple(_stamp(path) for path in paths)
+
+
+def _rag_version():
+    table = config.RAG_PATH / (rag.TABLE + '.lance')
+    versions = table / '_versions'
+    paths = [config.RAG_PATH, table, versions, config.HERMES_HOME / 'rag_commit_state' / 'sync.json']
+    if versions.is_dir():
+        paths.extend(sorted(versions.iterdir()))
+    return tuple(_stamp(path) for path in paths)
+
+
+def _redact_text(text):
+    text = memory.redact_secrets(text)
+    text = re.sub(r"(?im)^(\s*[\w.-]*(?:key|token|secret|password|credential)[\w.-]*\s*=).+$", r"\1[REDIGIDO]", text)
+    return TOKEN.sub('[REDIGIDO]', text)
+
+
+def _document(path):
+    resolved = memory._inside_roots(Path(path))
+    if resolved is None:
+        raise ValueError('caminho fora dos diretorios permitidos')
+    def read():
+        doc = memory.read_document(path)
+        return {**doc, 'content': _redact_text(str(doc.get('content', '')))}
+    return CACHE.get(('document', str(resolved)), _stamp(resolved), 30, read)[0]
+
+
+def _rag_catalog():
+    value = _read(lambda: rag.catalog(preview=2000))
+    return {**value, 'docs': [scrub(doc) for doc in value.get('docs', [])]}
 
 
 def scrub(value, depth=0):
@@ -19,9 +70,7 @@ def scrub(value, depth=0):
     if isinstance(value, list):
         return [scrub(item, depth + 1) for item in value[:64]]
     if isinstance(value, str):
-        text = memory.redact_secrets(value)
-        text = re.sub(r"(?im)^(\s*[\w.-]*(?:key|token|secret|password|credential)[\w.-]*\s*=).+$", r"\1[REDIGIDO]", text)
-        return TOKEN.sub("[REDIGIDO]", text)[:4000]
+        return _redact_text(value)[:4000]
     return value
 
 
@@ -37,7 +86,8 @@ def collect(snapshot, question):
                "events": snapshot.get("events", [])[:24], "warnings": snapshot.get("warnings", []),
                "visuals": snapshot.get("visuals", {}), "telemetry_available": snapshot.get("telemetry_available"),
                "vm": _read(lambda: vm.snapshot(with_breakdown=False))}
-    catalog = _read(memory.catalog)
+    scope = (str(config.HERMES_HOME), str(config.RAG_PATH), str(Path.cwd()))
+    catalog, catalog_freshness = CACHE.get(('catalog', scope), _catalog_version(), 30, lambda: _read(memory.catalog))
     entries = catalog.get("documents", []) + catalog.get("skills", [])
     context["document_catalog"] = [{key: entry.get(key) for key in ("name", "category", "modified")}
                                    for entry in entries[:96]]
@@ -48,7 +98,7 @@ def collect(snapshot, question):
     documents = []
     for entry in candidates:
         try:
-            document = memory.read_document(entry["path"])
+            document = _document(entry["path"])
         except (OSError, ValueError):
             continue
         content = str(document.get("content", ""))
@@ -60,7 +110,10 @@ def collect(snapshot, question):
         documents.append((score, {"name": entry.get("name"), "category": entry.get("category"),
                                   "content": excerpt[:4000], "excerpt": True}))
     context["documents"] = [item for _, item in sorted(documents, key=lambda pair: -pair[0])[:6]]
-    vector = _read(lambda: rag.catalog(preview=2000))
+    vector, rag_freshness = CACHE.get(('rag', scope), _rag_version(), 30, _rag_catalog)
+    context['freshness'] = {'vm': {'observed_at': context['vm'].get('timestamp'), 'max_age_seconds': 0},
+                            'lab_catalog': {'observed_at': snapshot.get('catalog_sampled_at'), 'max_age_seconds': 30},
+                            'document_catalog': catalog_freshness, 'rag': rag_freshness}
     all_docs = vector.get("docs", [])
     summary, commit_docs = _commit_context(all_docs, question)
     summary["counts_are_exact_for_indexed_data"] = not bool(vector.get("error"))

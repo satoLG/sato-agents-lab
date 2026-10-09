@@ -15,6 +15,14 @@ from hermes_dashboard import config  # noqa: E402
 import app as app_module  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def isolate_prepared_context_cache():
+    from hermes_dashboard import chat_context
+    chat_context.CACHE.clear()
+    yield
+    chat_context.CACHE.clear()
+
+
 @pytest.fixture
 def vm(tmp_path, monkeypatch):
     """Aponta todos os caminhos pra tmp_path e devolve um helper de montagem."""

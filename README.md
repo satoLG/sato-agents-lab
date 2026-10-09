@@ -12,6 +12,34 @@ python3 app.py                 # http://127.0.0.1:8080
 
 Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explorar.
 
+## Worker do chat e contexto preparado
+
+O worker da fila aquece um processo Hermes quando o chat privado inicia. O processo
+mantém os módulos carregados; cada mensagem recebe um CLI/agente novo e somente
+o histórico explícito da sua conversa. O identificador Hermes `web-<conversation_id>`
+é estável dentro dessa conversa, sem usar `/resume` nem carregar histórico implícito.
+Ferramentas continuam bloqueadas na definição, no despacho e na validação de eventos.
+
+O servidor coleta o contexto ao processar a mensagem, em vez de capturá-lo na entrada
+da fila e refazê-lo depois. CPU, RAM e processos são observados em cada pedido.
+Catálogos, documentos redigidos e RAG têm cache em memória por até 30 segundos;
+mudanças nos arquivos, metadados dos documentos, manifests LanceDB e checkpoint
+de sincronização invalidam a fonte correspondente antes desse prazo. A seleção de
+trechos continua sendo feita para cada pergunta, e os rankings de commits continuam
+contando todo o catálogo indexado. O contexto inclui a idade e validade de suas fontes.
+Falha ao atualizar uma fonte não reaproveita silenciosamente uma cópia expirada.
+
+O cache é de fontes, não de respostas, e limita a representação serializada a 16 MiB
+e 48 entradas. O processo é reciclado entre mensagens após 100 pedidos ou RSS acima
+de 384 MiB. Queda, erro de protocolo, tentativa de ferramenta ou timeout de 240 segundos
+descartam o processo; a fila durável mantém sua recuperação existente. Alterações em
+`config.yaml`, `.env`, `cli.py`, `run_agent.py` ou no runner também recriam o processo.
+Aquecer não faz inferência: o provedor é chamado somente ao processar uma mensagem.
+
+Os logs do serviço registram PID, reutilização do worker, RSS, tamanho do prompt,
+quantidade de mensagens de histórico e tempos de contexto/runner, sem registrar o
+conteúdo da pergunta ou credenciais nesses registros de desempenho.
+
 ## Sato Agent na raiz
 
 `/` apresenta um robô do laboratório próximo ao campo de mensagem. Após o
