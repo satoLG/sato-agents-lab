@@ -251,7 +251,7 @@ export function createParcelFlow(world,art,zones,factory,obstacles,hall,onCue=()
     const deposited=parcel(hall,x,dockY+.34,z-.85);deposited.visible=false;deposits.push(deposited);
     const start={x:-34,z:-7},route=findPath(start,end,obstacles,workers),curve=new T.CurvePath();let previous=new T.Vector3(start.x,groundHeight(start.x,start.z)-.03,start.z);
     for(const p of route){const next=new T.Vector3(p.x,groundHeight(p.x,p.z)-.03,p.z);curve.add(new T.LineCurve3(previous,next));previous=next;}
-    const rig=factory.robot();rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);const carried=parcel(rig.root,0,.82,.72);rod(carried,[-.88,.05,-.1],[.88,.05,-.1],.025,mat('#a1b4bc',.8,.28));const duration=Math.max(8,curve.getLength()/2.2);
+    const rig=factory.robot({floating:true});rig.root.scale.setScalar(.85);rig.root.traverse(o=>o.userData.dynamic=true);hall.add(rig.root);const carried=parcel(rig.root,0,.82,.72);rod(carried,[-.88,.05,-.1],[.88,.05,-.1],.025,mat('#a1b4bc',.8,.28));const duration=Math.max(8,curve.getLength()/2.2);
     couriers.push({id,rig,parcel:carried,deposited,curve,duration,phase:index*4,speed:0,previousCarry:false});
   }
   hall.traverse(o=>o.userData.dynamic=true);

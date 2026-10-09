@@ -17,12 +17,8 @@ const ragUI=createRagUI(()=>scene,fetchJSON);
 const equipmentUI=createEquipmentUI(()=>scene);
 const touchIconURL=new URL('../icons/game-icons/tap.svg',import.meta.url).href;
 const progress=$('loading-progress');
-const blocks=Array.from({length:12},()=>node('span'));
-progress.append(...blocks);
 function loadingStep(value,label){
-  const shown=Math.max(0,Math.min(100,Math.round(value)));
-  progress.setAttribute('aria-valuenow',String(shown));
-  blocks.forEach((block,i)=>block.classList.toggle('on',i<Math.round(shown/100*blocks.length)));
+  progress.value=Math.max(0,Math.min(100,Math.round(value)));
   $('loading-stage').textContent=label;
 }
 function revealScene(){

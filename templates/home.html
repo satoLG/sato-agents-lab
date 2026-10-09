@@ -1,3 +1,4 @@
+{% from 'fragments/site-ui.html' import navigation, loading %}
 {% macro icon(name) -%}<svg aria-hidden="true" focusable="false"><use href="{{ url_for('lab_asset', version=lab_asset_version, filename='icons/lucide.svg') }}#{{ name }}"/></svg>{%- endmacro %}
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -12,13 +13,14 @@
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/scene-ui.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home-appearance.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/sato-ui.css') }}">
 </head>
-<body data-ready="false">
+<body data-page="home" data-ready="false">
 <main id="home" data-theme="cyan" data-scenario="black" aria-label="Converse com o Sato Agent">
   <svg class="logo-filters" aria-hidden="true"><defs><filter id="home-logo-ink" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -.3333 -.3333 -.3333 1 0"/></filter></defs></svg>
   <header class="home-header">
     <a class="brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="30" height="30"></a>
-    <nav class="home-nav glass" aria-label="Explorar Sato Agents"><a href="/dashboard" data-destination="dashboard">{{ icon('layout-dashboard') }} Dashboard</a><a href="/lab" data-destination="lab">{{ icon('flask-conical') }} Lab</a></nav>
+    {{ navigation('home') }}
   </header>
   <div id="home-scene" aria-hidden="true"></div>
   <div id="home-art" aria-hidden="true"></div>
@@ -27,7 +29,7 @@
   <button id="chat-peek" class="glass" type="button" aria-label="Mostrar últimas mensagens" aria-expanded="true" aria-controls="home-speech last-question" hidden>{{ icon('history') }}</button>
   <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
   <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
-  <div id="home-loading" role="status"><span>SATO AGENT</span><progress id="home-progress" max="100" value="0" aria-label="Carregando robô"></progress><small id="home-loading-stage">Carregando robô…</small></div>
+  {{ loading('home-loading','home-progress','home-loading-stage','Carregando robô…') }}
   <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>
   <section id="home-history" aria-label="Histórico da conversa" hidden>
     <header class="history-header glass"><button id="history-close" class="icon-button" type="button" aria-label="Fechar histórico">{{ icon('arrow-left') }}</button><div><h2 id="history-title">Conversas</h2><span id="history-subtitle">Seu histórico com Sato Agent</span></div><button id="history-new" class="text-button" type="button">Nova conversa</button><button id="history-sessions" class="text-button" type="button" hidden>Lista de sessões</button></header>

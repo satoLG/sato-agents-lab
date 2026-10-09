@@ -1,0 +1,27 @@
+const {test,expect}=require('@playwright/test');
+for(const viewport of [{width:1440,height:1000},{width:393,height:852}])test(`shared UI and identical telemetry at ${viewport.width}px`,async({page,request},info)=>{
+ test.setTimeout(120000);await page.setViewportSize(viewport);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const state=await(await request.get('/api/lab/state')).json();
+ const stats={month:'2026-10',total_calls:5,total_cost:.3,fallback_rate:null,models:[{model:'same-model',provider:'custom-a',calls:2,input_tokens:100,output_tokens:20,cost:.1},{model:'same-model',provider:'custom-b',calls:3,input_tokens:200,output_tokens:30,cost:.2}],note:'Uso agregado por sessão'};
+ const channels={stats:{data:stats},vm:{data:{cpu:{total:42},memory:{total:1024,used_percent:61}}},live:{data:{processes:[],events:[]}}};
+ const boards={models:{rows:[{when:'2026-10-09T12:00:00Z',name:'Modelo registrado',status:'REGISTRADO',provider:'custom-b'}]}};
+ await page.route('**/api/lab/stream',route=>route.fulfill({contentType:'text/event-stream',body:`event: telemetry\ndata: ${JSON.stringify({state,channels,boards})}\n\n`}));
+ await page.route('**/api/lab/hermes-chat/session',route=>route.fulfill({json:{available:false,authenticated:false}}));
+ await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+ const reference=await page.locator('.site-nav').evaluate(el=>({background:getComputedStyle(el).backgroundColor,radius:getComputedStyle(el).borderRadius,font:getComputedStyle(el).fontFamily}));
+ await page.goto('/dashboard');await expect(page.locator('#dashboard-loading')).toBeHidden();await expect(page.locator('[data-live-indicators]')).toHaveCount(0);
+ await page.getByRole('tab',{name:'Providers',exact:true}).click();await expect(page.locator('#panel-providers table tbody tr')).toHaveCount(2);await expect(page.locator('#panel-providers')).toContainText('custom-a');await expect(page.locator('#panel-providers')).toContainText('custom-b');
+ const dashboardRows=await page.locator('#panel-providers table tbody td').allTextContents();
+ await page.locator('#panel-providers summary').click();await expect(page.locator('#panel-providers details[open]')).toContainText('custom-b');
+ expect(await page.locator('.site-nav').evaluate(el=>({background:getComputedStyle(el).backgroundColor,radius:getComputedStyle(el).borderRadius,font:getComputedStyle(el).fontFamily}))).toEqual(reference);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:info.outputPath('dashboard-providers.png'),fullPage:true});
+ await page.getByRole('tab',{name:'VM',exact:true}).click();await expect(page.locator('#panel-vm [data-live-sector]')).toContainText('42%');
+ await page.route('**/js/lab-scene.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('renderer.render(world,camera);','window.unifiedQA={world,avatar,hero,callbacks};renderer.render(world,camera);')});});
+ await page.goto('/lab');await expect(page.locator('#loading')).toBeHidden({timeout:45000});await expect(page.locator('#scene canvas')).toBeVisible();await expect(page.locator('.site-nav')).toBeVisible();
+ const geometry=await page.evaluate(()=>{const q=unifiedQA;let workstations=0,floating=0;q.world.traverse(o=>{if(o.name==='bevelled-workstation')workstations++;if(o.name==='spherical-hull')floating++;});return {legs:q.hero.legs.length,workstations,floating};});expect(geometry.legs).toBe(0);expect(geometry.workstations).toBeGreaterThan(10);expect(geometry.floating).toBeGreaterThan(8);
+ await page.evaluate(()=>unifiedQA.callbacks.onEquipment('models'));await expect(page.locator('#equipment-panel table tbody tr')).toHaveCount(2);expect(await page.locator('#equipment-panel table tbody td').allTextContents()).toEqual(dashboardRows);
+ expect(await page.locator('.site-nav').evaluate(el=>({background:getComputedStyle(el).backgroundColor,radius:getComputedStyle(el).borderRadius,font:getComputedStyle(el).fontFamily}))).toEqual(reference);
+ expect(await page.locator('#equipment-panel').evaluate(el=>el.getBoundingClientRect().right<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath('lab-providers.png')});
+ await page.getByRole('button',{name:'Fechar',exact:true}).click();await page.screenshot({path:info.outputPath('lab-scene.png')});expect(errors).toEqual([]);
+});

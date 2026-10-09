@@ -18,5 +18,5 @@ test('one large bank per sector, real readings, history zoom and button-only cha
  await expect(page.locator('#interaction')).toHaveAttribute('data-robot','guide:hermes');await page.locator('#interaction').click();await expect(page.locator('#chat-free-toggle')).toBeVisible();await expect(page.locator('#chat-form')).toBeHidden();await page.locator('#chat-close').click();
  await page.locator('#camera-room').click();await page.screenshot({path:'test-results/large-monitors.png'});
  expect(errors).toEqual([]);
- await page.goto('/dashboard');await page.locator('[data-live-indicators] select').selectOption('vm');await expect(page.locator('[data-live-indicators] .stat-grid')).toContainText('42%');
+ await page.goto('/dashboard');await page.getByRole('tab',{name:'VM',exact:true}).click();await expect(page.locator('#panel-vm [data-live-sector] .stat-grid')).toContainText('42%');
 });

@@ -2,22 +2,9 @@ import * as T from '../vendor/three.module.min.js';
 import {createRigFactory,poseRig,setRigBlink} from './lab-rigs.js';
 import {createDeliveryChute} from './lab-chute.js';
 import {updateNature} from './nature-motion.js';
+import {createSceneArt} from './scene-art.js';
 import {createHomeNavigation} from './home-navigation.js';
 
-function robotArt(){
- const materials=new Map(),geometries=new Map();
- const geo=(key,make)=>{if(!geometries.has(key))geometries.set(key,make());return geometries.get(key);};
- const mat=(color,metalness=.1,roughness=.55)=>{const key=`${color}:${metalness}:${roughness}`;if(!materials.has(key))materials.set(key,new T.MeshStandardMaterial({color,metalness,roughness}));return materials.get(key);};
- const glow=color=>{const key=`glow:${color}`;if(!materials.has(key))materials.set(key,new T.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.8,roughness:.4}));return materials.get(key);};
- const material=color=>typeof color==='string'?mat(color):color;
- function mesh(parent,geometry,finish,x=0,y=0,z=0){const object=new T.Mesh(geometry,finish);object.position.set(x,y,z);parent.add(object);return object;}
- function box(parent,w,h,d,color,x=0,y=0,z=0){const m=mesh(parent,geo('box',()=>new T.BoxGeometry(1,1,1)),material(color),x,y,z);m.scale.set(w,h,d);return m;}
- function sphere(parent,r,color,x=0,y=0,z=0,scale=[1,1,1]){const m=mesh(parent,geo('sphere',()=>new T.SphereGeometry(1,24,16)),material(color),x,y,z);m.scale.set(r*scale[0],r*scale[1],r*scale[2]);return m;}
- function cylinder(parent,r,height,color,x=0,y=0,z=0,top=r){return mesh(parent,geo(`cyl:${r}:${top}:${height}`,()=>new T.CylinderGeometry(top,r,height,20)),material(color),x,y,z);}
- function ring(parent,r,width,color,x=0,y=0,z=0,floor=false){const m=mesh(parent,geo(`ring:${r}:${width}`,()=>new T.TorusGeometry(r,width,8,48)),material(color),x,y,z);if(floor)m.rotation.x=Math.PI/2;return m;}
- function rod(parent,a,b,width,color){const start=new T.Vector3(...a),end=new T.Vector3(...b),delta=end.clone().sub(start),m=cylinder(parent,width,delta.length(),color);m.position.copy(start.add(end).multiplyScalar(.5));m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());return m;}
- return {box,sphere,cylinder,ring,rod,mesh,mat,glow,geo};
-}
 const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 
 export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario,onExplore}={}){
@@ -30,7 +17,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const key=new T.DirectionalLight('#fff3e5',3.4);key.position.set(-3,5,4);world.add(key);
  const fill=new T.DirectionalLight('#95ceff',2.2);fill.position.set(4,2,1);world.add(fill);
  const rim=new T.DirectionalLight('#79c6ff',3);rim.position.set(1,3,-4);world.add(rim);
- const camera=new T.PerspectiveCamera(42,1,.1,160),art=robotArt();
+ const camera=new T.PerspectiveCamera(42,1,.1,160),art=createSceneArt();
  const rig=createRigFactory(art).robot({floating:true});rig.root.name='sato-companion';rig.root.rotation.y=.12;rig.root.visible=false;world.add(rig.root);
  const chute=createDeliveryChute(world,art,{height:8,radius:1.08});chute.visible=false;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),sets=new Map(),pendingSets=new Map();
@@ -90,7 +77,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(age>2.65)chute.position.y=3.05+5*smooth((age-2.65)/1.9);
  }
  function pose(dt){
-  poseRig(rig,reduced.matches?0:time,dt,{speed:navigation.speed,attention:1,talk:time<speakingUntil,lookYaw,reduced:reduced.matches});
+  poseRig(rig,reduced.matches?0:time,dt,{speed:navigation.speed,travelAngle:navigation.travelAngle,attention:1,talk:time<speakingUntil,lookYaw,reduced:reduced.matches});
   // The complete optic remains fixed in its recess. Only the iris translates,
   // with radial clearance inside the .183 opening around the .151 iris.
   const eyeX=navigation.active?0:lookYaw*.09,eyeY=navigation.active?0:lookPitch*.09;
@@ -102,7 +89,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(arrival){arrivalPose();return;}
   const floor=sets.get(currentScenario)?.groundHeight?.(rig.root.position.x,rig.root.position.z)||0;
   rig.root.position.y=floor;
-  if(!reduced.matches){rig.root.position.y+=Math.sin(time*1.65)*.045;rig.spine.rotation.z+=Math.sin(time*.8)*.025;}
+  if(!reduced.matches){rig.root.position.y+=Math.sin(time*1.65)*.045;if(navigation.speed<.01)rig.spine.rotation.z+=Math.sin(time*.8)*.025;}
   if(navigation.active)return;
   if(!reaction)return;
   const elapsed=time-reaction.at,p=Math.min(1,elapsed/reaction.duration),envelope=Math.sin(p*Math.PI);

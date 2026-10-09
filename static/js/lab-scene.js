@@ -1,3 +1,4 @@
+import {createWorkstation} from './scene-equipment.js';
 import {createMonitorBank,indicatorCards} from './lab-monitors.js';
 import {createHistoryBoard} from './lab-history.js';
 import * as T from '../vendor/three.module.min.js';
@@ -16,10 +17,11 @@ import {createRagDome} from './lab-rag.js';
 import {batchStatic} from './lab-batch.js';
 import {loadSatoAvatar} from './lab-avatar.js';
 import {createLabControls,WALK_SPEED,RUN_SPEED} from './lab-controls.js';
+import {createSceneArt} from './scene-art.js';
 import {createRigFactory, poseRig, dampAngle} from './lab-rigs.js';
 import {canStand, findPath, nearestFree, moveWithCollision} from './lab-navigation.js';
 
-// Local assets only: the supplied Sato GLB and procedural lab/robots.
+// Local assets only: companion geometry, shared equipment and procedural campus.
 const LIVE = new Set(['recent', 'running', 'process']);
 const NAMES=Object.fromEntries(Object.entries(ZONES).map(([id,z])=>[id,z.name]));
 
@@ -121,15 +123,7 @@ export async function createLabScene(container, callbacks) {
   const energy=createEnergyLines(hall,groundHeight);
   function consoleDesk(group,color){
     group.name='sector-shared-workbench';
-    box(group,8.4,.2,1.65,'#e4eade',0,1.07,0);
-    for(const x of [-3.65,3.65]){box(group,.22,1,.95,'#27323b',x,.5,0);box(group,.28,.12,1.3,'#71818a',x,.06,0);}
-    box(group,7.2,.16,.07,'#27323b',0,.84,.6);
-    box(group,7.8,.045,.04,glow(color),0,.94,.82);
-    for(const x of [-2.8,0,2.8]){
-      box(group,1.02,.05,.35,'#27323b',x,1.2,.38);
-      for(let row=0;row<3;row++)for(let col=0;col<8;col++)box(group,.078,.014,.065,'#71818a',x-.35+col*.1,1.23,.27+row*.08);
-      sphere(group,.033,glow(color),x+.6,1.2,.35);
-    }
+    for(const x of [-2.8,0,2.8])createWorkstation(group,art,{x});
     batchStatic(group);group.traverse(o=>o.userData.dynamic=true);
   }
 
@@ -182,7 +176,7 @@ export async function createLabScene(container, callbacks) {
   campus.registerReception();
   batchStatic(world);
 
-  const factory = createRigFactory({box,sphere,cylinder,ring,rod,mesh,mat,glow,geo});
+  const factory = createRigFactory(createSceneArt());
   const parcels=createParcelFlow(world,art,ZONES,factory,obstacles,hall,(kind,p)=>audio.cue(kind,p),campus.reception,p=>campus.registerReception(p));campus.registerReception();batchStatic(world);
   const hallReveal=createHallReveal(world,hall);
   const walkSurfaces=[];world.traverse(o=>{if(o.isMesh&&o.userData.walkable)walkSurfaces.push(o);});
@@ -223,7 +217,7 @@ export async function createLabScene(container, callbacks) {
         keep.add(w.id); let item=robots.get(w.id);
         if (!item) {
           const slot=w.kind==='guide'?0:slots.map((_,i)=>i).slice(1).find(i=>!occupied.has(i));if(slot===undefined)continue;occupied.add(slot);
-          const isCore=id==='hermes'&&slot===0;const rig=factory.robot({core:isCore});rig.phase=phaseFor(w.id);rig.root.scale.setScalar(isCore?1.35:slot===0?1:.8);rig.root.position.set(zone.x+slots[slot][0],groundAt(zone.x+slots[slot][0],zone.z+slots[slot][1])-.03,zone.z+slots[slot][1]);
+          const isCore=id==='hermes'&&slot===0;const rig=factory.robot({core:isCore,floating:true});rig.phase=phaseFor(w.id);rig.root.scale.setScalar(isCore?1.35:slot===0?1:.8);rig.root.position.set(zone.x+slots[slot][0],groundAt(zone.x+slots[slot][0],zone.z+slots[slot][1])-.03,zone.z+slots[slot][1]);
           rig.root.traverse(o=>o.userData.robot=w.id);rig.bubble=bubble(rig.root,2.27);(id==='gateway'?campus.reception:hall).add(rig.root);
           item={rig,slot,worker:w};robots.set(w.id,item);renderer.shadowMap.needsUpdate=true;
         }
@@ -404,7 +398,7 @@ export async function createLabScene(container, callbacks) {
     avatar.position.y=groundAt(avatar.position.x,avatar.position.z)+hero.jumpHeight;
     audio.setListener(avatar.position.x,avatar.position.z,azimuth);
     for(const event of hero.drainEvents())audio.cue(event);
-    container.dataset.action=hero.actionState;container.dataset.gait=moving?(running?'run':'walk'):'idle';
+    container.dataset.action=hero.actionState;container.dataset.gait=moving?'hover':'idle';
     for(const item of robots.values()){
       const rig=item.rig,attention=inside(item.worker.sector)&&(item.worker.kind!=='catalog'||chatId===item.worker.id||animationTime<rig.greeting)?1:0;
       const look=Math.atan2(avatar.position.x-rig.root.position.x,avatar.position.z-rig.root.position.z);

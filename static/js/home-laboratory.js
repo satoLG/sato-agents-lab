@@ -1,4 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
+import {createHousing,createWorkstation,createServiceRack} from './scene-equipment.js';
 import {createChamberMaterials} from './lab-chamber-materials.js';
 import {createContactShadows} from './scene-grove.js';
 
@@ -29,33 +30,12 @@ export function createHomeLaboratory(root,art){
   const c=document.createElement('canvas');c.width=512;c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#142531';ctx.fillRect(0,0,512,128);ctx.fillStyle=color;ctx.font='600 54px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,256,64);
   const map=new T.CanvasTexture(c);map.colorSpace=T.SRGBColorSpace;const sign=mesh(parent,new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map}),x,y,z);return sign;
  }
- function housing(parent,w,h,d,finish,x,y,z){
-  const key=`lab-bevel-${w}-${h}-${d}`,geometry=geo(key,()=>{
-   const shape=new T.Shape();shape.moveTo(-w/2,-h/2);shape.lineTo(w/2,-h/2);shape.lineTo(w/2,h/2);shape.lineTo(-w/2,h/2);shape.closePath();
-   const g=new T.ExtrudeGeometry(shape,{depth:d-.08,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.035,bevelThickness:.04});g.translate(0,0,-(d-.08)/2);return g;
-  });return mesh(parent,geometry,finish,x,y,z);
- }
- function console(x,z,angle=0){
-  const group=new T.Group();group.position.set(x,0,z);group.rotation.y=angle;root.add(group);group.name='bevelled-workstation';
-  housing(group,2.2,.55,.95,white,0,.88,0);box(group,1.75,.75,.6,dark,0,.25,0);box(group,2.12,.04,.94,steel,0,1.18,0);
-  for(const sx of [-.64,.64]){
-   cylinder(group,.055,.32,steel,sx,1.34,-.24);housing(group,.95,.66,.12,dark,sx,1.68,-.24);
-   box(group,.84,.55,.016,mat('#12303f'),sx,1.68,-.169);
-   for(let i=0;i<5;i++)box(group,.37+(i%3)*.1,.018,.018,i%2?cyan:amber,sx-.09,1.85-i*.073,-.155);
-  }
-  for(let i=0;i<8;i++)for(let j=0;j<3;j++)box(group,.1,.018,.08,steel,-.52+i*.14,1.215,.15+j*.11);
-  for(const sx of [-.86,.86])sphere(group,.03,cyan,sx,.88,.5);
-  solid(x,z,2.4,1.4);
- }
+ const housing=(...args)=>createHousing(art,...args);
+ const console=(x,z,angle=0)=>createWorkstation(root,art,{x,z,angle,onSolid:solid});
  console(-6,-1,.3);console(6,3,-Math.PI/2);console(-5.9,6,Math.PI);
  // Service racks: individual cartridges, louvers, cables and status lights.
  for(const x of [5.1,7]){
-  housing(root,1.4,2.8,1.05,dark,x,1.4,-7.9);solid(x,-7.9,1.5,1.2);
-  for(let i=0;i<7;i++){
-   housing(root,1.16,.27,.1,steel,x,.32+i*.36,-7.32);
-   for(let j=0;j<6;j++)box(root,.1,.025,.03,dark,x-.45+j*.17,.32+i*.36,-7.25);
-   sphere(root,.022,i%3?cyan:amber,x+.5,.41+i*.36,-7.22);
-  }
+  createServiceRack(root,art,{x,z:-7.9});solid(x,-7.9,1.5,1.2);
   rod(root,[x-.5,2.85,-7.9],[x-.5,3.45,-7.9],.045,steel);rod(root,[x-.5,3.45,-7.9],[x-.5,3.45,-9.7],.045,steel);
  }
  // Central dividing bay keeps an open passage on either side.

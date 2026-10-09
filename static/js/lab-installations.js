@@ -1,4 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
+import {createServiceRack} from './scene-equipment.js';
 import {instrumentData,heatLevel} from './lab-telemetry.js';
 import {gridPlacement,deckHeight,EQUIPMENT_FOOTPRINTS,PROVIDER_SERVICE_FOOTPRINT} from './lab-layout.js';
 
@@ -19,15 +20,8 @@ export function createInstallations(world,zones,art,onAlarm=()=>{}){
   // Three cabinet rows delimit two clear aisles inside 4 × 3 cells.
   const servers=equipment('vm','vm-server-aisles'),leds=[];
   for(const side of [-1,0,1])for(const z of [-2,0,2]){
-    const rack=new T.Group();rack.name='working-server-cabinet';rack.position.set(side*3,0,z);rack.rotation.y=(side===0?-1:-side)*Math.PI/2;servers.add(rack);
-    box(rack,1.65,3.3,1.25,'#192b38',0,1.65,0);box(rack,1.48,3.12,.05,'#354854',0,1.65,.65);
-    for(let row=0;row<9;row++){
-      const y=.35+row*.32;box(rack,1.32,.25,.07,'#10232e',0,y,.70);
-      for(let j=0;j<5;j++)box(rack,.035,.16,.015,'#5c7180',-.55+j*.09,y,.75);
-      for(let j=0;j<2;j++){const led=box(rack,.075,.055,.02,glow('#72dbae'),.38+j*.16,y,.756);led.userData.dynamic=true;leds.push(led);}
-    }
-    box(rack,1.55,.12,.08,'#8b9ca7',0,3.15,.72);
-    if(side===0){for(let row=0;row<9;row++){box(rack,1.32,.25,.07,'#10232e',0,.35+row*.32,-.70);box(rack,.075,.055,.02,glow('#72dbae'),.45,.35+row*.32,-.75);}}
+    const rack=createServiceRack(servers,art,{x:side*3,z,angle:(side===0?-1:-side)*Math.PI/2,doubleSided:side===0});
+    leds.push(...rack.lights);
   }
   // Skills occupy the same equipment slot as the RAG projector.
   const books=equipment('memory','skills-book-stack');

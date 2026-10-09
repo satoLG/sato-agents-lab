@@ -1,6 +1,30 @@
-import {indicatorCards} from './lab-monitors.js';
-const section=document.querySelector('[data-live-indicators]'),cards=section.querySelector('.stat-grid'),select=section.querySelector('select'),status=section.querySelector('[role=status]');
-let channels={},stream=null,lastSample=0,staleTimer=null;
-function render(){cards.replaceChildren();for(const card of indicatorCards(select.value,channels)){const el=document.createElement('article');el.className='stat';const label=document.createElement('small'),value=document.createElement('strong'),detail=document.createElement('p');label.textContent=card.title;value.textContent=card.value;detail.textContent=card.detail;el.append(label,value,detail);cards.append(el);}if(!cards.children.length){const text=document.createElement('p');text.textContent='Sem indicadores disponíveis neste setor.';cards.append(text);}}
-function connect(){if(document.hidden||stream)return;stream=new EventSource('/api/lab/stream');stream.addEventListener('telemetry',e=>{clearTimeout(staleTimer);staleTimer=null;lastSample=Date.now();const payload=JSON.parse(e.data);if(payload.channels)channels={...channels,...payload.channels};if(payload.error){channels={};status.textContent='Fonte indisponível';}else status.textContent=`Leitura ${new Date(payload.state.now).toLocaleTimeString('pt-BR')}`;render();});stream.onerror=()=>{if(!staleTimer)staleTimer=setTimeout(()=>{staleTimer=null;channels={};render();status.textContent='Reconectando aos indicadores…';},Math.max(0,5000-(Date.now()-lastSample)));};}
-select.addEventListener('change',render);document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();stream=null;}else connect();});connect();render();
+import {indicatorCards} from './telemetry-indicators.js';
+import {renderReadings,renderHistory,renderModels} from './telemetry-ui.js';
+const sections=[...document.querySelectorAll('[data-live-sector]')];
+let channels={},boards={},stream=null,lastSample=0,staleTimer=null,status='Conectando…';
+function render(){
+ for(const section of sections){
+  if(section.closest('[role=tabpanel]').hidden)continue;
+  section.querySelector('[role=status]').textContent=status;
+  renderReadings(section.querySelector('.stat-grid'),indicatorCards(section.dataset.liveSector,channels));
+  renderHistory(section.querySelector('[data-live-history]'),boards[section.dataset.liveSector]);
+  const usage=section.querySelector('[data-model-usage]');if(usage)renderModels(usage,channels);
+ }
+}
+function unavailable(message){channels={};boards={};status=message;render();}
+function connect(){
+ if(document.hidden||stream)return;
+ stream=new EventSource('/api/lab/stream');
+ stream.addEventListener('telemetry',e=>{
+  clearTimeout(staleTimer);staleTimer=null;
+  try{
+   const payload=JSON.parse(e.data);if(payload.error){unavailable('Fonte indisponível');return;}
+   lastSample=Date.now();channels=payload.channels||{};boards=payload.boards||{};
+   status=`Leitura ${new Date(payload.state.now).toLocaleTimeString('pt-BR')}`;render();
+  }catch{unavailable('Leitura indisponível');}
+ });
+ stream.onerror=()=>{if(!staleTimer)staleTimer=setTimeout(()=>{staleTimer=null;unavailable('Reconectando…');},Math.max(0,5000-(Date.now()-lastSample)));};
+}
+document.addEventListener('dashboard:tab',render);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();stream=null;clearTimeout(staleTimer);staleTimer=null;}else{if(Date.now()-lastSample>5000)unavailable('Reconectando…');connect();}});
+connect();render();

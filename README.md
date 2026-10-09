@@ -12,6 +12,23 @@ python3 app.py                 # http://127.0.0.1:8080
 
 Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explorar.
 
+## UI e telemetria compartilhadas
+
+`fragments/site-ui.html` e `sato-ui.css` definem navegação, superfícies e loading
+nas três páginas. Cada aba do Dashboard apresenta diretamente os indicadores
+da sua estação, recebidos pelo mesmo `/api/lab/stream` que alimenta o Lab.
+`telemetry-indicators.js` e `telemetry-ui.js` compartilham indicadores, históricos
+e a tabela de modelos entre Dashboard e os modais dos equipamentos.
+
+A aba Providers agrega por modelo **e provider**, incluindo tokens e custo,
+sem consultar APIs de um provedor específico. A fonte é `session_model_usage`
+do Hermes ou `model_usage` legado. Não há um segundo log de inferências no
+dashboard; o histórico nativo disponível é agregado por sessão, sem horário
+individual de cada chamada. Provider ausente fica como não registrado.
+A configuração principal/fallback é exibida separadamente do uso observado.
+
+A câmera inicial segue a posição no chão, sem acompanhar a queda do tubo.
+
 ## Worker do chat e contexto preparado
 
 O worker da fila aquece um processo Hermes quando o chat privado inicia. O processo
@@ -155,8 +172,9 @@ Abra `/lab` pelo link **Laboratório 3D** no dashboard ou na página inicial.
 É uma segunda visualização do mesmo host e das mesmas fontes do Hermes: não
 precisa de outro serviço, Node.js em produção ou conexão com CDN. Three.js
 0.180.0 e sua licença MIT estão em `static/vendor/`; o cenário e os personagens
-são locais. O avatar usa o GLB fornecido pelo dono do repositório; cenário e robôs
-são procedurais, sem arquivos extraídos dos jogos de referência.
+são locais. O avatar e os robôs usam o mesmo modelo flutuante procedural da página inicial,
+com casco esférico, olho, braços rígidos e propulsor. Bancadas e racks usam
+`scene-equipment.js`; árvores, água e grama compartilham as bases da página inicial.
 
 - Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
   memória/skills, EVENTS (cron jobs e webhooks) e infraestrutura. As linhas do piso representam a
@@ -171,14 +189,14 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   o dispositivo usado. Ele escolhe uma posição acima/abaixo do personagem que
   evita cobrir o objeto. O personagem gira na direção do movimento. **Seguir** acompanha o personagem;
   **Sala** enquadra o laboratório. Placas físicas identificam as estações.
-- O som é opcional. Passos, corrida e soco usam amostras locais do Portal 2;
+- O som é opcional. O soco usa uma amostra local do Portal 2;
   o salto usa um efeito arcade sintetizado, com subida imediata e altura de 1,65 m.
-  robôs têm passos/servos, terminais têm teclas e feedback, equipamentos têm
+  robôs têm servos, terminais têm teclas e feedback, equipamentos têm
   mecanismos e as linhas iluminadas têm pulsos elétricos. O volume e o estéreo
   seguem a distância e a câmera, com silêncio fora do alcance. Motores, ventiladores e água têm loops locais atenuados por distância;
   até quatro fontes próximas tocam juntas, com natureza no exterior e um fundo
   contínuo de equipamentos no salão. A recepção permanece mais silenciosa. A origem e os recortes estão em `static/audio/portal2/`.
-- A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
+- A lista de estações/robôs escolhe um destino e o personagem flutua até ele,
   contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
   dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
   mantendo balões e formulário dentro da tela; Escape encerra a conversa.
@@ -191,19 +209,12 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   Cada setor tem uma fileira com painel numerado, seis monitores e um painel
   de histórico do mesmo tamanho do numerado, com espaço entre eles. O grid
   reserva células de 2 m no chão e na parede; detalhes em [docs/lab-grid.md](docs/lab-grid.md). O gateway fica na parede da recepção, atrás do robô. O responsável do
-  núcleo tem carcaça oval maior e óptica laranja.
-- O avatar usa `static/models/sato.glb`, com idle ancorado (4,8 s),
-  caminhada (0,92 s) e piscar independente. As poses se misturam ao iniciar/parar. A cadência
-  acompanha a velocidade real, com aceleração e desaceleração. Detalhes e
-  regeneração em `static/models/README.md`. Robôs mantêm poses procedurais
-  de respiração, apoio, piscar e gestos; operam seus terminais
-  e se voltam para quem entra na estação; a pupila central é azul emissiva.
-  As pernas seguem a distância percorrida, as juntas têm limites externos à carcaça,
-  e as pálpebras mecânicas fecham sobre a óptica. Esses gestos são ambientação, não evidência de execução. O indicador e os dados
-  continuam distinguindo atividade real, dados ausentes e leituras antigas.
-  A cena limita a 30 fps, agrupa geometria estática, reaproveita materiais e
-  atualiza as sombras reais a cada frame renderizado. Há pausa de animações no mapa e respeito
-  à preferência de movimento reduzido do sistema.
+  núcleo usa a mesma carcaça esférica, em escala maior, com óptica laranja.
+- O avatar usa `lab-avatar.js`, `lab-rigs.js` e `scene-art.js`, a mesma base do
+  robô inicial. O corpo inclina na direção local do impulso; os braços ficam
+  neutros durante o deslocamento, sem passos ou clipes de caminhada. O salto
+  continua como impulso vertical e as ações explícitas continuam disponíveis.
+
 - Dados ausentes aparecem como **sem telemetria**, nunca como uma execução
   fictícia. **Atividade recente** significa um evento nos últimos 180 segundos;
   **processo detectado** não confirma trabalho. Registros `running` sem um
@@ -340,9 +351,8 @@ com ondulação de superfície. As paredes internas têm 16 m; o calendário de 
 fica na metade superior, com centro a 12 m, acima dos equipamentos.
 
 Carcaças e equipamentos mantêm mapas de acabamento, relevos e reflexos metálicos
-após o agrupamento de geometria. Robôs têm pistões, juntas, dissipadores, trilhas
-luminosas e indicadores. Varredura do olhar, inspeção ociosa, operação de terminais,
-caminhada e respostas usam poses distintas. Os sons de personalidade e piscada,
+após o agrupamento de geometria. Robôs compartilham o casco, a óptica e o
+propulsor da página inicial. Flutuação, piscar e respostas usam poses distintas. Os sons de personalidade e piscada,
 ventiladores, motores e água vêm da biblioteca Portal 2 indicada pelo proprietário;
 pequenos gestos de áudio procedurais complementam os samples. Os créditos e a
 revisão exata da fonte estão em `static/audio/portal2/botanical-sources.json`.
