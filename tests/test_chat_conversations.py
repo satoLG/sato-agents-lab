@@ -102,17 +102,10 @@ def test_model_context_never_includes_another_conversation(private_chat, monkeyp
     row = web_chat._claim(); web_chat._finish(row, answer="Resposta B")
     submit(private_chat, headers, second, "Continue B")
     row = web_chat._claim()
-    monkeypatch.setattr(web_chat, "_assert_no_tools", lambda: None)
     captured = []
-    class Process:
-        def __init__(self, *args, **kwargs):
-            self.stdin = io.StringIO()
-            self.stdout = io.StringIO(json.dumps({"kind":"answer","text":"Continuando B"})+'\n')
-            self.stdin.close = lambda: captured.append(json.loads(self.stdin.getvalue()))
-        def __enter__(self): return self
-        def __exit__(self, *_): pass
-        def wait(self): return 0
-        def kill(self): pass
-    monkeypatch.setattr(web_chat.subprocess, "Popen", Process)
+    def run(payload, on_event):
+        captured.append(payload)
+        return 'Continuando B'
+    monkeypatch.setattr(web_chat.RUNNER, 'run', run)
     assert web_chat._answer(row) == "Continuando B"
     assert captured[0]["history"] == [{"role":"user","content":"Tema da conversa B"},{"role":"assistant","content":"Resposta B"}]

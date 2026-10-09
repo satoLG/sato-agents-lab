@@ -5,7 +5,6 @@ import os
 import re
 import secrets
 import sqlite3
-import subprocess
 import threading
 import time
 import uuid
@@ -18,6 +17,7 @@ from flask import jsonify, request, session
 from werkzeug.security import check_password_hash
 
 from . import config, lab, streaming, chat_context
+from .warm_runner import WarmRunner
 
 LOG = logging.getLogger(__name__)
 PASSWORD_HASH = os.getenv("HERMES_WEB_CHAT_PASSWORD_HASH", "")
@@ -33,12 +33,20 @@ LOGIN_ATTEMPTS = defaultdict(deque)
 LOGIN_LOCK = threading.Lock()
 WORKER_LOCK = threading.Lock()
 WORKER_STARTED = False
+WORKER_WAKE = threading.Event()
+RUNNER = WarmRunner(HERMES_PYTHON, Path(__file__).resolve().parent.parent / 'tools/web_chat_runner.py', HERMES_ROOT)
 LEGACY_CONVERSATION = "00000000000000000000000000000001"
 
 
 def configure(app):
     if not ENABLED:
         return
+    from flask.logging import default_handler
+    for logger in (LOG, logging.getLogger('hermes_dashboard.warm_runner')):
+        if not logger.handlers:
+            logger.addHandler(default_handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
     app.secret_key = SESSION_SECRET
     app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
                       SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=timedelta(days=7))
@@ -178,9 +186,8 @@ def submit():
     job_id = data.get("request_id", uuid.uuid4().hex)
     if not _conversation_id(conversation_id) or not _conversation_id(job_id):
         return jsonify({"error": "Conversa ou mensagem inválida."}), 400
-    context = _context(robot_id, question=question)
-    if not context:
-        return jsonify({"error": "Robô não encontrado no estado atual."}), 404
+    # Prepare live context when claimed, not twice or while waiting in the queue.
+    context = {'robot': {'id': robot_id}, 'prepared_at': None}
     now = time.time()
     conn = _connection()
     try:
@@ -205,6 +212,7 @@ def submit():
         accepted = _public_job(conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone(), conn)
     finally:
         conn.close()
+    WORKER_WAKE.set()
     return jsonify({"id": job_id, "status": "queued", "conversation_id": conversation_id, "job": accepted}), 202
 
 
@@ -343,17 +351,12 @@ def _claim():
         conn.close()
 
 
-def _assert_no_tools():
-    code = "from model_tools import get_tool_definitions; from toolsets import validate_toolset; assert validate_toolset('context_engine') and get_tool_definitions(enabled_toolsets=['context_engine'],quiet_mode=True)==[]"
-    result = subprocess.run([str(HERMES_PYTHON), "-c", code], cwd=HERMES_ROOT, capture_output=True, timeout=30)
-    if result.returncode:
-        raise RuntimeError("Hermes tool isolation check failed")
-
-
 def _answer(row):
-    _assert_no_tools()
-    _progress(row["id"], "isolation", "Modo conversa: ferramentas desabilitadas e verificadas.")
-    context = _context(row["robot_id"], question=row["question"]) or json.loads(row["context"])
+    started = time.monotonic()
+    context = _context(row["robot_id"], question=row["question"])
+    if not context:
+        raise RuntimeError('Current VM context unavailable')
+    context_seconds = time.monotonic() - started
     prompt = ("Você é Hermes, líder do Núcleo, em MODO CONVERSA. Converse sobre qualquer assunto, "
               "responda perguntas gerais, explique e analise o material fornecido pelo usuário. "
               "Você não tem ferramentas: não execute ações, comandos, alterações, consultas externas ou envio de mensagens, "
@@ -375,35 +378,11 @@ def _answer(row):
     history = []
     for previous in reversed(past):
         history.extend([{"role": "user", "content": previous["question"]}, {"role": "assistant", "content": previous["answer"]}])
-    cmd = [str(HERMES_PYTHON), str(Path(__file__).resolve().parent.parent / "tools/web_chat_runner.py")]
-    payload = json.dumps({"prompt": prompt, "history": history, "root": str(HERMES_ROOT)}, ensure_ascii=False)
-    output = None
-    # Timer kills a wedged provider even when stdout has no further events.
-    with subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                          text=True, cwd=HERMES_ROOT, bufsize=1) as process:
-        timer = threading.Timer(240, process.kill)
-        timer.start()
-        try:
-            process.stdin.write(payload)
-            process.stdin.close()
-            for line in process.stdout:
-                try:
-                    event = json.loads(line)
-                except ValueError:
-                    continue
-                if event.get("kind") == "answer":
-                    output = event.get("text", "")
-                elif event.get("kind") in {"tool.started", "tool.completed"}:
-                    process.kill()
-                    raise RuntimeError("Hermes tool isolation failed")
-                elif event.get("kind") in {"model", "thinking", "reply", "notice"}:
-                    _progress(row["id"], event["kind"], str(event.get("text") or ""))
-            if process.wait():
-                raise RuntimeError("Hermes provider unavailable")
-        finally:
-            timer.cancel()
-    if not output or len(output) > 10000:
-        raise RuntimeError("Hermes returned no usable response")
+    payload = {'id': row['id'], 'conversation_id': row['conversation_id'],
+               'prompt': prompt, 'history': history, 'root': str(HERMES_ROOT)}
+    output = RUNNER.run(payload, lambda kind, text: _progress(row['id'], kind, text))
+    LOG.info('Hermes chat performance job=%s context_s=%.3f prompt_chars=%s history_messages=%s runner=%s',
+             row['id'], context_seconds, len(prompt), len(history), RUNNER.last_metrics)
     return output
 
 
@@ -422,6 +401,11 @@ def _finish(row, answer=None, error=None):
 
 
 def _worker():
+    try:
+        RUNNER.start()
+        _context('guide:hermes', question='')
+    except Exception:
+        LOG.warning('Hermes warm-up unavailable; will retry when a job arrives')
     while True:
         try:
             row = _claim()
@@ -435,7 +419,8 @@ def _worker():
                 continue
         except Exception:
             LOG.exception("Hermes web chat worker loop failed")
-        time.sleep(2)
+        WORKER_WAKE.wait(2)
+        WORKER_WAKE.clear()
 
 
 def start_worker():

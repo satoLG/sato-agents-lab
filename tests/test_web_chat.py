@@ -71,31 +71,22 @@ def test_queue_recovers_a_crashed_worker_and_keeps_history(private_chat, monkeyp
     assert jobs[0]["status"] == "done" and jobs[0]["answer"] == "A VM usa CPU e RAM."
 
 
-def test_hermes_invocation_has_no_tools_and_no_shell(private_chat, monkeypatch):
+def test_hermes_invocation_passes_current_context_to_warm_runner(private_chat, monkeypatch):
     calls = []
-    def run(argv, **kwargs):
-        calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, 0, "", "")
-    monkeypatch.setattr(web_chat.subprocess, "run", run)
-    class Process:
-        def __init__(self, argv, **kwargs):
-            calls.append((argv, kwargs)); self.stdin=io.StringIO()
-            self.stdout=io.StringIO(json.dumps({"kind":"model","text":"Consultando modelo"})+'\n'+json.dumps({"kind":"answer","text":"CPU em 42%."})+'\n')
-        def __enter__(self): return self
-        def __exit__(self, *_): pass
-        def wait(self): return 0
-        def kill(self): pass
-    monkeypatch.setattr(web_chat.subprocess, "Popen", Process)
+    def run(payload, on_event):
+        calls.append(payload)
+        on_event('isolation', 'Ferramentas desabilitadas')
+        on_event('model', 'Consultando modelo')
+        return 'CPU em 42%.'
+    monkeypatch.setattr(web_chat.RUNNER, 'run', run)
     headers=authorize(private_chat)
-    created=private_chat.post('/api/lab/hermes-chat/jobs',json={"robot_id":"guide:hermes","question":"Qual a CPU?"},headers=headers).get_json()['id']
-    row=web_chat._claim()
-    assert web_chat._answer(row) == "CPU em 42%."
-    assert "get_tool_definitions" in calls[0][0][-1]
-    assert calls[1][0][1].endswith('web_chat_runner.py')
-    assert isinstance(calls[1][0], list) and not calls[1][1].get('shell')
+    created=private_chat.post('/api/lab/hermes-chat/jobs',json={'robot_id':'guide:hermes','question':'Qual a CPU?'},headers=headers).get_json()['id']
+    assert web_chat._answer(web_chat._claim()) == 'CPU em 42%.'
+    assert calls[0]['id'] == created and '42' in calls[0]['prompt']
+    assert calls[0]['history'] == []
     job=private_chat.get('/api/lab/hermes-chat/jobs/'+created).get_json()
+    assert any(event['kind']=='isolation' for event in job['progress'])
     assert any(event['kind']=='model' for event in job['progress'])
-
 
 def test_progress_stream_is_private_and_preserves_intermediate_events(private_chat):
     assert private_chat.get('/api/lab/hermes-chat/stream?robot_id=guide:hermes').status_code==401
@@ -108,20 +99,13 @@ def test_progress_stream_is_private_and_preserves_intermediate_events(private_ch
     assert 'event: history' in event and 'Consultando modelo' in event
 
 
-@pytest.mark.parametrize('kind', ['tool.started', 'tool.completed'])
-def test_server_kills_a_runner_that_reports_tool_activity(private_chat, monkeypatch, kind):
-    monkeypatch.setattr(web_chat, '_assert_no_tools', lambda: None)
-    killed = []
-    class Process:
-        def __init__(self, *_, **__):
-            self.stdin = io.StringIO()
-            self.stdout = io.StringIO(json.dumps({'kind': kind, 'text': 'terminal'}) + '\n')
-        def __enter__(self): return self
-        def __exit__(self, *_): pass
-        def kill(self): killed.append(True)
-    monkeypatch.setattr(web_chat.subprocess, 'Popen', Process)
-    headers = authorize(private_chat)
-    private_chat.post('/api/lab/hermes-chat/jobs', json={'robot_id': 'guide:hermes', 'question': 'Explique a VM'}, headers=headers)
-    with pytest.raises(RuntimeError, match='isolation failed'):
-        web_chat._answer(web_chat._claim())
-    assert killed == [True]
+def test_submit_does_not_prepare_or_capture_stale_vm_context(private_chat,monkeypatch):
+    def unavailable(*args,**kwargs):raise AssertionError('Context must be collected by the worker')
+    monkeypatch.setattr(web_chat,'_context',unavailable)
+    headers=authorize(private_chat)
+    result=private_chat.post('/api/lab/hermes-chat/jobs',json={'robot_id':'guide:hermes','question':'CPU agora?'},headers=headers)
+    assert result.status_code==202
+    row=web_chat._claim()
+    assert json.loads(row['context'])['prepared_at'] is None
+    monkeypatch.setattr(web_chat,'_context',lambda *args,**kwargs:None)
+    with pytest.raises(RuntimeError,match='Current VM context unavailable'):web_chat._answer(row)
