@@ -1,3 +1,4 @@
+{% from 'fragments/site-ui.html' import navigation, loading, logo_filter %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -9,19 +10,20 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='sato-logo.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/identity.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/scene-ui.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sato-ui.css') }}">
 {% block head %}{% endblock %}
 </head>
-<body>
+<body data-page="dashboard">
+{{ logo_filter() }}
 <header class="topbar">
-  <a class="brand" href="/">
-    <img class="brand-logo" src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="48" height="48">
-    <span class="brand-name">Sato Agents<span class="brand-sub">{% block subtitle %}Observabilidade{% endblock %}</span></span>
-  </a>
-  <div class="topbar-actions">{% block actions %}{% endblock %}</div>
+  <a class="site-brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="28" height="28" style="filter:url('#site-logo-ink') invert(1)"></a>
+  <div class="topbar-actions">{{ navigation('dashboard') }}</div>
 </header>
 {% block nav %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
 <footer>Sato Agents &middot; {{ stats.month if stats else '' }}</footer>
+{% block loading %}{% endblock %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

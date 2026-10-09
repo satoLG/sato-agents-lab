@@ -87,7 +87,7 @@ def api_stats():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html", stats=stats.public_stats(),
+    return render_template("dashboard.html", lab_asset_version=LAB_ASSET_VERSION, stats=stats.public_stats(),
                            models=stats.models_config(),
                            paths={"db": str(config.DB_PATH), "rag": str(config.RAG_PATH)})
 

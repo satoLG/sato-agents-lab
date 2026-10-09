@@ -1,0 +1,12 @@
+{% macro navigation(active) -%}
+<nav class="site-nav{% if active == 'home' %} home-nav{% endif %} glass" aria-label="Explorar Sato Agents">
+{% for id,href,label,icon in [('home','/','Início','circle'),('dashboard','/dashboard','Dashboard','layout-dashboard'),('lab','/lab','Lab','flask-conical')] %}
+{% if id != active %}<a href="{{ href }}" data-destination="{{ id }}"><svg aria-hidden="true"><use href="{{ url_for('static', filename='icons/lucide.svg') }}#{{ icon }}"/></svg>{{ label }}</a>{% endif %}
+{% endfor %}
+</nav>
+{%- endmacro %}
+{% macro loading(id,progress_id,stage_id,label='Carregando…') -%}
+<div id="{{ id }}" class="site-loading{% if id == 'loading' %} lab-loading{% endif %}" role="status"><div class="loading-core"><span class="loading-label">SATO AGENT</span><progress id="{{ progress_id }}" max="100" value="0" aria-label="Carregando"></progress><small id="{{ stage_id }}">{{ label }}</small></div></div>
+{%- endmacro %}
+
+{% macro logo_filter() -%}<svg class="logo-filters" width="0" height="0" aria-hidden="true" style="position:absolute"><defs><filter id="site-logo-ink" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -.3333 -.3333 -.3333 1 0"/></filter></defs></svg>{%- endmacro %}

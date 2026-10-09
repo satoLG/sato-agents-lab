@@ -1,7 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 import {onDeck} from './lab-layout.js';
 import {createWaterMaterial,waterRibbon} from './scene-water.js';
-import {createMeadow} from './scene-grove.js';
+import {createHomeGrass} from './home-grass.js';
 import {createGardenTree,createRockMaterial} from './lab-nature.js';
 
 export const streamZ=x=>-4+Math.sin(x*.095)*4.2;
@@ -18,17 +18,11 @@ export function createLabBiome(hall,art,environment){
  const water=createWaterMaterial();
  const creek=mesh(garden,river,water);creek.name='laboratory-stream';creek.userData.dynamic=true;
  let seed=714;const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
- const patches=[];
  const rocks=new T.InstancedMesh(new T.IcosahedronGeometry(1,2),createRockMaterial(),120);
  const rockVertices=rocks.geometry.attributes.position;
  for(let i=0;i<rockVertices.count;i++){const x=rockVertices.getX(i),y=rockVertices.getY(i),z=rockVertices.getZ(i),relief=1+.10*Math.sin(x*13+z*7)*Math.cos(y*9);rockVertices.setXYZ(i,x*relief,y*relief,z*relief);}rocks.geometry.computeVertexNormals();
  const dummy=new T.Object3D(),color=new T.Color();let stones=0;
- for(let i=0;i<400;i++){
-  const x=-38+random()*76,z=-41+random()*56,near=Math.abs(z-streamZ(x));if(near<1.2)continue;
-  const height=onDeck(x,z)? .45+random()*.3:.8+random()*.85;
-  patches.push({x,z,y:terrainHeight(x,z),size:height*.65});
- }
- createMeadow(garden,patches);
+ const grass=createHomeGrass(garden,{heightAt:terrainHeight,waterAt:()=>({center:0,width:0}),size:78,centerZ:-12,density:128,exclude:(x,z)=>z< -41||z>18||onDeck(x,z)||Math.abs(z-streamZ(x))<1.8});
  for(let i=0;i<120;i++){
   const x=-39+random()*78,side=i%2?1:-1,z=streamZ(x)+side*(1.2+random()*.7);
   dummy.position.set(x,terrainHeight(x,z)+.04,z);dummy.rotation.set(random(),random()*6,random());dummy.scale.set(.25+random()*.45,.12+random()*.22,.22+random()*.25);dummy.updateMatrix();rocks.setMatrixAt(stones,dummy.matrix);rocks.setColorAt(stones++,color.setHSL(.12+random()*.06,.07+random()*.08,.3+random()*.14));
@@ -40,5 +34,5 @@ export function createLabBiome(hall,art,environment){
   if([[0,0],[-crown,0],[crown,0],[0,-crown],[0,crown]].some(([dx,dz])=>onDeck(x+dx,z+dz))||Math.abs(z-streamZ(x))<2||Math.abs(x)+crown>39.4)continue;
   createGardenTree(garden,art,{x,z,y:terrainHeight(x,z),height,radius,vines,random});
  }
- return {tick(t){water.userData.waterTime.value=t;},streamAt(position){return {x:position.x,z:streamZ(position.x)};}};
+ return {tick(t){grass.tick(t);water.userData.waterTime.value=t;},streamAt(position){return {x:position.x,z:streamZ(position.x)};}};
 }

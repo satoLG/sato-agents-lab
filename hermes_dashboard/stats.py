@@ -25,7 +25,8 @@ def public_stats():
         cost = sum(row['cost'] or 0 for row in usage)
         return {'month': month_start.strftime('%Y-%m'), 'total_cost': round(cost, 4),
                 'total_calls': calls, 'fallback_count': None, 'fallback_rate': None,
-                'models': [{'model': row['model'], 'calls': row['calls'],
+                'models': [{'model': row['model'], 'provider': row['billing_provider'], 'calls': row['calls'],
+                            'input_tokens': row['input_tokens'], 'output_tokens': row['output_tokens'],
                             'cost': round(row['cost'] or 0, 4),
                             'percentage': round((row['calls'] or 0) / calls * 100, 1)
                             if calls else 0} for row in usage],
@@ -44,12 +45,16 @@ def _collect():
     # zerar a pagina publica inteira
     mu = db.columns("model_usage")
     cost_expr = "SUM(cost_usd)" if "cost_usd" in mu else "0"
+    provider_expr = 'provider' if 'provider' in mu else 'NULL'
+    input_expr = 'SUM(input_tokens)' if 'input_tokens' in mu else 'NULL'
+    output_expr = 'SUM(output_tokens)' if 'output_tokens' in mu else 'NULL'
     mts = db.time_sql("model_usage", "timestamp")
     tts = db.time_sql("tool_calls", "timestamp")
     rows = db.query(
-        f"""SELECT model, COUNT(*) AS calls, {cost_expr} AS cost
+        f"""SELECT model, {provider_expr} AS provider, COUNT(*) AS calls, {cost_expr} AS cost,
+                   {input_expr} AS input_tokens, {output_expr} AS output_tokens
             FROM model_usage WHERE {mts} > ?
-            GROUP BY model ORDER BY calls DESC""", (month_start,))
+            GROUP BY model, {provider_expr} ORDER BY calls DESC""", (month_start,))
     total_cost = sum(r.get("cost") or 0 for r in rows)
     total_calls = sum(r["calls"] for r in rows)
     # COALESCE porque fallback_reason NULL nao satisfaz "!= ''" no sqlite e a
@@ -77,7 +82,8 @@ def _collect():
         "fallback_count": fallback_count,
         "fallback_rate": round(fallback_count / total_calls * 100, 2) if total_calls else 0,
         "models": [
-            {"model": r["model"], "calls": r["calls"],
+            {"model": r["model"], "provider": r["provider"], "calls": r["calls"],
+             "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"],
              "cost": round(r.get("cost") or 0, 4),
              "percentage": round(r["calls"] / total_calls * 100, 1) if total_calls else 0}
             for r in rows

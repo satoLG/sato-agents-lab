@@ -7,40 +7,31 @@
 <script src="{{ url_for('static', filename='vendor/cytoscape.min.js') }}" defer></script>
 {% endblock %}
 
-{% block actions %}
-<a class="btn" href="{{ url_for('laboratory') }}">Laboratório 3D ↗</a>
-<span class="pill warn" title="Qualquer um com a URL ve tudo desta pagina">
-  <span class="ico">!</span>acesso aberto
-</span>
-{% endblock %}
+
 
 {% block nav %}
 <nav class="tabs" role="tablist" aria-label="Secoes do dashboard">
-  <button class="tab" type="button" role="tab" data-tab="atividade" aria-selected="true" aria-controls="panel-atividade">Atividade</button>
-  <button class="tab" type="button" role="tab" data-tab="vm" aria-selected="false" aria-controls="panel-vm">VM</button>
-  <button class="tab" type="button" role="tab" data-tab="tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
-  <button class="tab" type="button" role="tab" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
-  <button class="tab" type="button" role="tab" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
-  <button class="tab" type="button" role="tab" data-tab="rag" aria-selected="false" aria-controls="panel-rag">RAG</button>
-  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Cron</button>
-  <button class="tab" type="button" role="tab" data-tab="webhooks" aria-selected="false" aria-controls="panel-webhooks">Webhooks</button>
+  <button class="tab" type="button" role="tab" id="tab-atividade" data-tab="atividade" aria-selected="true" aria-controls="panel-atividade">Atividade</button>
+  <button class="tab" type="button" role="tab" id="tab-providers" data-tab="providers" aria-selected="false" aria-controls="panel-providers">Providers</button>
+  <button class="tab" type="button" role="tab" id="tab-gateway" data-tab="gateway" aria-selected="false" aria-controls="panel-gateway">Gateway</button>
+  <button class="tab" type="button" role="tab" id="tab-vm" data-tab="vm" aria-selected="false" aria-controls="panel-vm">VM</button>
+  <button class="tab" type="button" role="tab" id="tab-tools" data-tab="tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
+  <button class="tab" type="button" role="tab" id="tab-mcps" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
+  <button class="tab" type="button" role="tab" id="tab-memoria" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
+  <button class="tab" type="button" role="tab" id="tab-rag" data-tab="rag" aria-selected="false" aria-controls="panel-rag">RAG</button>
+  <button class="tab" type="button" role="tab" id="tab-cron" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Cron</button>
+  <button class="tab" type="button" role="tab" id="tab-webhooks" data-tab="webhooks" aria-selected="false" aria-controls="panel-webhooks">Webhooks</button>
 </nav>
 {% endblock %}
 
 {% block content %}
-
-<section class="panel" data-live-indicators aria-label="Indicadores dos setores">
-  <div class="panel-head"><h2>Indicadores dos setores</h2><p>As mesmas leituras nos monitores do laboratório.</p></div>
-  <label>Setor <select aria-label="Setor dos indicadores"><option value="hermes">Núcleo</option><option value="models">Providers</option><option value="gateway">Gateway</option><option value="mcp">MCP</option><option value="rag">RAG</option><option value="memory">Memória</option><option value="cron">EVENTS</option><option value="vm">VM</option></select></label>
-  <p role="status">Conectando aos indicadores…</p><div class="stat-grid"></div>
-</section>
-<script type="module" src="{{ url_for('static', filename='js/dashboard-live.js') }}"></script>
 
 <section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade">
   <div class="panel-head">
     <h1>Atividade</h1>
     <p>Mensagens e ferramentas do histórico nativo do Hermes. O conteúdo dos prompts fica oculto nesta página de acesso aberto.</p>
   </div>
+  <div data-live-sector="hermes" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
 
   {# painel ao vivo: htmx troca este bloco sozinho, e o filtro entre colchetes
      segura o polling enquanto a aba nao esta visivel #}
@@ -63,15 +54,16 @@
   <div data-role="detail"></div>
 </section>
 
-<section class="panel" id="panel-vm" role="tabpanel" hidden>
+<section class="panel" id="panel-vm" role="tabpanel" aria-labelledby="tab-vm" hidden>
   <div class="panel-head">
     <h1>VM</h1>
     <p>CPU, memoria e disco da maquina onde o agente roda.</p>
   </div>
+  <div data-live-sector="vm" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
   <div data-role="vm"><p class="skeleton">carregando...</p></div>
 </section>
 
-<section class="panel" id="panel-tools" role="tabpanel" hidden>
+<section class="panel" id="panel-tools" role="tabpanel" aria-labelledby="tab-tools" hidden>
   <div class="panel-head">
     <h1>Tools</h1>
     <p>Ferramentas disponiveis e estatisticas de tool calling.</p>
@@ -80,29 +72,32 @@
   <div data-role="tools"><p class="skeleton">carregando...</p></div>
 </section>
 
-<section class="panel" id="panel-mcps" role="tabpanel" hidden>
+<section class="panel" id="panel-mcps" role="tabpanel" aria-labelledby="tab-mcps" hidden>
   <div class="panel-head">
     <h1>MCPs</h1>
     <p>Servidores MCP configurados, suas acoes e o uso registrado no log.</p>
   </div>
+  <div data-live-sector="mcp" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
   <div class="controls" data-role="mcp-controls"></div>
   <div data-role="mcps"><p class="skeleton">carregando...</p></div>
 </section>
 
-<section class="panel" id="panel-memoria" role="tabpanel" hidden>
+<section class="panel" id="panel-memoria" role="tabpanel" aria-labelledby="tab-memoria" hidden>
   <div class="panel-head">
     <h1>Memoria, skills e contextos</h1>
     <p>Catalogo de documentos do agente. Toque para ler o conteudo.</p>
   </div>
+  <div data-live-sector="memory" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
   <div class="controls" data-role="mem-controls"></div>
   <div data-role="memory"><p class="skeleton">carregando...</p></div>
 </section>
 
-<section class="panel" id="panel-rag" role="tabpanel" hidden>
+<section class="panel" id="panel-rag" role="tabpanel" aria-labelledby="tab-rag" hidden>
   <div class="panel-head">
     <h1>RAG</h1>
     <p>Base vetorial em <span class="mono">{{ paths.rag }}</span></p>
   </div>
+  <div data-live-sector="rag" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
 
   <div class="controls" data-role="rag-views">
     <div class="seg" role="group" aria-label="Visao do RAG">
@@ -154,21 +149,35 @@
   </div>
 </section>
 
-<section class="panel" id="panel-cron" role="tabpanel" hidden>
+<section class="panel" id="panel-cron" role="tabpanel" aria-labelledby="tab-cron" hidden>
   <div class="panel-head">
     <h1>Cron</h1>
     <p>Agendamentos e execuções do Hermes na VM.</p>
   </div>
+  <div data-live-sector="cron" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
   <div data-role="cron"><p class="skeleton">carregando...</p></div>
 </section>
 
-<section class="panel" id="panel-webhooks" role="tabpanel" hidden>
+<section class="panel" id="panel-webhooks" role="tabpanel" aria-labelledby="tab-webhooks" hidden>
   <div class="panel-head"><h1>Webhooks</h1><p>Requisições recebidas que tenham registro estruturado.</p></div>
+  <div data-live-sector="cron" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
   <div data-role="webhooks"><p class="skeleton">carregando...</p></div>
+</section>
+
+<section class="panel" id="panel-providers" role="tabpanel" aria-labelledby="tab-providers" hidden>
+  <div class="panel-head"><h1>Providers</h1><p>Uso registrado por modelo e provider, em todos os provedores. A configuração de roteamento é independente do histórico de uso.</p></div>
+  <div data-live-sector="models" aria-label="Indicadores de modelos"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div data-model-usage></div><div class="execution-history" data-live-history></div></div>
+</section>
+<section class="panel" id="panel-gateway" role="tabpanel" aria-labelledby="tab-gateway" hidden>
+  <div class="panel-head"><h1>Gateway</h1><p>Entradas, processos e histórico observados no laboratório.</p></div>
+  <div data-live-sector="gateway" aria-label="Indicadores de gateway"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
 </section>
 
 {% endblock %}
 
+{% block loading %}{{ loading('dashboard-loading','dashboard-progress','dashboard-loading-stage','Preparando dashboard…') }}{% endblock %}
+
 {% block scripts %}
-<script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/app.js') }}"></script>
+<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/dashboard-live.js') }}"></script>
 {% endblock %}

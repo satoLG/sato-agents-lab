@@ -13,7 +13,7 @@ export function allowedPosition(x,z,area,radius=.65){
 export function createHomeNavigation(container,rig,camera,{getEnvironment,onChange}){
  const home=container.closest('#home'),stick=document.getElementById('home-joystick'),knob=stick.firstElementChild;
  const keys=new Set(),axis={x:0,y:0},pointers=new Map(),target=new T.Vector3(),desired=new T.Vector3(),front=new T.Vector3(),orbit=new T.Vector3();
- let active=false,yaw=Math.PI,viewYaw=0,pitch=.28,viewPitch=.28,speed=0,returning=false,stickPointer=null,frontYaw=0,boom=4.6;
+ let active=false,yaw=Math.PI,viewYaw=0,pitch=.28,viewPitch=.28,speed=0,travelAngle=0,returning=false,stickPointer=null,frontYaw=0,boom=4.6;
  const listeners=[];
  const listen=(el,event,fn,options)=>{el.addEventListener(event,fn,options);listeners.push(()=>el.removeEventListener(event,fn,options));};
  const controls=()=>!document.querySelector('dialog[open]')&&home.dataset.history!=='true'&&!document.hidden&&!document.activeElement?.matches('input,textarea,[contenteditable=true]');
@@ -75,7 +75,7 @@ export function createHomeNavigation(container,rig,camera,{getEnvironment,onChan
    if(allowedPosition(oldX+dx,oldZ,area,.9))rig.root.position.x+=dx;
    if(allowedPosition(rig.root.position.x,oldZ+dz,area,.9))rig.root.position.z+=dz;
    speed=Math.hypot(rig.root.position.x-oldX,rig.root.position.z-oldZ)/dt;
-   if(speed>.01){const heading=Math.atan2(dx,dz),delta=Math.atan2(Math.sin(heading-rig.root.rotation.y),Math.cos(heading-rig.root.rotation.y));rig.root.rotation.y+=delta*(1-Math.exp(-dt*10));}
+   if(speed>.01){const heading=Math.atan2(rig.root.position.x-oldX,rig.root.position.z-oldZ),delta=Math.atan2(Math.sin(heading-rig.root.rotation.y),Math.cos(heading-rig.root.rotation.y));rig.root.rotation.y+=delta*(1-Math.exp(-dt*10));travelAngle=Math.atan2(Math.sin(heading-rig.root.rotation.y),Math.cos(heading-rig.root.rotation.y));}
    rig.root.position.y=environment.groundHeight?.(rig.root.position.x,rig.root.position.z)||0;
    target.copy(rig.root.position);target.y+=1.15;
    viewYaw+=Math.atan2(Math.sin(yaw-viewYaw),Math.cos(yaw-viewYaw))*(1-Math.exp(-dt*9));viewPitch+=(pitch-viewPitch)*(1-Math.exp(-dt*9));
@@ -102,7 +102,10 @@ export function createHomeNavigation(container,rig,camera,{getEnvironment,onChan
  }
  function frameFront(basePosition,baseTarget,dt,baseFov){
   if(active)return;
-  front.copy(basePosition).applyAxisAngle(T.Object3D.DEFAULT_UP,frontYaw).add(rig.root.position);target.copy(baseTarget).add(rig.root.position);
+  // Framing follows ground translation, never the fall or hover animation.
+  const floor=getEnvironment()?.groundHeight?.(rig.root.position.x,rig.root.position.z)||0;
+  desired.set(rig.root.position.x,floor,rig.root.position.z);
+  front.copy(basePosition).applyAxisAngle(T.Object3D.DEFAULT_UP,frontYaw).add(desired);target.copy(baseTarget).add(desired);
   const area=getEnvironment()?.navigation;
   if(area){
    orbit.copy(front).sub(target);let fraction=1;
@@ -123,5 +126,5 @@ export function createHomeNavigation(container,rig,camera,{getEnvironment,onChan
   if(Math.abs(camera.fov-fov)>.001){camera.fov=fov;camera.updateProjectionMatrix();}
   camera.lookAt(target);camera.updateMatrixWorld(true);
  }
- return {setActive,get active(){return active;},get speed(){return speed;},get returning(){return returning;},get facingYaw(){return frontYaw+.12;},update,frameFront,reset,resetFront(){frontYaw=0;returning=false;},dispose(){reset();listeners.forEach(remove=>remove());}};
+ return {setActive,get active(){return active;},get speed(){return speed;},get travelAngle(){return travelAngle;},get returning(){return returning;},get facingYaw(){return frontYaw+.12;},update,frameFront,reset,resetFront(){frontYaw=0;returning=false;},dispose(){reset();listeners.forEach(remove=>remove());}};
 }

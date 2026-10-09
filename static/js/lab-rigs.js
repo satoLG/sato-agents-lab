@@ -181,12 +181,12 @@ export function setRigBlink(rig,amount){
  for(const {mesh,angle}of rig.lids){mesh.rotation.z=angle+(1-blink)*1.58;mesh.position.x=Math.cos(angle)*radius;mesh.position.y=.015+Math.sin(angle)*radius;}
 }
 // Distance-based cadence: a half-cycle corresponds to one planted footfall.
-export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=0,reduced=false,carrying=false}={}){
+export function poseRig(rig,t,dt,{speed=0,travelAngle=0,attention=0,work=0,talk=false,lookYaw=0,reduced=false,carrying=false}={}){
  const moving=Math.min(1,Math.max(0,speed)/2.2);
  rig.move=damp(rig.move,moving,dt,10);rig.attention=damp(rig.attention,attention,dt,5);
  rig.work=damp(rig.work,work*(1-attention)*(1-moving),dt,5);
  const before=rig.gaitPhase;
- if(!reduced)rig.gaitPhase+=Math.max(0,speed)*dt*Math.PI/(.44*rig.root.scale.x);
+ if(!reduced&&!rig.floating)rig.gaitPhase+=Math.max(0,speed)*dt*Math.PI/(.44*rig.root.scale.x);
  rig.steps=Math.floor(rig.gaitPhase/Math.PI)-Math.floor(before/Math.PI);
  const phase=t+rig.phase,stride=Math.sin(rig.gaitPhase),move=reduced?0:rig.move,idle=1-move;
  const inspect=Math.floor(phase/7)%3,breath=Math.sin(phase*1.4);
@@ -195,6 +195,15 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  rig.spine.rotation.x=-.045*move+breath*.01*idle+rig.work*.045;
  rig.spine.rotation.y=stride*.045*move+Math.sin(phase*.55)*.025*idle;
  rig.spine.rotation.z=-rig.hips.rotation.z*.65;
+ if(rig.floating){
+  // A thruster-driven body banks into the actual local travel vector.
+  rig.hips.position.y=.54+(reduced?0:Math.sin(phase*1.65)*.035);
+  rig.hips.rotation.z=0;
+  rig.spine.rotation.x=damp(rig.spine.userData.pitch||0,Math.cos(travelAngle)*move*.23,dt,8);
+  rig.spine.rotation.z=damp(rig.spine.userData.bank||0,-Math.sin(travelAngle)*move*.23,dt,8);
+  rig.spine.userData.pitch=rig.spine.rotation.x;rig.spine.userData.bank=rig.spine.rotation.z;
+  rig.spine.rotation.y=0;rig.steps=0;
+ }
  const glance=Math.sin(phase*.45)*.18+Math.sin(phase*.17)*.1;
  if(rig.floating)rig.head.rotation.set(0,0,0);
  else{
@@ -212,6 +221,13 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  }
  for(let i=0;i<rig.arms.length;i++){
   const {upper,lower,wrist,fingers,thumb,side}=rig.arms[i],wave=!reduced&&t<rig.greeting&&i===1?Math.sin(Math.min(1,rig.greeting-t)*Math.PI/2):0;
+  if(rig.floating){
+   // Arms stay neutral in transit; explicit greetings/talking can still gesture at rest.
+   const gesture=move>.01?0:1;
+   upper.rotation.x=damp(upper.rotation.x,talk?-gesture*.2:0,dt,10);
+   upper.rotation.z=damp(upper.rotation.z,side*.2+(i===1?wave*.95*gesture:0),dt,8);
+   lower.rotation.set(0,0,0);continue;
+  }
   const tap=Math.sin(phase*(i?5.6:4.4)+i*1.8);
   // Shoulders stay outside the shell. Elbows flex forward, away from the torso.
   const idleCheck=inspect===1&&i===0&&!talk?(1-rig.work)*idle*.42*(.5+.5*Math.sin(phase*.7)):0;
@@ -239,5 +255,5 @@ export function poseRig(rig,t,dt,{speed=0,attention=0,work=0,talk=false,lookYaw=
  const blinkPhase=(phase+50)% (4.1+(rig.phase%1)*2),blink=blinkPhase<.18?Math.sin(blinkPhase/.18*Math.PI):0;
  rig.blinked=blink>.6&&rig.blink<=.6;rig.blink=blink;
  setRigBlink(rig,blink);
- rig.root.userData.animation=move>.05?'walk':talk?'talk':rig.work>.4?'operate':inspect===0?'scan':inspect===1?'inspect':'idle';
+ rig.root.userData.animation=move>.05?(rig.floating?'hover':'walk'):talk?'talk':rig.work>.4?'operate':inspect===0?'scan':inspect===1?'inspect':'idle';
 }

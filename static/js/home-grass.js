@@ -3,13 +3,13 @@ import {seededRandom} from './scene-grove.js';
 
 // folio-2025's Grass.js: jittered grid, one camera-facing triangle per blade,
 // terrain-dependent height and wind only at the tip. Adapted to WebGL/GLSL.
-export function createHomeGrass(root,{heightAt,waterAt}){
+export function createHomeGrass(root,{heightAt,waterAt,size=56,centerZ=-4,exclude=null,density=null}){
  const random=seededRandom(6109),positions=[],heights=[],widths=[],colors=[],color=new T.Color();
- const subdivisions=matchMedia('(pointer:coarse)').matches?300:420,size=56,cell=size/subdivisions;
+ const subdivisions=density??(matchMedia('(pointer:coarse)').matches?300:420),cell=size/subdivisions;
  for(let row=0;row<subdivisions;row++)for(let column=0;column<subdivisions;column++){
-  const x=-size/2+(column+random())*cell,z=-size/2+(row+random())*cell-4;
+  const x=-size/2+(column+random())*cell,z=-size/2+(row+random())*cell+centerZ;
   const water=waterAt(z),shore=Math.abs(x-water.center)-water.width,path=Math.abs(x+.8*Math.sin(z*.4));
-  if(water.width>0&&shore<.8||Math.hypot(x,z)<1.4||path<.7&&z>-8&&z<4)continue;
+  if(exclude?exclude(x,z):water.width>0&&shore<.8||Math.hypot(x,z)<1.4||path<.7&&z>-8&&z<4)continue;
   const variation=.65+.35*Math.sin(x*.39+Math.sin(z*.3))*Math.cos(z*.42);
   positions.push(x,heightAt(x,z)+.008,z);heights.push((.36+random()*.30)*variation);widths.push(.03+random()*.02);
   color.setHSL(.19+random()*.035,.45+random()*.15,.30+random()*.08);colors.push(color.r,color.g,color.b);
@@ -21,7 +21,7 @@ export function createHomeGrass(root,{heightAt,waterAt}){
  geometry.setAttribute('bladeHeight',new T.InstancedBufferAttribute(new Float32Array(heights),1));
  geometry.setAttribute('bladeWidth',new T.InstancedBufferAttribute(new Float32Array(widths),1));
  geometry.setAttribute('bladeColor',new T.InstancedBufferAttribute(new Float32Array(colors),3));geometry.instanceCount=heights.length;
- geometry.boundingSphere=new T.Sphere(new T.Vector3(0,0,-4),size*.73);
+ geometry.boundingSphere=new T.Sphere(new T.Vector3(0,0,centerZ),size*.73);
  const time={value:0},material=new T.MeshBasicMaterial({color:'#ffffff',side:T.DoubleSide});
  material.onBeforeCompile=shader=>{
   shader.uniforms.grassTime=time;

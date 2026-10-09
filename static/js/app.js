@@ -11,6 +11,8 @@ import * as webhooks from "./tab-webhooks.js";
 
 const TABS = {
   atividade: activity,
+  providers: {init(){}},
+  gateway: {init(){}},
   vm: vm,
   tools: tools,
   mcps: mcps,
@@ -43,8 +45,9 @@ function show(name) {
   } else if (TABS[name].refresh) {
     TABS[name].refresh();
   }
+  document.dispatchEvent(new CustomEvent('dashboard:tab',{detail:name}));
   const active = document.querySelector(`[data-tab="${name}"]`);
-  if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if(active){const nav=active.parentElement;const left=active.offsetLeft,right=left+active.offsetWidth;if(left<nav.scrollLeft)nav.scrollLeft=left;else if(right>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=right-nav.clientWidth;}
 }
 
 function currentTab() {
@@ -63,6 +66,8 @@ window.hermesActivityVisible = () => {
 };
 
 show(currentTab());
+const loader=document.getElementById('dashboard-loading');
+if(loader){document.getElementById('dashboard-progress').value=100;requestAnimationFrame(()=>loader.hidden=true);}
 
 // Keep the selected history current while the page is visible. The activity
 // live fragment is refreshed separately by HTMX every three seconds.

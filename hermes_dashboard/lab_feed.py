@@ -29,7 +29,7 @@ def boards(channels):
         status = "REGISTRADO" if native else "FALHA" if row.get("ok") is False else "REGISTRADO"
         result.setdefault(sector, {"rows": [], "upcoming": [], "source": "Dashboard · Atividades"})["rows"].append({
             "when": row.get("when"), "name": row.get("name"), "status": status,
-            "kind": row.get("kind"), "model": row.get("model"), "duration_ms": row.get("duration_ms"), "source": row.get("source"),
+            "kind": row.get("kind"), "model": row.get("model"), "provider": row.get("provider"), "duration_ms": row.get("duration_ms"), "source": row.get("source"),
         })
     catalog = channels.get("events", {}).get("data") or {}
     for row in webhooks.overview().get("events", []):
@@ -67,7 +67,7 @@ def collect():
             data.pop("docs", None)
             return data
         _catalog_channels = {key: _read(producer) for key, producer in {
-            "mcp": mcp.servers, "memory": memory.catalog, "rag": rag_summary, "events": events.overview,
+            "models": stats.models_config, "mcp": mcp.servers, "memory": memory.catalog, "rag": rag_summary, "events": events.overview,
         }.items()}
         _catalog_at = time.monotonic()
     channels.update(_catalog_channels)
