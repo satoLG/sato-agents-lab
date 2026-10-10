@@ -20,6 +20,14 @@ def test_maquina_limpa(client):
     check_all(client, "maquina limpa")
 
 
+def test_model_inspector_without_vm_or_navigation_link(client):
+    response = client.get('/models')
+    assert response.status_code == 200
+    assert 'Estúdio de modelos' in response.get_data(as_text=True)
+    for route in ['/', '/dashboard', '/lab']:
+        assert 'href="/models"' not in client.get(route).get_data(as_text=True)
+
+
 def test_banco_vazio_sem_tabelas(vm, client):
     vm.db(["CREATE TABLE outra_coisa (id INTEGER)"])
     check_all(client, "banco sem as tabelas esperadas")

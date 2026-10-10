@@ -99,6 +99,11 @@ def laboratory():
     return render_template("lab.html", lab_asset_version=LAB_ASSET_VERSION)
 
 
+@app.get("/models")
+def model_inspector():
+    return render_template("models.html", lab_asset_version=LAB_ASSET_VERSION)
+
+
 @app.route("/lab-assets/<version>/<path:filename>")
 def lab_asset(version, filename):
     if version != LAB_ASSET_VERSION:
