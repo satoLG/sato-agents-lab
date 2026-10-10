@@ -12,9 +12,23 @@ assert len(rig.data.bones)==53
 assert len(bpy.data.actions)==46
 for o in bpy.context.scene.objects:
  if o.type=='MESH':
+  # Keep the GLB's split normals through welding and quad reconstruction.
+  # BMesh otherwise smooths the deliberate planes of the new silhouette.
+  normals=[tuple(n.vector) for n in o.data.corner_normals]
+  stored=o.data.attributes.new('_sato_source_normal','FLOAT_VECTOR','CORNER')
+  stored.data.foreach_set('vector',[c for n in normals for c in n])
   bm=bmesh.new();bm.from_mesh(o.data);bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=1e-7)
+  layer=bm.loops.layers.float_vector['_sato_source_normal']
+  for e in bm.edges:
+   if len(e.link_faces)==2:
+    a,b=e.link_faces
+    for v in e.verts:
+     na=next(l[layer] for l in a.loops if l.vert==v);nb=next(l[layer] for l in b.loops if l.vert==v)
+     if (na-nb).length>1e-4:e.smooth=False;break
   bmesh.ops.join_triangles(bm,faces=list(bm.faces),angle_face_threshold=.35,angle_shape_threshold=.8,cmp_seam=True,cmp_sharp=True,cmp_uvs=True,cmp_materials=True)
   bm.to_mesh(o.data);bm.free();o.data.update()
+  stored=o.data.attributes['_sato_source_normal']
+  o.data.normals_split_custom_set([tuple(v.vector) for v in stored.data]);o.data.attributes.remove(stored)
   o['Design']='Sato low poly · connected geometry around original bind pose'
 for side in ['L','R']:
  obj=bpy.data.objects.get('Sato_arm_hand_'+side)
@@ -49,4 +63,4 @@ for screen in bpy.data.screens:
    area.spaces.active.region_3d.view_distance=1.65;area.spaces.active.region_3d.view_location=Vector((0,0,.48));area.spaces.active.shading.type='MATERIAL'
 args.output.parent.mkdir(parents=True,exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(args.output.resolve()))
-print('SATO_BLEND',json.dumps({'bones':len(rig.data.bones),'clips':len(bpy.data.actions),'meshes':len([o for o in scene.objects if o.type=='MESH'])}))
+print('SATO_BLEND',json.dumps({'bones':len(rig.data.bones),'clips':len(bpy.data.actions),'meshes':len([o for o in scene.objects if o.type=='MESH' and o.name.startswith('Sato_')])}))

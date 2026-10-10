@@ -8,6 +8,14 @@ import {GLTFLoader} from '../static/vendor/GLTFLoader.js';
 async function load(){const bytes=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)),length=bytes.readUInt32LE(12),json=JSON.parse(bytes.subarray(20,20+length)),bin=bytes.subarray(28+length);const loader=new GLTFLoader();loader.register(p=>({name:'headless',beforeRoot(){p.loadTexture=async()=>null;}}));const gltf=await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');return {json,gltf,data(i){const a=json.accessors[i],v=json.bufferViews[a.bufferView],size={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT4:16}[a.type],offset=(v.byteOffset||0)+(a.byteOffset||0);return bin.subarray(offset,offset+a.count*size*4);}};}
 function parts(root){const out=[];root.traverse(o=>{if(o.isSkinnedMesh)out.push(o);});return out;}
 
+test('approved painted atlases and the complete rear hair volume remain unchanged',async()=>{
+ const {json,gltf}=await load(),expected=JSON.parse(await fs.readFile(new URL('./fixtures/sato-approved-appearance.json',import.meta.url))),bytes=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)),bin=bytes.subarray(28+bytes.readUInt32LE(12));
+ const sha=b=>createHash('sha256').update(b).digest('hex');
+ assert.deepEqual(json.images.map(image=>{const v=json.bufferViews[image.bufferView],start=v.byteOffset||0;return {name:image.name,sha256:sha(bin.subarray(start,start+v.byteLength))};}),expected.textures);
+ const rear=new Set();for(const mesh of parts(gltf.scene.getObjectByName('Sato_hair_cap'))){const {position:p,uv}=mesh.geometry.attributes;for(let i=0;i<p.count;i++)if(p.getZ(i)<-.00001)rear.add([p.getX(i),p.getY(i),p.getZ(i),uv?.getX(i)??.5,uv?.getY(i)??.5].map(v=>v.toFixed(7)).join(','));}
+ assert.equal(rear.size,expected.rearVertices);assert.equal(sha([...rear].sort().join('\n')),expected.rearHash);
+});
+
 test('all original bind transforms, inverse binds and 46 clips remain byte-identical',async()=>{
  const {json,data}=await load(),expected=JSON.parse(await fs.readFile(new URL('./fixtures/sato-rig-signature.json',import.meta.url))),parents=new Map();json.nodes.forEach(n=>n.children?.forEach(i=>parents.set(i,n.name)));
  const rest=json.skins[0].joints.map(i=>{const n=json.nodes[i];return {name:n.name,parent:parents.get(i),translation:n.translation,rotation:n.rotation,scale:n.scale};});assert.deepEqual(JSON.parse(JSON.stringify(rest)),expected.rest);
