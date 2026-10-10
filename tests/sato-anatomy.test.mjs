@@ -65,9 +65,11 @@ test('resized soles and trouser cuffs stay above the floor through grounded moti
 test('painted face has a closed surface, a defined jaw and a narrower chin',async()=>{
  const g=await load(),parts=meshes(g.scene.getObjectByName('Sato_clean_face'));
  const positions=parts.flatMap(m=>Array.from({length:m.geometry.attributes.position.count},(_,i)=>new T.Vector3().fromBufferAttribute(m.geometry.attributes.position,i)));
- const widthAt=y=>Math.max(...positions.filter(p=>Math.abs(p.y-y)<.001).map(p=>Math.abs(p.x)))*2;
- assert.ok(widthAt(.740)>widthAt(.727)*1.5,'The jaw must widen from the chin');
- assert.ok(widthAt(.826)>widthAt(.740)*1.5,'Cheeks and jaw need distinct contour stations');
+ const chin=positions.filter(p=>p.y<.75&&p.y>.725&&p.z>.070),neck=positions.filter(p=>Math.abs(p.y-.693)<.001),corner=positions.filter(p=>Math.abs(p.x)>.055&&Math.abs(p.z)<.020&&p.y<.78);
+ assert.ok(chin.length&&corner.length,'The chin and mandibular corners need distinct geometry');
+ assert.ok(Math.max(...chin.map(p=>p.z))-Math.max(...neck.map(p=>p.z))>.045,'The chin must project in front of the neck in profile');
+ assert.ok(Math.min(...corner.map(p=>p.y))-Math.min(...chin.map(p=>p.y))>.018,'The jawline must rise from the chin toward the ear');
+ assert.ok(Math.max(...positions.filter(p=>Math.abs(p.y-.826)<.001).map(p=>Math.abs(p.x)))>Math.max(...chin.map(p=>Math.abs(p.x)))*1.5,'The chin must remain narrower than the cheeks');
  assert.ok(positions.some(p=>p.y<.68),'The neck is part of the head surface');
  const painted=parts.find(m=>m.material.name.includes('painted anime'));
  assert.ok(painted?.geometry.attributes.uv);
@@ -77,7 +79,7 @@ test('painted face has a closed surface, a defined jaw and a narrower chin',asyn
 
 test('filled nape covers the rear skull and follows only the head',async()=>{
  const g=await load();let hairVertices=0,lowest=Infinity,highest=-Infinity;
- for(const name of ['Sato_hair_cap','Sato_hair_locks']){
+ for(const name of ['Sato_hair_cap']){
   const root=g.scene.getObjectByName(name);assert.ok(root);
   for(const mesh of meshes(root)){
    const {position,skinIndex,skinWeight}=mesh.geometry.attributes;hairVertices+=position.count;
@@ -88,7 +90,7 @@ test('filled nape covers the rear skull and follows only the head',async()=>{
   }
  }
  assert.ok(hairVertices>100);
- assert.ok(lowest>.730&&lowest<.745,'The cap must reach the nape while clearing the shoulders');assert.ok(highest<.96);
+ assert.ok(lowest>.730&&lowest<.745,'The cap must reach the nape while clearing the shoulders');assert.ok(highest>1.0&&highest<1.05,'The crown needs visible, proportionate upward spikes');
  const cap=meshes(g.scene.getObjectByName('Sato_hair_cap'));
  const rear=cap.flatMap(m=>Array.from({length:m.geometry.attributes.position.count},(_,i)=>new T.Vector3().fromBufferAttribute(m.geometry.attributes.position,i))).filter(p=>p.z<-.04&&p.y<.8);
  assert.ok(rear.length>25,'The rear hair must have a filled volume');

@@ -1046,5 +1046,6 @@
     "Rig|Walk_Loop",
     "Hands_Open_Close"
   ],
-  "channels": 7185
+  "channels": 7185,
+  "motionHash": "531f1adee1e108b14b2565d580523370ae0477c02472ddbf4fac97feb548d023"
 }

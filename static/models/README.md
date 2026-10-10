@@ -4,56 +4,63 @@
 
 `sato.glb` is the current runtime character. Its appearance is rebuilt around
 the existing Quaternius bind pose, following the supplied low-poly anime
-references. Style revision 2 has 6,744 triangles and embeds its two
+references. Style revision 3 has 6,820 triangles and embeds its two
 nearest-filtered pixel textures. There are no external model or texture
 requests at runtime.
 
-The head has separate chin, mandibular and cheek contour stations, a small
-integrated nose, painted brown anime eyes, brows and a restrained smile.
-The continuous head/neck surface replaces the previous open, toothy mouth.
+The neck enters beneath a projecting chin and a rising mandibular edge.
+That underside is modeled in geometry; the mouth and nose retain their
+previous positions, avoiding a protruding muzzle. The head/neck surface is
+continuous. Painted brown anime eyes, thicker brows and a restrained smile
+retain the face's identity.
 Slim graphite spectacles, chestnut hair, a midnight shirt, slate trousers and
 brown sneakers keep Sato recognizable. A filled hair cap follows the back of
-the skull down to the nape. Its front edge now forms an asymmetric, jagged
-fringe on the cap itself, with shallow raised locks and restrained painted
-highlights. All hair is bound exclusively to `DEF-head`. The face and hair
-atlases, and every rear cap position and UV, match the user-approved first
-style revision exactly; only the front hairstyle and jaw geometry change.
+the skull down to the nape. One connected hair surface sweeps upward and
+backward from the hairline into asymmetric crown tips; the front lock belongs
+to that same surface. Long chestnut highlights follow that flow. All hair is
+bound exclusively to `DEF-head`. The face atlas remains identical outside
+the thicker eyebrow band. Spectacles, eyes and finger shafts are preserved.
 
-The torso has lower shoulders, a narrower waist and broad, beveled planes
-instead of inflated round volumes. Fitted sleeves lead into slender upper
+The torso has sloping shoulders, a fuller waist, flatter chest and broad,
+beveled planes. Fitted sleeves lead into slender upper
 arms and faceted forearms. Each arm, wrist, palm, thumb and four fingers is
-one connected, closed surface. The palms widen toward the knuckles; shorter,
-thicker fingers retain the existing three phalanx influences. Hands use
+one connected, closed surface. Palm and back surfaces are flat through their
+center, with finger influences starting at the knuckles. The approved fingers
+retain the existing three phalanx influences. Hands use
 smooth corner normals on their beveled geometry while clothing and forearms
-use planar normals. The trousers share a crotch seam and taper into the
+use planar normals. The upper thighs fit beneath the torso, start fuller than
+the calves and taper down without lateral swelling. The trousers share a
+crotch seam and taper into the
 sneakers. Their forefoot uses the existing toe joints; a small heel bevel
-clears the floor through the grounded clips without changing any animation.
+clears the floor through the grounded clips. The neckline has room around the
+neck at the front and nape and follows its deformation during head turns.
 
-The 53 bone transforms, hierarchy, inverse bind matrices and **all 46 clips**
-are byte-identical to anatomy revision 1 (`2448a33`). This includes the 45 source
-clips and `Hands_Open_Close`, the source pistol articulation, and the authored
-punch, sword and torch grips. Tests check the complete 7,185-channel animation
-fingerprint against that baseline. glTF Validator reports zero errors and
-zero warnings.
+The 53 bone transforms, hierarchy and inverse bind matrices remain unchanged.
+Of the 46 clips, **45 are byte-identical** to anatomy revision 1 (`2448a33`),
+including the hand audition, source pistol articulation, and authored punch,
+sword and torch grips. `Rig|Idle_Loop` now lowers the shoulders, straightens
+the arms, angles the hands slightly inward and brings the feet closer together.
+Two-bone solves preserve limb lengths, ankle height and sole pitch. Tests
+fingerprint every untouched motion channel against the original baseline.
 
 ## Authoring and verification
 
 The deterministic authoring source is `tools/style-sato.mjs`. It rebuilds
 geometry and draws the two pixel atlases, then repacks the referenced buffer
-views while copying original animation and inverse-bind bytes unchanged.
+views while copying untouched animation and inverse-bind bytes unchanged.
 The exported `sato-style-face.png` and `sato-style-hair.png` are also available
 beside the GLB for texture editing.
 
-To regenerate, provide the anatomy-revision-1 `static/models/sato.glb` from
-commit `2448a33` (or the merge commit `71e6b74`):
+To regenerate, provide the style-revision-2 `static/models/sato.glb` from
+commit `c4efbd8` (the unmodified idle is needed as the authoring input):
 
 ```sh
-node tools/style-sato.mjs path/to/anatomy-revision-1.glb static/models/sato.glb
+node tools/style-sato.mjs path/to/style-revision-2.glb static/models/sato.glb
 npm run test:avatar
 ```
 
 `npm run style:sato -- input.glb output.glb` accepts the same arguments.
-Applying style revision 2 to an asset already carrying that revision is a
+Applying style revision 3 to an asset already carrying that revision is a
 byte-preserving no-op. `sato-source.glb` and the older `build-sato.mjs` use
 the earlier rig and are not the input for this pipeline. `refine-sato.mjs` remains the authoring
 source for the preceding anatomy/contact/grip revision.
@@ -71,9 +78,11 @@ Its camera and lights are in a separate preview collection. The runtime GLB is n
 Blender, so its animation fingerprints remain exact.
 
 `npm run test:avatar` checks actual finger deformation, ground clearance,
-connected manifold arm/hand surfaces, the approved atlas and rear-cap
-fingerprints, texture orientation, jaw/nape contours,
-all-clip finite deformation and lab jump/attack blending. The browser avatar
+connected manifold arm/hand surfaces, preserved mouth/finger/face fingerprints,
+texture orientation, jaw/nape contours, thigh and shoulder silhouettes,
+closer idle stance and inward hands, scalp coverage and neckline clearance
+across moving poses, all-clip finite deformation and lab jump/attack blending.
+The browser avatar
 and model-inspector tests cover WebGL rendering, playback, isolation and GLB
 download. The supplied screenshots are visual references; they
 are not baked into the character textures.

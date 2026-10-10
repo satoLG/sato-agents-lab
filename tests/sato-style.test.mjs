@@ -2,26 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import {inflateSync} from 'node:zlib';
 import * as T from '../static/vendor/three.module.min.js';
 import {GLTFLoader} from '../static/vendor/GLTFLoader.js';
 
 async function load(){const bytes=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)),length=bytes.readUInt32LE(12),json=JSON.parse(bytes.subarray(20,20+length)),bin=bytes.subarray(28+length);const loader=new GLTFLoader();loader.register(p=>({name:'headless',beforeRoot(){p.loadTexture=async()=>null;}}));const gltf=await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');return {json,gltf,data(i){const a=json.accessors[i],v=json.bufferViews[a.bufferView],size={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT4:16}[a.type],offset=(v.byteOffset||0)+(a.byteOffset||0);return bin.subarray(offset,offset+a.count*size*4);}};}
 function parts(root){const out=[];root.traverse(o=>{if(o.isSkinnedMesh)out.push(o);});return out;}
 
-test('approved painted atlases and the complete rear hair volume remain unchanged',async()=>{
- const {json,gltf}=await load(),expected=JSON.parse(await fs.readFile(new URL('./fixtures/sato-approved-appearance.json',import.meta.url))),bytes=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)),bin=bytes.subarray(28+bytes.readUInt32LE(12));
+test('eyes and face colors stay unchanged while brows thicken and hair keeps its chestnut palette',async()=>{
+ const {json}=await load(),expected=JSON.parse(await fs.readFile(new URL('./fixtures/sato-approved-appearance.json',import.meta.url))),bytes=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)),bin=bytes.subarray(28+bytes.readUInt32LE(12));
  const sha=b=>createHash('sha256').update(b).digest('hex');
- assert.deepEqual(json.images.map(image=>{const v=json.bufferViews[image.bufferView],start=v.byteOffset||0;return {name:image.name,sha256:sha(bin.subarray(start,start+v.byteLength))};}),expected.textures);
- const rear=new Set();for(const mesh of parts(gltf.scene.getObjectByName('Sato_hair_cap'))){const {position:p,uv}=mesh.geometry.attributes;for(let i=0;i<p.count;i++)if(p.getZ(i)<-.00001)rear.add([p.getX(i),p.getY(i),p.getZ(i),uv?.getX(i)??.5,uv?.getY(i)??.5].map(v=>v.toFixed(7)).join(','));}
- assert.equal(rear.size,expected.rearVertices);assert.equal(sha([...rear].sort().join('\n')),expected.rearHash);
+ const images=json.images.map(image=>{const v=json.bufferViews[image.bufferView],start=v.byteOffset||0;return bin.subarray(start,start+v.byteLength);});
+ // The deterministic atlas uses unfiltered RGBA rows. Only the brow band may change.
+ const png=images[0],compressed=[];for(let o=8;o<png.length;){const length=png.readUInt32BE(o);if(png.toString('ascii',o+4,o+8)==='IDAT')compressed.push(png.subarray(o+8,o+8+length));o+=length+12;}
+ const pixels=inflateSync(Buffer.concat(compressed)),protectedRows=[];let browPixels=0;
+ for(let y=0;y<256;y++){assert.equal(pixels[y*1025],0);if(y<79||y>104)protectedRows.push(pixels.subarray(y*1025,(y+1)*1025));else for(let x=0;x<256;x++){const i=y*1025+1+x*4;if(pixels[i]===81&&pixels[i+1]===56&&pixels[i+2]===46)browPixels++;}}
+ assert.equal(sha(Buffer.concat(protectedRows)),expected.faceOutsideBrowsHash);assert.ok(browPixels>expected.browPixels*1.4,'Eyebrows must have more visible thickness');
+ const hairData=[];for(let o=8;o<images[1].length;){const length=images[1].readUInt32BE(o);if(images[1].toString('ascii',o+4,o+8)==='IDAT')hairData.push(images[1].subarray(o+8,o+8+length));o+=length+12;}
+ const hairPixels=inflateSync(Buffer.concat(hairData));let chestnut=0;for(let y=0;y<128;y++)for(let x=0;x<128;x++){const i=y*513+1+x*4,[r,g,b,a]=hairPixels.subarray(i,i+4);assert.equal(a,255);assert.ok(r>g&&g>b,'Hair must retain the warm brown palette');if(r===80&&g===55&&b===48)chestnut++;}assert.ok(chestnut>128*128*.20);
 });
 
-test('all original bind transforms, inverse binds and 46 clips remain byte-identical',async()=>{
+test('all original bind transforms, inverse binds and 45 action clips remain byte-identical',async()=>{
  const {json,data}=await load(),expected=JSON.parse(await fs.readFile(new URL('./fixtures/sato-rig-signature.json',import.meta.url))),parents=new Map();json.nodes.forEach(n=>n.children?.forEach(i=>parents.set(i,n.name)));
  const rest=json.skins[0].joints.map(i=>{const n=json.nodes[i];return {name:n.name,parent:parents.get(i),translation:n.translation,rotation:n.rotation,scale:n.scale};});assert.deepEqual(JSON.parse(JSON.stringify(rest)),expected.rest);
  const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(data(json.skins[0].inverseBindMatrices)),expected.inverseBindHash);
- const hash=createHash('sha256');let channels=0;for(const a of json.animations){hash.update(a.name);for(const c of a.channels){const s=a.samplers[c.sampler];hash.update(json.nodes[c.target.node].name+':'+c.target.path+':'+s.interpolation);hash.update(data(s.input));hash.update(data(s.output));channels++;}}
- assert.equal(hash.digest('hex'),expected.animationHash);assert.equal(channels,expected.channels);assert.deepEqual(json.animations.map(a=>a.name),expected.clips);
+ const hash=createHash('sha256');let channels=0;for(const a of json.animations){channels+=a.channels.length;if(a.name==='Rig|Idle_Loop')continue;hash.update(a.name);for(const c of a.channels){const s=a.samplers[c.sampler];hash.update(json.nodes[c.target.node].name+':'+c.target.path+':'+s.interpolation);hash.update(data(s.input));hash.update(data(s.output));}}
+ assert.equal(hash.digest('hex'),expected.motionHash);assert.equal(channels,expected.channels);assert.deepEqual(json.animations.map(a=>a.name),expected.clips);
 });
 
 test('arms, palms, thumbs and fingers form connected, closed surfaces with normalized weights',async()=>{
