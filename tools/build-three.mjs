@@ -12,3 +12,7 @@ await build({
 await build({entryPoints:['node_modules/three/examples/jsm/renderers/CSS3DRenderer.js'],bundle:true,minify:true,format:'esm',outfile:'static/vendor/CSS3DRenderer.js',plugins:[{name:'shared-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:'./three.module.min.js',external:true}));}}]});
 
 await build({entryPoints:['node_modules/three/examples/jsm/loaders/RGBELoader.js'],bundle:true,minify:true,format:'esm',outfile:'static/vendor/RGBELoader.js',plugins:[{name:'shared-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:'./three.module.min.js',external:true}));}}]});
+
+for(const [folder,name] of [['controls','OrbitControls'],['exporters','GLTFExporter']]){
+ await build({entryPoints:[`node_modules/three/examples/jsm/${folder}/${name}.js`],bundle:true,minify:true,format:'esm',outfile:`static/vendor/${name}.js`,plugins:[{name:'shared-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:'./three.module.min.js',external:true}));}}]});
+}

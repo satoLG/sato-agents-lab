@@ -1,0 +1,51 @@
+{% from 'fragments/site-ui.html' import loading %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111b21">
+  <title>Modelos · Sato Agents</title>
+  <link rel="icon" href="{{ url_for('static', filename='sato-logo.png') }}">
+  {% for name in ['identity','sato-ui','models'] %}<link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/' + name + '.css') }}">{% endfor %}
+</head>
+<body data-page="models">
+<header class="inspector-header"><div><span class="eyebrow">SATO AGENTS</span><h1>Estúdio de modelos</h1></div><p>Explore a malha, confira o rig e examine cada animação.</p></header>
+<main class="inspector-layout">
+  <section class="viewport glass" aria-label="Visualização do modelo">
+    <div id="model-canvas" tabindex="0" aria-label="Modelo 3D. Arraste para orbitar, use a roda para aproximar e botão direito para deslocar."></div>
+    <div class="view-toolbar"><button id="frame-model" type="button">Enquadrar</button><button data-view="front" type="button">Frente</button><button data-view="side" type="button">Lado</button><button data-view="back" type="button">Costas</button></div>
+    <p class="view-hint">Arraste para orbitar · roda para zoom · botão direito para deslocar</p>
+    {{ loading('model-loading','model-progress','model-stage','Carregando modelo…') }}
+    <p id="model-error" role="alert" hidden></p>
+  </section>
+  <aside class="inspector-controls" aria-label="Controles do inspetor">
+    <section class="glass control-card"><h2>Modelo</h2>
+      <label for="model-select">Biblioteca</label><select id="model-select"><option value="sato">Sato · humanoide</option><option value="companion">Robozinho · flutuante</option></select>
+      <p id="model-description" class="muted"></p>
+      <div class="button-row"><label class="file-button" for="model-file">Abrir GLB local</label><input id="model-file" type="file" accept=".glb" hidden><button id="export-model" type="button" disabled>Baixar GLB</button></div>
+      <p class="muted">Abra o GLB no Blender para editar. Arquivos locais ficam apenas neste navegador.</p>
+      <dl id="model-stats"></dl>
+    </section>
+    <section class="glass control-card"><h2>Animação</h2>
+      <label for="clip-select">Clipe</label><select id="clip-select" disabled><option>Carregando…</option></select>
+      <div class="button-row"><button id="play-animation" type="button" aria-pressed="false" disabled>Reproduzir</button><button id="restart-animation" type="button" disabled>Reiniciar</button><button id="step-animation" type="button" disabled>+1 quadro</button></div>
+      <label for="animation-time">Linha do tempo <output id="time-label">0.00 / 0.00 s</output></label><input id="animation-time" type="range" min="0" max="1" value="0" step="0.001" disabled>
+      <label for="animation-speed">Velocidade</label><select id="animation-speed"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      <label class="check"><input id="animation-loop" type="checkbox" checked> Repetir clipe</label>
+      <p class="muted">Os clipes do Sato são exibidos sem o controlador do lab, para inspecionar o movimento original.</p>
+    </section>
+    <section class="glass control-card"><h2>Inspeção</h2>
+      <label class="check"><input id="show-wireframe" type="checkbox"> Malha em arame</label>
+      <label class="check"><input id="show-skeleton" type="checkbox"> Ossos e articulações</label>
+      <label class="check"><input id="show-grid" type="checkbox" checked> Grade do chão</label>
+      <label for="mesh-select">Peça ou malha</label><select id="mesh-select"><option value="">Modelo completo</option></select>
+      <label class="check"><input id="isolate-mesh" type="checkbox"> Isolar peça selecionada</label>
+      <p id="mesh-detail" class="muted">Selecione uma peça para conferir sua geometria e material.</p>
+      <p id="export-status" class="muted" role="status"></p>
+    </section>
+  </aside>
+</main>
+<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/model-inspector.js') }}"></script>
+</body>
+</html>

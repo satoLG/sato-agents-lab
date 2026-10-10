@@ -15,7 +15,7 @@ export function createRigFactory(art) {
     const head = bone(spine, 'head', 0, type === 'avatar' ? .84 : 0, 0);
     return {type, root, hips, spine, head, arms: [], legs: [], eyes: [], move: 0, attention: 0, work: .6, phase: 0, greeting: 0, gaitPhase: 0, steps: 0, blink: 0, lids: []};
   }
-  function robot({core=false,floating=false}={}) {
+  function robot({core=false,floating=false,batch=true}={}) {
     const rig = base('robot');rig.core=core;rig.floating=floating;if(core){rig.spine.position.y=.9;rig.root.name='core-custodian';}
     const signal=core?'#ffad4a':'#65d5ff';
     const shell=mat('#e3e8df',.42,.3),mechanism=mat('#344751',.82,.27),fingerMetal=mat('#b8c7cd',.85,.27);
@@ -167,7 +167,7 @@ export function createRigFactory(art) {
       rig.indicator = sphere(rig.spine, .06, glow('#779d8a'), .22, .75, -.12);
     }
     rig.root.rotation.y = Math.PI;
-    batchRobot(rig);
+    if(batch)batchRobot(rig);
     return rig;
   }
   return {robot};
