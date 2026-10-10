@@ -4,7 +4,9 @@ const fs=require('node:fs');
 test('Sato inspector exposes every clip and supports playback, scrubbing and inspection',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/models');
  await expect(page.locator('#model-loading')).toBeHidden();await expect(page.locator('#model-error')).toBeHidden();
- await expect(page.locator('#clip-select option')).toHaveCount(45);await expect(page.locator('#clip-select')).toHaveValue('8');
+ await expect(page.locator('#clip-select option')).toHaveCount(46);await expect(page.locator('#clip-select')).toHaveValue('8');
+ await page.locator('#clip-select').selectOption({label:'Hands_Open_Close'});await page.locator('#animation-time').fill('0.8');
+ await expect(page.locator('#time-label')).toContainText('0.80');
  await page.locator('#clip-select').selectOption({label:'Rig|Walk_Loop'});await page.locator('#play-animation').click();
  await expect.poll(()=>page.locator('#animation-time').inputValue()).not.toBe('0');await page.locator('#play-animation').click();
  await expect(page.locator('#play-animation')).toHaveAttribute('aria-pressed','false');

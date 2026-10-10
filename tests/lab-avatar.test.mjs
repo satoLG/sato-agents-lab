@@ -7,8 +7,9 @@ import {createSatoAvatar,AVATAR_HEIGHT} from '../static/js/lab-avatar.js';
 import {WALK_SPEED,RUN_SPEED} from '../static/js/lab-controls.js';
 async function load(){const l=new GLTFLoader();l.register(p=>({name:'headless',beforeRoot(){p.loadTexture=async()=>null;}}));const b=await fs.readFile(new URL('../static/models/sato.glb',import.meta.url));return l.parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');}
 const advance=(rig,seconds,options={})=>{for(let i=0;i<Math.ceil(seconds*60);i++)rig.update(1/60,options);};
-test('refined mesh keeps 53 bones, 45 clips and required action phases',async()=>{
-  const g=await load();g.scene.traverse(o=>{if(o.isSkinnedMesh)assert.equal(o.skeleton.bones.length,53);});assert.equal(g.animations.length,45);
+test('refined mesh keeps 53 bones, 45 source clips, hand audition and required action phases',async()=>{
+  const g=await load();g.scene.traverse(o=>{if(o.isSkinnedMesh)assert.equal(o.skeleton.bones.length,53);});assert.equal(g.animations.length,46);
+  assert.ok(g.animations.find(c=>c.name==='Hands_Open_Close'));
   for(const name of ['Walk_Loop','Sprint_Loop','Jump_Start','Jump_Loop','Jump_Land','Punch_Jab','Punch_Cross'])assert.ok(g.animations.find(c=>c.name===`Rig|${name}`));
   for(const name of ['Sato_clean_face','Sato_nose','Sato_ear_-1','Sato_ear_1'])assert.ok(g.scene.getObjectByName(name));
 });
@@ -42,4 +43,10 @@ test('aiming sideways and backward keeps finite bone transforms; stopping restor
 test('footsteps follow gait and are absent while blocked or attacking',async()=>{
   const r=createSatoAvatar(await load());advance(r,2,{speed:WALK_SPEED});assert.ok(r.drainEvents().filter(e=>e==='walk').length>=2);
   advance(r,1,{speed:0});assert.deepEqual(r.drainEvents(),[]);r.attack();advance(r,.25,{speed:0});assert.deepEqual(r.drainEvents(),['punch']);
+});
+
+test('lab attack closes the skinned fingers and blends back to an open hand',async()=>{
+ const g=await load(),r=createSatoAvatar(g),finger=g.scene.getObjectByName('DEF-f_index01R'),open=finger.quaternion.clone();
+ r.attack();advance(r,.15);assert.ok(finger.quaternion.angleTo(open)>.8);
+ advance(r,1);assert.equal(r.actionState,'ground');assert.ok(finger.quaternion.angleTo(open)<.001);
 });
