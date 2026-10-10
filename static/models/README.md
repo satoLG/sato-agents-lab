@@ -2,7 +2,7 @@
 
 `sato-source.glb` is the original Sato asset. `sato.glb` is the runtime replacement: it keeps Sato's appearance and repaired face while using the Quaternius humanoid skeleton and animation set.
 
-The runtime asset contains 53 bones and 45 clips, including the clips used by the lab:
+The runtime asset contains 53 bones, the 45 original clips and a `Hands_Open_Close` audition, including the clips used by the lab:
 
 - `Rig|Idle_Loop`
 - `Rig|Walk_Loop`
@@ -35,7 +35,7 @@ The revised GLB passes glTF Validator with zero errors and zero warnings.
 ## Model inspector and editable companion
 
 Open `/models` directly (there is deliberately no navigation link). It exposes
-all 45 Sato clips, play/pause, scrubbing, a 30 fps frame step, speed and loop
+all 46 Sato clips, play/pause, scrubbing, a 30 fps frame step, speed and loop
 controls, orbit/zoom/pan, wireframe, bones, mesh isolation and geometry counts.
 Sato uses the original `sato.glb` in both the inspector and the laboratory.
 The inspector plays the raw asset clips, without the lab's locomotion blending
@@ -55,3 +55,55 @@ download returns the original GLB bytes. **Abrir GLB local** previews exported
 Blender revisions in the browser without uploading or changing site assets.
 To integrate a revised robot into the home, its procedural source must be
 updated or explicitly migrated to the revised GLB in a subsequent change.
+
+## Anatomy and hand skinning revision
+
+![Sato anatomy preview: portrait, front and back](sato-anatomy-preview.png)
+
+The current `sato.glb` keeps the original Quaternius hierarchy, inverse bind
+matrices, rest transforms and animation names. Its face uses distinct cheek,
+mandibular and chin stations. The beard is a material region of that same head
+surface and ends behind the ears; it is not a second overlapping shell. The
+smile is an actual aperture with recessed dark walls/back and ivory teeth in
+front of the cavity. The old mouth overlays and residual textured head fragments
+have been replaced. Eyes and brows follow the revised face surface.
+
+The original spiky hair is trimmed above the nape and weighted entirely to
+`DEF-head`, removing the former shoulder influences. Boots are fitted to the
+ankle/toe span, the trouser cuffs taper into them, and the forefoot uses the toe
+joints. Baked leg IK corrects residual sole penetration in grounded clips while
+preserving thigh/shin lengths and the source foot pitch. Root/hip motion and the
+jump controller are unchanged. Swimming,
+rolling, sitting, death and the airborne jump loop retain their original foot
+tracks because they do not use the same standing contact constraint.
+
+New palm and finger meshes use all 30 existing finger bones. Pistol animations
+retain the source trigger/support-hand articulation. Punch clips close both
+hands; sword and torch clips grip with the right hand. These are baked into the
+GLB and therefore also work in the inspector and after Blender import. The
+additional `Hands_Open_Close` clip animates only the fingers for a simple grip
+audition; all 45 source clips remain available.
+
+Regenerate from the unrefined Quaternius runtime asset at Git revision `7471367`
+(`static/models/sato.glb`), not `sato-source.glb`, which uses the earlier rig:
+
+```sh
+node tools/refine-sato.mjs path/to/unrefined-sato.glb static/models/sato.glb
+npm run test:avatar
+```
+
+`npm run refine:sato` also accepts those input/output arguments after `--`.
+Reapplying revision 1 to an already refined file is a byte-preserving no-op.
+The older `build-sato.mjs` is the authoring pipeline for the earlier rig and is
+not this Quaternius refinement pipeline.
+
+Design references supplied for this revision:
+
+- [Character Prompt Builder](https://github.com/euan-gwd/comfyui-character-prompt-builder): explicit face, hair, hand/prop anchors.
+- [Character Design](https://github.com/khanhhuyenngo985-sys/character-scene-design-skills/blob/main/skills/character-design/SKILL.md) and its [bone/face layer](https://github.com/khanhhuyenngo985-sys/character-scene-design-skills/blob/main/skills/character-design/references/bone-face-structure-layer.md): proportions, jaw structure and consistent front/side/back contours.
+- [Character Reference Sheet](https://github.com/ShinChven/nano-banana-skills/blob/main/skills/character-reference-sheet/SKILL.md): preserve the supplied character's appearance across close-up and full-body views.
+- [Video Prompting character sheets](https://github.com/Square-Zero-Labs/video-prompting-skill/blob/main/video-prompting/references/workflows/character-sheets.md): stable silhouette, hand/prop poses and a motion audition.
+
+These guide visual consistency; the geometry, skin weights and animation fixes
+are authored directly in the GLB. Regression checks exercise actual deformed
+vertices, mouth ray intersections, native grips and the lab's attack blending.
