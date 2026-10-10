@@ -11,7 +11,7 @@ test('refined mesh keeps 53 bones, 45 source clips, hand audition and required a
   const g=await load();g.scene.traverse(o=>{if(o.isSkinnedMesh)assert.equal(o.skeleton.bones.length,53);});assert.equal(g.animations.length,46);
   assert.ok(g.animations.find(c=>c.name==='Hands_Open_Close'));
   for(const name of ['Walk_Loop','Sprint_Loop','Jump_Start','Jump_Loop','Jump_Land','Punch_Jab','Punch_Cross'])assert.ok(g.animations.find(c=>c.name===`Rig|${name}`));
-  for(const name of ['Sato_clean_face','Sato_nose','Sato_ear_-1','Sato_ear_1'])assert.ok(g.scene.getObjectByName(name));
+  for(const name of ['Sato_clean_face','Sato_hair_cap','Sato_hair_locks','Sato_ear_-1','Sato_ear_1'])assert.ok(g.scene.getObjectByName(name));
 });
 test('walking stays walking; sprint requires explicit intent and returns smoothly',async()=>{
   const r=createSatoAvatar(await load());advance(r,1,{speed:WALK_SPEED});assert.ok(r.walk.getEffectiveWeight()>.99);assert.equal(r.run.getEffectiveWeight(),0);

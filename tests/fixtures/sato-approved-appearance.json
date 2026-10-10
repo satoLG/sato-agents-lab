@@ -1,0 +1,15 @@
+{
+  "source": "style revision 1, commit 5c5b412; approved painted face and filled rear hair",
+  "textures": [
+    {
+      "name": "Sato face · 256px",
+      "sha256": "01b67090c3e0bf1d268fe0f94b401479e805e0c417cd0c454cf7cacb863c4d4f"
+    },
+    {
+      "name": "Sato hair · 128px",
+      "sha256": "b1651307334dc1415ac6ab74f39667e1f7716ae88278b70926ada1405b3fd7b7"
+    }
+  ],
+  "rearVertices": 160,
+  "rearHash": "d26a6a49c6f66efad451a7b7487c161157255ec8b4bbe228eb4f8fcb83f64c0f"
+}

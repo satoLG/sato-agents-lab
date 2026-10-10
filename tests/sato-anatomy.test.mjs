@@ -17,8 +17,8 @@ function play(g,name){
 function meshes(root){const out=[];root.traverse(n=>{if(n.isSkinnedMesh)out.push(n);});return out;}
 function vertex(mesh,index){const v=new T.Vector3().fromBufferAttribute(mesh.geometry.attributes.position,index);mesh.applyBoneTransform(index,v);return v.applyMatrix4(mesh.matrixWorld);}
 function fingertip(g,name){
- const hand=g.scene.getObjectByName('Sato_articulated_hands'),points=[];
- for(const mesh of meshes(hand)){
+ const points=[];
+ for(const mesh of meshes(g.scene).filter(m=>m.name.startsWith('Sato_arm_hand_'))){
   const index=mesh.skeleton.bones.findIndex(b=>b.name===name),{skinIndex,skinWeight,position}=mesh.geometry.attributes;
   for(let i=0;i<position.count;i++)if([0,1,2,3].some(c=>skinIndex.getComponent(i,c)===index&&skinWeight.getComponent(i,c)>.9))points.push(vertex(mesh,i));
  }
@@ -46,12 +46,12 @@ test('punches and sword close the fingers; pistol retains a distinct trigger fin
 });
 
 test('resized soles and trouser cuffs stay above the floor through grounded motion',async()=>{
- const g=await load(),footwear=['14','16','35','48'].map(id=>g.scene.getObjectByName(`tripo_part_${id}`));
+ const g=await load(),footwear=['L','R'].flatMap(side=>meshes(g.scene.getObjectByName(`Sato_sneaker_${side}`)));
  g.scene.updateMatrixWorld(true);
  const legs=['L','R'].map(side=>['thigh','shin','foot'].map(part=>g.scene.getObjectByName(`DEF-${part}${side}`)));
  const lengths=legs.map(leg=>[0,1].map(i=>leg[i].getWorldPosition(new T.Vector3()).distanceTo(leg[i+1].getWorldPosition(new T.Vector3()))));
- const trousers=g.scene.getObjectByName('tripo_part_3');
- const sample=[...footwear.flatMap(mesh=>Array.from({length:mesh.geometry.attributes.position.count},(_,i)=>[mesh,i])),...Array.from({length:trousers.geometry.attributes.position.count},(_,i)=>i).filter(i=>trousers.geometry.attributes.position.getY(i)<.10).map(i=>[trousers,i])];
+ const trousers=meshes(g.scene.getObjectByName('Sato_trousers'));
+ const sample=[...footwear.flatMap(mesh=>Array.from({length:mesh.geometry.attributes.position.count},(_,i)=>[mesh,i])),...trousers.flatMap(mesh=>Array.from({length:mesh.geometry.attributes.position.count},(_,i)=>i).filter(i=>mesh.geometry.attributes.position.getY(i)<.10).map(i=>[mesh,i]))];
  for(const name of ['Idle_Loop','Walk_Loop','Sprint_Loop','Crouch_Fwd_Loop','Jump_Start','Jump_Land','Punch_Jab','Punch_Cross','Pistol_Idle_Loop','Pistol_Shoot','Sword_Idle','Sword_Attack']){
   const animation=play(g,`Rig|${name}`),steps=Math.ceil(animation.clip.duration*120);let lowest=Infinity;
   for(let i=0;i<=steps;i++){
@@ -62,30 +62,34 @@ test('resized soles and trouser cuffs stay above the floor through grounded moti
  }
 });
 
-test('mouth has an aperture with teeth in front of its recessed cavity',async()=>{
- const g=await load();g.scene.updateMatrixWorld(true);
- const teeth=g.scene.getObjectByName('Sato_teeth'),cavity=g.scene.getObjectByName('Sato_smile'),head=g.scene.getObjectByName('Sato_clean_face');
- for(const mesh of [...meshes(head),teeth,cavity]){mesh.material.side=T.DoubleSide;mesh.skeleton.update();}
- const ray=new T.Raycaster(new T.Vector3(0,.763,.25),new T.Vector3(0,0,-1));
- const t=ray.intersectObject(teeth)[0],c=ray.intersectObject(cavity)[0];assert.ok(t);assert.ok(c);
- assert.ok(t.point.z-c.point.z>.005,'Teeth/cavity need a depth gap');
- const h=ray.intersectObject(head,true).find(hit=>hit.point.z>0);assert.equal(h,undefined,'Skin must not cover the mouth');
+test('painted face has a closed surface, a defined jaw and a narrower chin',async()=>{
+ const g=await load(),parts=meshes(g.scene.getObjectByName('Sato_clean_face'));
+ const positions=parts.flatMap(m=>Array.from({length:m.geometry.attributes.position.count},(_,i)=>new T.Vector3().fromBufferAttribute(m.geometry.attributes.position,i)));
+ const widthAt=y=>Math.max(...positions.filter(p=>Math.abs(p.y-y)<.001).map(p=>Math.abs(p.x)))*2;
+ assert.ok(widthAt(.740)>widthAt(.727)*1.5,'The jaw must widen from the chin');
+ assert.ok(widthAt(.826)>widthAt(.740)*1.5,'Cheeks and jaw need distinct contour stations');
+ assert.ok(positions.some(p=>p.y<.68),'The neck is part of the head surface');
+ const painted=parts.find(m=>m.material.name.includes('painted anime'));
+ assert.ok(painted?.geometry.attributes.uv);
+ const p=painted.geometry.attributes.position,u=painted.geometry.attributes.uv;
+ for(let i=0;i<p.count;i++)assert.ok(Math.abs(u.getY(i)-(1-(p.getY(i)-.70)/.25))<1e-5,'glTF face UVs must preserve the painted orientation');
 });
 
-test('nape hair is above the neck and bound only to the head; beard stops behind the ears',async()=>{
- const g=await load();let hairVertices=0;
- for(const id of [1,7,9,12,13,15,21,22,23,25,27,33,40,41,46]){
-  const root=g.scene.getObjectByName(`tripo_part_${id}`);if(!root)continue;
+test('filled nape covers the rear skull and follows only the head',async()=>{
+ const g=await load();let hairVertices=0,lowest=Infinity,highest=-Infinity;
+ for(const name of ['Sato_hair_cap','Sato_hair_locks']){
+  const root=g.scene.getObjectByName(name);assert.ok(root);
   for(const mesh of meshes(root)){
    const {position,skinIndex,skinWeight}=mesh.geometry.attributes;hairVertices+=position.count;
    for(let i=0;i<position.count;i++){
-    assert.ok(position.getY(i)>=.8269);
+    lowest=Math.min(lowest,position.getY(i));highest=Math.max(highest,position.getY(i));
     for(let c=0;c<4;c++)if(skinWeight.getComponent(i,c)>0)assert.equal(mesh.skeleton.bones[skinIndex.getComponent(i,c)].name,'DEF-head');
    }
   }
  }
  assert.ok(hairVertices>100);
- for(const mesh of meshes(g.scene.getObjectByName('Sato_clean_face')))if(mesh.material.name.includes('beard')){
-  const p=mesh.geometry.attributes.position;for(let i=0;i<p.count;i++)assert.ok(p.getZ(i)>-.025||p.getY(i)<.77);
- }
+ assert.ok(lowest>.730&&lowest<.745,'The cap must reach the nape while clearing the shoulders');assert.ok(highest<.96);
+ const cap=meshes(g.scene.getObjectByName('Sato_hair_cap'));
+ const rear=cap.flatMap(m=>Array.from({length:m.geometry.attributes.position.count},(_,i)=>new T.Vector3().fromBufferAttribute(m.geometry.attributes.position,i))).filter(p=>p.z<-.04&&p.y<.8);
+ assert.ok(rear.length>25,'The rear hair must have a filled volume');
 });
