@@ -1,109 +1,96 @@
 # Sato runtime model
 
-`sato-source.glb` is the original Sato asset. `sato.glb` is the runtime replacement: it keeps Sato's appearance and repaired face while using the Quaternius humanoid skeleton and animation set.
+![Sato: painted face, connected hands, front and rear silhouette](sato-style-preview.png)
 
-The runtime asset contains 53 bones, the 45 original clips and a `Hands_Open_Close` audition, including the clips used by the lab:
+`sato.glb` is the current runtime character. Its appearance is rebuilt around
+the existing Quaternius bind pose, following the supplied low-poly anime
+references. It has 7,108 triangles and embeds its two nearest-filtered pixel
+textures. There are no external model or texture requests at runtime.
 
-- `Rig|Idle_Loop`
-- `Rig|Walk_Loop`
-- `Rig|Sprint_Loop`
-- `Rig|Jump_Loop`
+The head has separate chin, mandibular and cheek contour stations, a small
+integrated nose, painted brown anime eyes, brows and a restrained smile.
+The continuous head/neck surface replaces the previous open, toothy mouth.
+Slim graphite spectacles, chestnut hair, a midnight shirt, slate trousers and
+brown sneakers keep Sato recognizable. A filled hair cap follows the back of
+the skull down to the nape, with swept front locks and restrained painted
+highlights. All hair is bound exclusively to `DEF-head`.
 
-The application aliases these to `Idle`, `Walk`, `Run` and `Jump` and blends idle, walking and running based on movement speed. `createSatoAvatar().jump()` triggers the one-shot jump clip. The rest of the Quaternius clips remain available in the GLB for future interactions.
+Each arm, wrist, palm, thumb and four fingers is one connected, closed surface.
+Support rings blend the existing elbow, wrist and phalanx influences. The
+trousers share a crotch seam and taper into the sneakers. Their forefoot uses
+the existing toe joints; a small heel bevel clears the floor through the
+grounded clips without changing any animation.
 
-The face was rebuilt from the supplied reference: the glasses are straight, thin and black; the eyes sit close to the face; the forehead is clean; and the beard, eyebrows and smile use separate clean materials. The source and generated GLBs have embedded textures, so production does not need a model service or CDN.
+The 53 bone transforms, hierarchy, inverse bind matrices and **all 46 clips**
+are byte-identical to anatomy revision 1 (`2448a33`). This includes the 45 source
+clips and `Hands_Open_Close`, the source pistol articulation, and the authored
+punch, sword and torch grips. Tests check the complete 7,185-channel animation
+fingerprint against that baseline. glTF Validator reports zero errors and
+zero warnings.
 
-The 53-bone hierarchy and 45 animations were verified after export. The GLB validator reports zero errors and zero warnings.
+## Authoring and verification
 
+The deterministic authoring source is `tools/style-sato.mjs`. It rebuilds
+geometry and draws the two pixel atlases, then repacks the referenced buffer
+views while copying original animation and inverse-bind bytes unchanged.
+The exported `sato-style-face.png` and `sato-style-hair.png` are also available
+beside the GLB for texture editing.
 
-## Face and locomotion revision
-
-The runtime GLB now has a projected chin, wider mandibular corners, a closed nose
-embedded into the face, symmetric ears with inner folds, and a shorter rear hair
-silhouette. The 53-bone rig and all 45 source clips are retained.
-
-`lab-avatar.js` selects walking/running from explicit controller intent, uses
-Jump_Start → Jump_Loop → Jump_Land with a controller-owned arc, and alternates
-Punch_Jab/Punch_Cross. Full-body actions fade against locomotion with normalized
-weights. The hips steer into lateral travel while the torso follows aim; backward
-movement reverses the gait. Foot contacts, takeoff, landing and punches emit sound
-cues. Ambient reduced motion keeps direct jump/attack input available.
-
-Checks: `npm run test:avatar`, `npm run test:controls`, `npm run test:navigation`.
-The revised GLB passes glTF Validator with zero errors and zero warnings.
-
-## Model inspector and editable companion
-
-Open `/models` directly (there is deliberately no navigation link). It exposes
-all 46 Sato clips, play/pause, scrubbing, a 30 fps frame step, speed and loop
-controls, orbit/zoom/pan, wireframe, bones, mesh isolation and geometry counts.
-Sato uses the original `sato.glb` in both the inspector and the laboratory.
-The inspector plays the raw asset clips, without the lab's locomotion blending
-or its controller-owned jump trajectory.
-
-`companion.glb` is an editable snapshot of the home robot: 43 separate meshes,
-the rigid joint hierarchy, embedded optic texture and five transform animation
-clips (idle and four banking directions). Import it into Blender to edit the
-meshes/materials or keyframes. The home still uses `lab-rigs.js` and `poseRig`;
-`companion-model.js` uses that same factory without batching, and samples its
-joint transforms into glTF clips. Shader glow, animated material opacity and
-emission flashes are runtime effects, not baked material animation in the GLB.
-
-To regenerate the snapshot after changing the robot source, select the floating
-robot in `/models`, choose **Baixar GLB**, and replace `companion.glb`. Sato's
-download returns the original GLB bytes. **Abrir GLB local** previews exported
-Blender revisions in the browser without uploading or changing site assets.
-To integrate a revised robot into the home, its procedural source must be
-updated or explicitly migrated to the revised GLB in a subsequent change.
-
-## Anatomy and hand skinning revision
-
-![Sato anatomy preview: portrait, front and back](sato-anatomy-preview.png)
-
-The current `sato.glb` keeps the original Quaternius hierarchy, inverse bind
-matrices, rest transforms and animation names. Its face uses distinct cheek,
-mandibular and chin stations. The beard is a material region of that same head
-surface and ends behind the ears; it is not a second overlapping shell. The
-smile is an actual aperture with recessed dark walls/back and ivory teeth in
-front of the cavity. The old mouth overlays and residual textured head fragments
-have been replaced. Eyes and brows follow the revised face surface.
-
-The original spiky hair is trimmed above the nape and weighted entirely to
-`DEF-head`, removing the former shoulder influences. Boots are fitted to the
-ankle/toe span, the trouser cuffs taper into them, and the forefoot uses the toe
-joints. Baked leg IK corrects residual sole penetration in grounded clips while
-preserving thigh/shin lengths and the source foot pitch. Root/hip motion and the
-jump controller are unchanged. Swimming,
-rolling, sitting, death and the airborne jump loop retain their original foot
-tracks because they do not use the same standing contact constraint.
-
-New palm and finger meshes use all 30 existing finger bones. Pistol animations
-retain the source trigger/support-hand articulation. Punch clips close both
-hands; sword and torch clips grip with the right hand. These are baked into the
-GLB and therefore also work in the inspector and after Blender import. The
-additional `Hands_Open_Close` clip animates only the fingers for a simple grip
-audition; all 45 source clips remain available.
-
-Regenerate from the unrefined Quaternius runtime asset at Git revision `7471367`
-(`static/models/sato.glb`), not `sato-source.glb`, which uses the earlier rig:
+To regenerate, provide the anatomy-revision-1 `static/models/sato.glb` from
+commit `2448a33` (or the merge commit `71e6b74`):
 
 ```sh
-node tools/refine-sato.mjs path/to/unrefined-sato.glb static/models/sato.glb
+node tools/style-sato.mjs path/to/anatomy-revision-1.glb static/models/sato.glb
 npm run test:avatar
 ```
 
-`npm run refine:sato` also accepts those input/output arguments after `--`.
-Reapplying revision 1 to an already refined file is a byte-preserving no-op.
-The older `build-sato.mjs` is the authoring pipeline for the earlier rig and is
-not this Quaternius refinement pipeline.
+`npm run style:sato -- input.glb output.glb` accepts the same arguments.
+Applying style revision 1 to an already styled asset is a byte-preserving
+no-op. `sato-source.glb` and the older `build-sato.mjs` use the earlier rig and
+are not the input for this pipeline. `refine-sato.mjs` remains the authoring
+source for the preceding anatomy/contact/grip revision.
 
-Design references supplied for this revision:
+For an editable Blender file with packed textures and the 46 action clips:
 
-- [Character Prompt Builder](https://github.com/euan-gwd/comfyui-character-prompt-builder): explicit face, hair, hand/prop anchors.
-- [Character Design](https://github.com/khanhhuyenngo985-sys/character-scene-design-skills/blob/main/skills/character-design/SKILL.md) and its [bone/face layer](https://github.com/khanhhuyenngo985-sys/character-scene-design-skills/blob/main/skills/character-design/references/bone-face-structure-layer.md): proportions, jaw structure and consistent front/side/back contours.
-- [Character Reference Sheet](https://github.com/ShinChven/nano-banana-skills/blob/main/skills/character-reference-sheet/SKILL.md): preserve the supplied character's appearance across close-up and full-body views.
-- [Video Prompting character sheets](https://github.com/Square-Zero-Labs/video-prompting-skill/blob/main/video-prompting/references/workflows/character-sheets.md): stable silhouette, hand/prop poses and a motion audition.
+```sh
+blender --background --factory-startup --python tools/export-sato-blend.py -- static/models/sato.glb path/to/sato-anime.blend
+```
 
-These guide visual consistency; the geometry, skin weights and animation fixes
-are authored directly in the GLB. Regression checks exercise actual deformed
-vertices, mouth ray intersections, native grips and the lab's attack blending.
+The Blender authoring export welds coincident vertices and restores compatible
+quads, retaining UV seams as corner data. Its camera and lights are in a
+separate preview collection. The runtime GLB is not re-exported through
+Blender, so its animation fingerprints remain exact.
+
+`npm run test:avatar` checks actual finger deformation, ground clearance,
+connected manifold arm/hand surfaces, texture orientation, jaw/nape contours,
+all-clip finite deformation and lab jump/attack blending. The browser avatar
+and model-inspector tests cover WebGL rendering, playback, isolation and GLB
+download. The original 10 supplied screenshots are visual references; they
+are not baked into the character textures.
+
+## Runtime animation and inspector
+
+`lab-avatar.js` blends `Rig|Idle_Loop`, `Rig|Walk_Loop` and `Rig|Sprint_Loop`
+from explicit controller intent. Jump uses Jump_Start → Jump_Loop → Jump_Land
+with a controller-owned height arc; punches alternate Jab/Cross. Backward
+movement reverses the gait, and lateral travel turns the hips while the torso
+follows aim. Footstep and action cues and reduced-motion behavior are retained.
+
+Open `/models` directly to inspect all clips, pause/scrub/step playback,
+change speed, orbit, view bones/wireframe and isolate meshes. It uses the
+same `sato.glb` as the lab and plays its raw clips without controller blending.
+**Baixar GLB** returns the original asset bytes. **Abrir GLB local** previews
+Blender revisions without uploading or replacing site assets.
+
+## Editable floating companion
+
+`companion.glb` is the separate home robot: 43 editable meshes, its rigid joint
+hierarchy, embedded optic texture and five transform clips (idle and four
+banking directions). The home continues to use `lab-rigs.js` and `poseRig`;
+`companion-model.js` exports that same factory without batching. Shader glow,
+material-opacity animation and emission flashes remain runtime effects.
+
+To regenerate that snapshot, select the floating robot in `/models`, choose
+**Baixar GLB**, and replace `companion.glb`. Integrating a revised robot into
+the home requires updating its procedural source or explicitly migrating it
+to the revised GLB in a separate change.
