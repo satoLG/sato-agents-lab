@@ -11,5 +11,7 @@
     }
   ],
   "rearVertices": 160,
-  "rearHash": "d26a6a49c6f66efad451a7b7487c161157255ec8b4bbe228eb4f8fcb83f64c0f"
+  "rearHash": "d26a6a49c6f66efad451a7b7487c161157255ec8b4bbe228eb4f8fcb83f64c0f",
+  "faceOutsideBrowsHash": "04991628c00eb7331d6aa3b462556365bb8008a127525c4800529d7275103299",
+  "browPixels": 628
 }
