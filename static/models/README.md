@@ -4,28 +4,30 @@
 
 `sato.glb` is the current runtime character. Its appearance is rebuilt around
 the existing Quaternius bind pose, following the supplied low-poly anime
-references. Style revision 3 has 6,820 triangles and embeds its two
+references. Style revision 4 has 8,270 triangles and embeds its two
 nearest-filtered pixel textures. There are no external model or texture
 requests at runtime.
 
 The neck enters beneath a projecting chin and a rising mandibular edge.
 That underside is modeled in geometry; the mouth and nose retain their
 previous positions, avoiding a protruding muzzle. The head/neck surface is
-continuous. Painted brown anime eyes, thicker brows and a restrained smile
+continuous, with a fuller occiput and a tapered posterior neck. Painted brown
+anime eyes, lower brows, stronger upper lids and a restrained smile
 retain the face's identity.
 Slim graphite spectacles, chestnut hair, a midnight shirt, slate trousers and
 brown sneakers keep Sato recognizable. A filled hair cap follows the back of
-the skull down to the nape. One connected hair surface sweeps upward and
-backward from the hairline into asymmetric crown tips; the front lock belongs
-to that same surface. Long chestnut highlights follow that flow. All hair is
+the skull down to the nape. Broad, staggered locks taper into short asymmetric
+tips. Their roots are stitched into the scalp surface; front locks sweep
+diagonally down, while crown locks continue the flow backward. All hair is
 bound exclusively to `DEF-head`. The face atlas remains identical outside
-the thicker eyebrow band. Spectacles, eyes and finger shafts are preserved.
+the eyebrow and upper-lid band. Spectacles and finger shafts are preserved.
 
 The torso has sloping shoulders, a fuller waist, flatter chest and broad,
 beveled planes. Fitted sleeves lead into slender upper
 arms and faceted forearms. Each arm, wrist, palm, thumb and four fingers is
 one connected, closed surface. Palm and back surfaces are flat through their
-center, with finger influences starting at the knuckles. The approved fingers
+center, with finger influences starting at the knuckles and a broader thumb web.
+The approved fingers
 retain the existing three phalanx influences. Hands use
 smooth corner normals on their beveled geometry while clothing and forearms
 use planar normals. The upper thighs fit beneath the torso, start fuller than
@@ -35,13 +37,15 @@ sneakers. Their forefoot uses the existing toe joints; a small heel bevel
 clears the floor through the grounded clips. The neckline has room around the
 neck at the front and nape and follows its deformation during head turns.
 
-The 53 bone transforms, hierarchy and inverse bind matrices remain unchanged.
-Of the 46 clips, **45 are byte-identical** to anatomy revision 1 (`2448a33`),
-including the hand audition, source pistol articulation, and authored punch,
-sword and torch grips. `Rig|Idle_Loop` now lowers the shoulders, straightens
-the arms, angles the hands slightly inward and brings the feet closer together.
-Two-bone solves preserve limb lengths, ankle height and sole pitch. Tests
-fingerprint every untouched motion channel against the original baseline.
+The original 53 bone transforms, hierarchy and inverse bind matrices remain
+unchanged. Six additional support joints preserve elbow, knee and hip volume
+using baked quaternion averages. These are standard GLB joints and require no
+runtime shader changes. More support loops fill the pelvis/thigh transition.
+All 46 clips remain available, including the hand audition and authored grips.
+Locomotion and combat use closer feet and reduced lateral arm opening; ankle
+heights, sole orientation, finger channels and unrelated channels are retained.
+The relaxed idle also lowers shoulders and turns the hands slightly inward.
+Tests fingerprint all untouched motion channels against style revision 2.
 
 ## Authoring and verification
 
@@ -60,7 +64,7 @@ npm run test:avatar
 ```
 
 `npm run style:sato -- input.glb output.glb` accepts the same arguments.
-Applying style revision 3 to an asset already carrying that revision is a
+Applying style revision 4 to an asset already carrying that revision is a
 byte-preserving no-op. `sato-source.glb` and the older `build-sato.mjs` use
 the earlier rig and are not the input for this pipeline. `refine-sato.mjs` remains the authoring
 source for the preceding anatomy/contact/grip revision.
@@ -81,7 +85,8 @@ Blender, so its animation fingerprints remain exact.
 connected manifold arm/hand surfaces, preserved mouth/finger/face fingerprints,
 texture orientation, jaw/nape contours, thigh and shoulder silhouettes,
 closer idle stance and inward hands, scalp coverage and neckline clearance
-across moving poses, all-clip finite deformation and lab jump/attack blending.
+across moving poses, elbow cross-section volume through every clip, filled hip
+sections in crouches/lunges, all-clip finite deformation and lab jump/attack blending.
 The browser avatar
 and model-inspector tests cover WebGL rendering, playback, isolation and GLB
 download. The supplied screenshots are visual references; they

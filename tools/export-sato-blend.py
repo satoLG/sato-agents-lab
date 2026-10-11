@@ -8,7 +8,7 @@ args=parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv els
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(args.input.resolve()),merge_vertices=True)
 rig=next(o for o in bpy.context.scene.objects if o.type=='ARMATURE')
-assert len(rig.data.bones)==53
+assert len(rig.data.bones)==59
 assert len(bpy.data.actions)==46
 for o in bpy.context.scene.objects:
  if o.type=='MESH':
@@ -34,7 +34,7 @@ for side in ['L','R']:
  obj=bpy.data.objects.get('Sato_arm_hand_'+side)
  assert obj and all(obj.vertex_groups.get('DEF-f_'+f+'.03.'+side) for f in ['index','middle','ring','pinky'])
  assert obj.vertex_groups.get('DEF-thumb.03.'+side)
-rig['Preservation']='53 bones · 46 clips · rest transforms and inverse binds unchanged in GLB'
+rig['Preservation']='53 original bones + 6 joint-volume supports · 46 clips · original rest transforms and inverse binds unchanged in GLB'
 rig.animation_data.action=None
 for t in rig.animation_data.nla_tracks:t.mute=True
 idle=next(a for a in bpy.data.actions if a.name.endswith('Idle_Loop') and all(s not in a.name for s in ['Crouch','Pistol','Sitting','Swim','Torch','Spell']))
