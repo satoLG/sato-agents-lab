@@ -23,7 +23,7 @@ test('real GLB textures render and animated poses blend without WebGL errors',as
     const lit=pixels.filter((v,i)=>i%4!==3&&v>20).length;
     const glError=gl.getError();renderer.dispose();return {textured,bones,poses,lit,glError};
   });
-  expect(result.textured).toBeGreaterThan(0);expect(result.bones).toBe(53);expect(result.lit).toBeGreaterThan(5000);
+  expect(result.textured).toBeGreaterThan(0);expect(result.bones).toBe(59);expect(result.lit).toBeGreaterThan(5000);
   expect(result.poses[0].weight).toBe(0);expect(result.poses[1].weight).toBeGreaterThan(.99);expect(result.poses[2].weight).toBeLessThan(.001);
   expect(result.poses[0].position).not.toEqual(result.poses[1].position);
   expect(result.glError).toBe(0);expect(errors).toEqual([]);

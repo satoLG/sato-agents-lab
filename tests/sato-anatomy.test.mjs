@@ -90,7 +90,7 @@ test('filled nape covers the rear skull and follows only the head',async()=>{
   }
  }
  assert.ok(hairVertices>100);
- assert.ok(lowest>.730&&lowest<.745,'The cap must reach the nape while clearing the shoulders');assert.ok(highest>1.0&&highest<1.05,'The crown needs visible, proportionate upward spikes');
+ assert.ok(lowest>.730&&lowest<.750,'Short hair must follow the nape while clearing the shoulders');assert.ok(highest>.945&&highest<.980,'Spikes must stay short and close to the skull');
  const cap=meshes(g.scene.getObjectByName('Sato_hair_cap'));
  const rear=cap.flatMap(m=>Array.from({length:m.geometry.attributes.position.count},(_,i)=>new T.Vector3().fromBufferAttribute(m.geometry.attributes.position,i))).filter(p=>p.z<-.04&&p.y<.8);
  assert.ok(rear.length>25,'The rear hair must have a filled volume');
