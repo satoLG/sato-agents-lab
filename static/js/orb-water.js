@@ -1,9 +1,69 @@
 import * as T from '../vendor/three.module.min.js';
-import {orbNoiseGLSL as noiseGLSL} from './orb-noise.js';
+import {orbNoiseGLSL as noiseGLSL,orbNoiseGradientGLSL} from './orb-noise.js';
 import {orbGroundGLSL} from './orb-ground.js';
 
 export const CORE_RADIUS = 1.84;
 export const WATER_RADIUS = 2.05;
+
+// Radius and its exact gradient in sphere space. The shoreline envelope raises
+// only the water over the existing beach; no terrain vertices are moved.
+export const orbWaterSurfaceGLSL=`
+  uniform float orbTime,orbStrength;
+  uniform vec3 orbMoonDirection;
+  ${orbNoiseGradientGLSL}
+  vec2 orbSmooth(float lo,float hi,float x) {
+    float t=clamp((x-lo)/(hi-lo),0.,1.);
+    return vec2(t*t*(3.-2.*t),6.*t*(1.-t)/(hi-lo));
+  }
+  vec4 orbSurface(vec3 n) {
+    vec4 large=orbNoiseGradient(n*2.25+vec3(orbTime*.16,0.,orbTime*.09));
+    vec4 small=orbNoiseGradient(n*6.51-vec3(0.,orbTime*.2,orbTime*.13));
+    vec4 fine=orbNoiseGradient(n*13.02+vec3(5.,-orbTime*.26,0.));
+    float u=dot(n,vec3(4.34,0.,2.48))+orbTime*.55;
+    float v=dot(n,vec3(0.,4.96,-2.17))+orbTime*.38;
+    float waves=(large.x-.5)*.21+(.68*small.x+.32*fine.x-.5)*.09+sin(u)*sin(v)*.027;
+    vec3 waveGradient=large.yzw*(2.25*.21)+small.yzw*(6.51*.68*.09)+fine.yzw*(13.02*.32*.09)
+      +.027*(cos(u)*sin(v)*vec3(4.34,0.,2.48)+sin(u)*cos(v)*vec3(0.,4.96,-2.17));
+    vec3 moon=normalize(orbMoonDirection);
+    float a=dot(n,moon),tide=.016+.046*a*a+.016*a,gain=1.+.24*a;
+    vec3 tideGradient=(.092*a+.016)*moon;
+    vec2 coastProtection=orbSmooth(.58,.82,n.y);
+    float waveScale=1.-.985*coastProtection.x,tideScale=1.-.92*coastProtection.x;
+    vec3 protectionGradient=vec3(0.,coastProtection.y,0.);
+    float radius=${WATER_RADIUS.toFixed(2)}+tide*tideScale+waves*(orbStrength*1.65)*gain*waveScale;
+    vec3 gradient=tideGradient*tideScale-.92*tide*protectionGradient
+      +(orbStrength*1.65)*(waveGradient*gain*waveScale+waves*.24*moon*waveScale-waves*gain*.985*protectionGradient);
+    float h2=dot(n.xz,n.xz);
+    if(n.y>.58&&h2>.000001) {
+      float h=sqrt(h2),angle=atan(n.z,n.x),ca=cos(angle),sa=sin(angle);
+      vec3 angleGradient=vec3(-n.z,0.,n.x)/h2;
+      float coast=.92*(1.+.09*sin(3.*angle+.7)+.055*cos(5.*angle-1.2));
+      float coastDerivative=.92*(.27*cos(3.*angle+.7)-.275*sin(5.*angle-1.2));
+      // A readable sand band surrounds the grass. Adjust only the water's
+      // contact point, preserving every vertex of the existing island.
+      float contact=.92;
+      float d=contact*coast,dd=contact*coastDerivative,x=d*ca,z=d*sa;
+      float dx=dd*ca-d*sa,dz=dd*sa+d*ca;
+      float mound=.025*exp(-((x+.18)*(x+.18)+(z+.20)*(z+.20))/.25);
+      float plateau=2.145+mound;
+      float dp=-8.*mound*((x+.18)*dx+(z+.20)*dz);
+      float beach=sqrt(2.072*2.072-d*d),db=-d*dd/beach;
+      float blend=orbSmooth(.44,1.16,contact).x;
+      float height=mix(plateau,beach,blend),dh=mix(dp,db,blend);
+      float level=sqrt(d*d+height*height),dl=(d*dd+height*dh)/level;
+      float ratio=2.18*h/coast;
+      vec3 ratioGradient=2.18*(vec3(n.x,0.,n.z)/(h*coast)-h*coastDerivative*angleGradient/(coast*coast));
+      vec2 inner=orbSmooth(.25,.65,ratio),outer=orbSmooth(1.04,1.70,ratio),cap=orbSmooth(.58,.72,n.y);
+      float mask=inner.x*(1.-outer.x)*cap.x;
+      vec3 maskGradient=(inner.y*(1.-outer.x)-inner.x*outer.y)*cap.x*ratioGradient
+        +inner.x*(1.-outer.x)*vec3(0.,cap.y,0.);
+      radius+=(level-${WATER_RADIUS.toFixed(2)})*mask;
+      gradient+=dl*angleGradient*mask+(level-${WATER_RADIUS.toFixed(2)})*maskGradient;
+    }
+    if(radius<${(CORE_RADIUS+.06).toFixed(2)})return vec4(${(CORE_RADIUS+.06).toFixed(2)},0.,0.,0.);
+    return vec4(radius,gradient);
+  }
+`;
 
 export function createOrbWater() {
   const uniforms = {
@@ -14,50 +74,27 @@ export function createOrbWater() {
     _EdgeFoamColor:{value:new T.Color(1,.97,1)},
   };
   const material = new T.MeshPhysicalMaterial({
-    color:'#47b8de', metalness:0, roughness:.28,
+    color:'#47b8de', metalness:0, roughness:.23,
     transmission:1, thickness:.48, ior:1.333,
     attenuationColor:'#327dae', attenuationDistance:2.8,
-    clearcoat:.28, clearcoatRoughness:.32, envMapIntensity:.72,
+    clearcoat:0, specularIntensity:.32, envMapIntensity:.42,
     // Physical transmission draws the opaque core through the moving surface.
     transparent:true, opacity:1, depthWrite:false,
   });
   const displacement = `
-    uniform float orbTime;
-    uniform float orbStrength;
-    uniform vec3 orbMoonDirection;
     varying vec3 vOrbPosition;
     varying highp float vOrbEyeDepth;
-    ${noiseGLSL}
-    vec3 orbDisplace(vec3 p) {
-      vec3 n = normalize(p);
-      vec3 q = n * 3.1;
-      float largeWave = (orbNoise(n * 2.25 + vec3(orbTime*.16, 0., orbTime*.09)) - .5) * .21;
-      float smallWave = (.68*orbNoise(q*2.1-vec3(0.,orbTime*.2,orbTime*.13))+.32*orbNoise(q*4.2+vec3(5.,-orbTime*.26,0.))-.5) * .09;
-      float swell = sin(q.x*1.4 + q.z*.8 + orbTime*.55) * sin(q.y*1.6 - q.z*.7 + orbTime*.38) * .027;
-      // The beach remains readable even when the open ocean is rough.
-      float shore = 1. - .66 * smoothstep(.84, .97, n.y);
-      float alignment = dot(n, normalize(orbMoonDirection));
-      // Both tidal lobes remain above the resting radius. The lunar side
-      // rises slightly more; the far side and the equator keep moving too.
-      float tide = .012 + .028 * alignment * alignment + .008 * alignment;
-      float waveGain = 1. + .18 * alignment;
-      float radius = ${WATER_RADIUS.toFixed(2)} + tide * shore + (largeWave + smallWave + swell) * (orbStrength * 1.65) * shore * waveGain;
-      radius = max(${(CORE_RADIUS+.06).toFixed(2)}, radius);
-      return n * radius;
-    }
+    ${orbWaterSurfaceGLSL}
   `;
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = displacement + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', `
       vec3 orbN = normalize(position);
-      vec3 orbT = normalize(cross(abs(orbN.y) > .98 ? vec3(1.,0.,0.) : vec3(0.,1.,0.), orbN));
-      vec3 orbB = normalize(cross(orbN, orbT));
-      vec3 orbP = orbDisplace(position);
-      // Reconstruct the normal from displaced neighbours, so reflections wobble too.
-      vec3 orbPT = orbDisplace(position + orbT * .012);
-      vec3 orbPB = orbDisplace(position + orbB * .012);
-      vec3 objectNormal = normalize(cross(orbPT - orbP, orbPB - orbP));
+      vec4 orbField=orbSurface(orbN);
+      vec3 orbP=orbN*orbField.x;
+      vec3 orbGradient=orbField.yzw-orbN*dot(orbN,orbField.yzw);
+      vec3 objectNormal=normalize(orbN*orbField.x-orbGradient);
       #ifdef USE_TANGENT
         vec3 objectTangent = vec3(tangent.xyz);
       #endif
@@ -117,7 +154,7 @@ export function createOrbWater() {
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'orb-physical-water-soft-foam-v4';
+  material.customProgramCacheKey = () => 'orb-physical-water-covered-coast-v5';
   return {material, uniforms};
 }
 

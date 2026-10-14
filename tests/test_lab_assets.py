@@ -28,13 +28,17 @@ def test_lab_asset_version_cannot_silently_serve_another_release(client):
     assert client.get(prefix + '../app.py').status_code == 404
 
 
-def test_orb_lunar_maps_are_local_and_lightweight(client):
+def test_orb_rock_maps_are_local_and_lightweight(client):
     prefix = f'/lab-assets/{app_module.LAB_ASSET_VERSION}/textures/orb-moon/'
     total = 0
-    for name in ['lroc-color.webp', 'lola-normal.webp']:
+    for name in ['rock-color.webp', 'rock-normal.webp', 'rock-height.png']:
         response = client.get(prefix + name)
         assert response.status_code == 200
-        assert response.mimetype == 'image/webp'
-        assert response.data[:4] == b'RIFF' and response.data[8:12] == b'WEBP'
+        if name.endswith('.webp'):
+            assert response.mimetype == 'image/webp'
+            assert response.data[:4] == b'RIFF' and response.data[8:12] == b'WEBP'
+        else:
+            assert response.mimetype == 'image/png'
+            assert response.data[:8] == b'\x89PNG\r\n\x1a\n'
         total += len(response.data)
     assert total < 120_000

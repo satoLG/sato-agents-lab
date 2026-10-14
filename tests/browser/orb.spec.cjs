@@ -65,7 +65,7 @@ test.describe('orb desktop',()=>{
       return {strength:water.uniforms.orbStrength.value,transmission:water.material.transmission,roughness:water.material.roughness,moonColor:moon.mesh.material.map.image.src,moonNormal:moon.mesh.material.normalMap.image.src,grass:grass.geometry.instanceCount,cards:trees.geometry.attributes.position.count/4,texture:trees.material.alphaMap.image.src,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false)};
     });
     expect(details.strength).toBeGreaterThan(.55);expect(details.transmission).toBe(1);expect(details.grass).toBeGreaterThan(1000);expect(details.cards).toBe(80);expect(details.texture).toContain('folio-2025/foliageSDF.png');expect(details.programs).toBe(true);
-    expect(details.roughness).toBeGreaterThan(.2);expect(details.moonColor).toContain('lroc-color.webp');expect(details.moonNormal).toContain('lola-normal.webp');
+    expect(details.roughness).toBeGreaterThan(.2);expect(details.moonColor).toContain('rock-color.webp');expect(details.moonNormal).toContain('rock-normal.webp');
     await page.screenshot({path:info.outputPath('orb-world.png')});const before=await pixels(page);
     await page.locator('#orb-scene').focus();await page.keyboard.press('ArrowRight');await expect.poll(()=>pixels(page)).not.toBe(before);
     await page.keyboard.press('+');await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(1);
@@ -121,18 +121,20 @@ test.describe('orb desktop',()=>{
       water.material.customProgramCacheKey=()=> 'orb-lunar-radius-qa';water.material.transmission=0;water.material.needsUpdate=true;
       renderer.toneMapping=T.NoToneMapping;renderer.outputColorSpace=T.LinearSRGBColorSpace;
       const camera=new T.PerspectiveCamera(18,1,.05,150),target=new T.WebGLRenderTarget(65,65),data=new Uint8Array(4);
-      moon.update(0);const near=moon.mesh.position.clone().normalize(),far=near.clone().negate(),equator=new T.Vector3().crossVectors(near,new T.Vector3(0,1,0)).normalize();
+      // Sample the moon near the horizon, away from the protected island cap,
+      // so the comparison isolates lunar tide from the raised coastal water.
+      const horizon=39;moon.update(horizon);const near=moon.mesh.position.clone().normalize(),far=near.clone().negate(),equator=new T.Vector3().crossVectors(near,new T.Vector3(0,1,0)).normalize();
       camera.position.copy(near).multiplyScalar(8);camera.lookAt(0,0,0);await renderer.compileAsync(scene,camera);
       function height(direction){camera.position.copy(direction).multiplyScalar(8);camera.lookAt(0,0,0);renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,32,32,1,1,data);renderer.setRenderTarget(null);return data[0]/255*.4-.2;}
       const first={near:height(near),far:height(far),equator:height(equator)};
-      moon.update(150);const opposite={near:height(near),far:height(far),equator:height(equator)};
+      moon.update(horizon+150);const opposite={near:height(near),far:height(far),equator:height(equator)};
       // With waves restored, both faces must continue changing over time.
       water.uniforms.orbStrength.value=.9;const waves0={near:height(near),far:height(far)};
       water.uniforms.orbTime.value=8;const waves8={near:height(near),far:height(far)};
       target.dispose();return {first,opposite,waves0,waves8};
     });
-    for(const tide of [result.first,result.opposite]){expect(tide.near).toBeGreaterThan(.02);expect(tide.far).toBeGreaterThan(.02);expect(tide.equator).toBeGreaterThan(.006);}
-    expect(result.first.near-result.first.far).toBeGreaterThan(.01);expect(result.opposite.far-result.opposite.near).toBeGreaterThan(.01);
+    for(const tide of [result.first,result.opposite]){expect(tide.near).toBeGreaterThan(.035);expect(tide.far).toBeGreaterThan(.035);expect(tide.equator).toBeGreaterThan(.01);}
+    expect(result.first.near-result.first.far).toBeGreaterThan(.025);expect(result.opposite.far-result.opposite.near).toBeGreaterThan(.025);
     expect(Math.abs(result.first.near-result.opposite.far)).toBeLessThan(.003);expect(Math.abs(result.first.far-result.opposite.near)).toBeLessThan(.003);
     expect(Math.abs(result.waves0.near-result.waves8.near)).toBeGreaterThan(.003);expect(Math.abs(result.waves0.far-result.waves8.far)).toBeGreaterThan(.003);expect(errors).toEqual([]);
   });
@@ -152,6 +154,74 @@ test.describe('orb desktop',()=>{
     await page.locator('#orb-scene').focus();await page.keyboard.press('Space');
     await expect.poll(()=>page.evaluate(()=>orbQA.water.uniforms.orbTime.value),{timeout:10000}).toBeGreaterThan(.2);
     await page.keyboard.press('Space');expect(await page.evaluate(()=>window.depthRepaints)).toBeLessThanOrEqual(1);
+  });
+
+  test('water preserves a visible beach band and covers the outer sand through waves and tides',async({page})=>{
+    test.setTimeout(90000);await exposeScene(page);await enter(page);
+    const result=await page.evaluate(async()=>{
+      const {T,renderer,water}=orbQA;
+      const {orbWaterSurfaceGLSL}=await import('/static/js/orb-water.js');
+      const {terrainHeight,coastRadius}=await import('/static/js/orb-island.js');
+      const samples=[];
+      for(let i=0;i<36;i++)for(const ratio of [.65,.84,1.02,1.12,1.25,1.4,1.55,1.7,1.85]) {
+        const a=i*Math.PI/18,d=coastRadius(a)*ratio,x=Math.cos(a)*d,z=Math.sin(a)*d;
+        const point=new T.Vector3(x,terrainHeight(x,z),z);samples.push({ratio,land:point.length(),n:point.normalize()});
+      }
+      const bytes=new Float32Array(samples.length*4);samples.forEach((s,i)=>s.n.toArray(bytes,i*4));
+      const directions=new T.DataTexture(bytes,samples.length,1,T.RGBAFormat,T.FloatType);directions.needsUpdate=true;
+      const material=new T.ShaderMaterial({uniforms:{...water.uniforms,directions:{value:directions}},
+        vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
+        fragmentShader:`varying vec2 vUv;uniform sampler2D directions;${orbWaterSurfaceGLSL}
+          void main(){vec3 n=texture2D(directions,vUv).xyz;vec4 f=orbSurface(n);
+            float e=.0004;vec3 numeric=vec3(
+              orbSurface(normalize(n+vec3(e,0.,0.))).x-orbSurface(normalize(n-vec3(e,0.,0.))).x,
+              orbSurface(normalize(n+vec3(0.,e,0.))).x-orbSurface(normalize(n-vec3(0.,e,0.))).x,
+              orbSurface(normalize(n+vec3(0.,0.,e))).x-orbSurface(normalize(n-vec3(0.,0.,e))).x)/(2.*e);
+            vec3 analytic=normalize(n*f.x-(f.yzw-n*dot(n,f.yzw)));
+            gl_FragColor=vec4(f.x,length(analytic-normalize(n*f.x-numeric)),0.,1.);}`});
+      const scene=new T.Scene(),geometry=new T.PlaneGeometry(2,2);scene.add(new T.Mesh(geometry,material));
+      const camera=new T.Camera(),target=new T.WebGLRenderTarget(samples.length,1,{type:T.FloatType}),output=new Float32Array(samples.length*4);
+      let minimumCover=Infinity,minimumDry=Infinity,normalError=0;
+      const originalTime=water.uniforms.orbTime.value,originalMoon=water.uniforms.orbMoonDirection.value.clone();
+      for(const time of [0,8,40,100,220])for(const moon of [[1,0,0],[-1,0,0],[0,1,0],[0,0,-1]]){
+        water.uniforms.orbTime.value=time;water.uniforms.orbMoonDirection.value.set(...moon);
+        renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,samples.length,1,output);
+        samples.forEach((s,i)=>{const sea=output[i*4];normalError=Math.max(normalError,output[i*4+1]);if(s.ratio<=.84)minimumDry=Math.min(minimumDry,s.land-sea);else minimumCover=Math.min(minimumCover,sea-s.land);});
+      }
+      renderer.setRenderTarget(null);water.uniforms.orbTime.value=originalTime;water.uniforms.orbMoonDirection.value.copy(originalMoon);
+      target.dispose();directions.dispose();material.dispose();geometry.dispose();return {minimumCover,minimumDry,normalError};
+    });
+    expect(result.minimumCover).toBeGreaterThan(.003);expect(result.minimumDry).toBeGreaterThan(.003);
+    expect(result.normalError).toBeLessThan(.012);
+  });
+
+  test('sea ambience starts with play, can be muted and releases audio on exit',async({page})=>{
+    test.setTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+    await page.addInitScript(()=>{
+      const Audio=window.AudioContext;window.audioQA={contexts:[]};
+      window.AudioContext=class extends Audio {
+        constructor(...args){super(...args);window.audioQA.contexts.push(this);}
+        createGain(){const gain=super.createGain(),connect=gain.connect.bind(gain);gain.connect=(target,...args)=>{
+          if(target===this.destination){const analyser=this.createAnalyser();analyser.fftSize=1024;connect(analyser);analyser.connect(target);window.audioQA.analyser=analyser;window.audioQA.master=gain;return target;}
+          return connect(target,...args);
+        };return gain;}
+      };
+    });
+    await page.goto('/orb',{waitUntil:'domcontentloaded'});await expect(page.locator('#orb-start')).toBeEnabled({timeout:45000});
+    expect(await page.evaluate(()=>audioQA.contexts.length)).toBe(0);await expect(page.locator('#orb-sound')).toBeHidden();
+    await page.locator('#orb-start').click();await expect(page.locator('#orb-sound')).toBeVisible();
+    const rms=()=>page.evaluate(()=>{const data=new Float32Array(1024);audioQA.analyser.getFloatTimeDomainData(data);return Math.sqrt(data.reduce((sum,v)=>sum+v*v,0)/data.length);});
+    await expect.poll(rms).toBeGreaterThan(.0001);expect(await rms()).toBeLessThan(.04);
+    expect(await page.evaluate(()=>audioQA.contexts.length)).toBe(1);
+    await page.locator('#orb-sound').click();await expect(page.locator('#orb-sound')).toHaveAttribute('aria-pressed','false');
+    await expect.poll(rms).toBeLessThan(.00001);
+    await page.locator('#orb-scene').focus();await page.keyboard.press('m');await expect(page.locator('#orb-sound')).toHaveAttribute('aria-pressed','true');await expect.poll(rms).toBeGreaterThan(.0001);
+    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await expect.poll(()=>page.evaluate(()=>audioQA.contexts[0].state)).toBe('suspended');
+    await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+    await expect.poll(()=>page.evaluate(()=>audioQA.contexts[0].state)).toBe('running');
+    await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide')));
+    await expect.poll(()=>page.evaluate(()=>audioQA.contexts[0].state)).toBe('closed');expect(errors).toEqual([]);
   });
 
   test('foam extends beyond an opaque edge and stays thin on a steep contact',async({page})=>{

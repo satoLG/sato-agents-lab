@@ -5,6 +5,7 @@ import {createOrbIsland} from './orb-island.js';
 import {createOrbDepth} from './orb-depth.js';
 import {sphereDistanceForDiameter} from './orb-camera.js';
 import {createOrbMoon,loadOrbMoonTextures,MOON_RADIUS,MOON_ORBIT_RADIUS} from './orb-moon.js';
+import {createOceanGeometry} from './orb-geometry.js';
 
 const WORLD_POSITION=new T.Vector3(4.4,4.7,9.8);
 const WORLD_TARGET=new T.Vector3(0,.45,0);
@@ -16,7 +17,7 @@ const INTRO_DIRECTION=WORLD_POSITION.clone().sub(WORLD_TARGET).normalize();
 function createEnvironment(renderer) {
   // An HDR light field provides broad sky reflections and soft sun streaks.
   // It is generated locally; the scene has no CDN or texture dependencies.
-  const w=512,h=256,data=new Float32Array(w*h*4);
+  const w=1024,h=512,data=new Float32Array(w*h*4);
   const lights=[
     [.14,.26,.11,.055,7.5,8.3,8.5],
     [.63,.19,.055,.09,4.6,6.3,8.0],
@@ -36,7 +37,8 @@ function createEnvironment(renderer) {
     data[k]=red+sky*.5;data[k+1]=green+sky;data[k+2]=blue+sky*1.4;data[k+3]=1;
   }
   const texture=new T.DataTexture(data,w,h,T.RGBAFormat,T.FloatType);
-  texture.mapping=T.EquirectangularReflectionMapping;texture.needsUpdate=true;
+  texture.mapping=T.EquirectangularReflectionMapping;texture.wrapS=T.RepeatWrapping;
+  texture.magFilter=texture.minFilter=T.LinearFilter;texture.needsUpdate=true;
   const pmrem=new T.PMREMGenerator(renderer),target=pmrem.fromEquirectangular(texture);
   texture.dispose();pmrem.dispose();return target;
 }
@@ -78,7 +80,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   renderer.setClearColor('#030a10');renderer.outputColorSpace=T.SRGBColorSpace;
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
-  renderer.transmissionResolutionScale=.5;
+  renderer.transmissionResolutionScale=.75;
   container.appendChild(canvas);
   onProgress(.12);
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(36,1,.05,150);
@@ -108,7 +110,9 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   // Only external contact geometry should contribute intersection foam.
   nucleus.userData.orbFoamExclude=true;world.add(nucleus);
   const water=createOrbWater(),mobile=window.matchMedia('(max-width:760px)').matches;
-  const ocean=new T.Mesh(new T.SphereGeometry(WATER_RADIUS,mobile?64:96,mobile?48:64),water.material);
+  const ocean=new T.Mesh(createOceanGeometry(WATER_RADIUS,mobile?24:28),water.material);
+  // Vertex displacement includes the raised coastal water and the lunar swell.
+  ocean.geometry.boundingSphere.radius=WATER_RADIUS+.35;
   ocean.name='wobbly-ocean';ocean.receiveShadow=true;world.add(ocean);
   const [moonTextures,island]=await Promise.all([loadOrbMoonTextures(),createOrbIsland()]);
   const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value,textures:moonTextures});

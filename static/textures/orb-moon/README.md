@@ -1,14 +1,27 @@
-# Lunar surface
+# Rocky moon surface
 
-Source: NASA's Scientific Visualization Studio, [CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/), visualization by Ernie Wright, with LRO LROC and LOLA data. NASA imagery is used under [NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
+Source: [Rock Boulder Dry, Poly Haven](https://polyhaven.com/a/rock_boulder_dry),
+photography by Dimitrios Savva, processing by Rico Cilliers. Released under
+[CC0](https://polyhaven.com/license). This is weathered rock, not a lunar mosaic.
 
-- Color: [2019 LROC natural-color mosaic, 1024 × 512](https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg), recompressed as `lroc-color.webp`.
-- Normal: derived from [LOLA floating-point elevation, 1440 × 720](https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_4.tif), reduced to 512 × 256. OpenGL tangent-space normals use longitude wrapping, spherical distances, 2.5× relief and a polar taper. This is a display derivative, not a scientific data product.
+Original 1K JPG maps:
 
-Both maps are served locally. No source TIFF or remote request is needed at runtime. Rebuild with Pillow and numpy:
+- [Diffuse](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_boulder_dry/rock_boulder_dry_diff_1k.jpg)
+- [OpenGL normal](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_boulder_dry/rock_boulder_dry_nor_gl_1k.jpg)
+- [Displacement](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_boulder_dry/rock_boulder_dry_disp_1k.jpg)
+
+The color and normal maps are reduced to 512 × 512 WebP. Color saturation and
+contrast are softened to fit the island. Normal vectors are renormalized after
+resizing. A 64 × 64 grayscale height map is sampled once on the CPU, using
+triplanar projection, to sculpt small variations into the moon geometry.
+Larger, continuous sphere-space relief complements the fine normal map.
+All three assets are served locally; no external request is made at runtime.
+
+Rebuild using Pillow and numpy:
 
 ```bash
 python tools/build-orb-moon.py --source-dir /path/to/sources
 ```
 
-The source directory must contain `lroc-color-1k.jpg` and `lola-elevation-4.tif` downloaded from the URLs above.
+Save the downloads as `rock-color-1k.jpg`, `rock-normal-1k.jpg` and
+`rock-height-1k.jpg` in the source directory.

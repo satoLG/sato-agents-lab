@@ -54,13 +54,13 @@ test('orb intro camera matches the loading circle in portrait and landscape',asy
 });
 
 test('moon makes a slow circle in the initial camera plane and drives the tide axis',async()=>{
- const {createOrbMoon,MOON_ORBIT_PERIOD,MOON_RADIUS}=await import('../static/js/orb-moon.js');
+ const {createOrbMoon,MOON_ORBIT_PERIOD,MOON_RADIUS,MOON_SPIN_PERIOD,MOON_ORBIT_RADIUS}=await import('../static/js/orb-moon.js');
  const {createOrbWater,CORE_RADIUS,WATER_RADIUS}=await import('../static/js/orb-water.js');
  const normal=new T.Vector3(4.4,4.25,9.8).normalize(),water=createOrbWater();
  const moon=createOrbMoon({orbitNormal:normal,moonDirection:water.uniforms.orbMoonDirection.value});
  const camera=new T.PerspectiveCamera(36,1100/850,.05,150);camera.position.set(4.4,4.7,9.8);camera.lookAt(0,.45,0);camera.updateMatrixWorld();
  const center=new T.Vector3().project(camera),start=moon.mesh.position.clone();let screenRadius;
- assert.equal(moon.mesh.geometry.parameters.radius/CORE_RADIUS,.5);assert.equal(MOON_RADIUS,CORE_RADIUS*.5);assert.ok(MOON_ORBIT_PERIOD>=240);
+ assert.equal(moon.mesh.geometry.parameters.radius,MOON_RADIUS);assert.ok(MOON_RADIUS/CORE_RADIUS>=.4&&MOON_RADIUS/CORE_RADIUS<.5);assert.ok(MOON_ORBIT_PERIOD>=240);assert.ok(MOON_ORBIT_RADIUS>4.25);
  for(let i=0;i<=24;i++){
   moon.update(MOON_ORBIT_PERIOD*i/24);
   const p=moon.mesh.position.clone(),projected=p.clone().project(camera);
@@ -71,7 +71,28 @@ test('moon makes a slow circle in the initial camera plane and drives the tide a
   assert.ok(water.uniforms.orbMoonDirection.value.distanceTo(p.normalize())<1e-10,'tide direction must follow the actual moon');
  }
  assert.ok(moon.mesh.position.distanceTo(start)<1e-10,'one period must close the orbit');
+ moon.update(MOON_SPIN_PERIOD/4);assert.ok(Math.abs(moon.mesh.rotation.y+Math.PI/2)<1e-10,'self rotation is slow and independent of the orbit');
+ const p=moon.mesh.geometry.attributes.position,n=moon.mesh.geometry.attributes.normal,seen=new Map();let min=Infinity,max=0;
+ for(let i=0;i<p.count;i++){
+  const r=Math.hypot(p.getX(i),p.getY(i),p.getZ(i));min=Math.min(min,r);max=Math.max(max,r);
+  const key=[p.getX(i),p.getY(i),p.getZ(i)].map(x=>Math.round(x*1e5)).join(','),normal=new T.Vector3().fromBufferAttribute(n,i);
+  if(seen.has(key))assert.ok(normal.distanceTo(seen.get(key))<1e-6,'seam and pole geometric normals must agree');else seen.set(key,normal);
+ }
+ assert.ok(max-min>.04&&max-min<.12,'rock relief changes the actual silhouette without large spikes');
  moon.mesh.geometry.dispose();moon.mesh.material.map?.dispose();moon.mesh.material.normalMap?.dispose();moon.mesh.material.dispose();water.material.dispose();
+});
+
+test('ocean has a closed surface of evenly shared triangles without a UV seam',async()=>{
+ const {createOceanGeometry}=await import('../static/js/orb-geometry.js');
+ for(const detail of [24,28]){
+  const geometry=createOceanGeometry(2.05,detail),p=geometry.attributes.position,indices=geometry.index.array,edges=new Map();
+  for(let i=0;i<indices.length;i+=3)for(let j=0;j<3;j++){
+   const a=indices[i+j],b=indices[i+(j+1)%3],key=[Math.min(a,b),Math.max(a,b)].join(',');edges.set(key,(edges.get(key)||0)+1);
+  }
+  assert.ok([...edges.values()].every(count=>count===2),'every edge must join exactly two faces');
+  assert.equal(p.count-edges.size+indices.length/3,2,'closed sphere Euler characteristic');
+  assert.ok(indices.length/3<17000);geometry.dispose();
+ }
 });
 
 test('island beach slopes gently and joins beneath the submerged core',async()=>{

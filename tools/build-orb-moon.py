@@ -1,12 +1,12 @@
-"""Build small lunar albedo/normal maps from NASA SVS LROC and LOLA data.
+"""Reduce Poly Haven's CC0 Rock Boulder Dry maps for orb's small rocky moon.
 
-Requires Pillow and numpy. Sources and usage are in textures/orb-moon/README.md.
+Requires Pillow and numpy. Sources are documented beside the generated maps.
 """
 import argparse
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--source-dir', type=Path, required=True)
@@ -14,22 +14,19 @@ parser.add_argument('--output-dir', type=Path, default=Path(__file__).resolve().
 args = parser.parse_args()
 args.output_dir.mkdir(parents=True, exist_ok=True)
 
-color = Image.open(args.source_dir / 'lroc-color-1k.jpg').convert('RGB')
-color.save(args.output_dir / 'lroc-color.webp', quality=80, method=6)
+color = Image.open(args.source_dir / 'rock-color-1k.jpg').convert('RGB').resize((512, 512), Image.Resampling.LANCZOS)
+# Keep the photographed rock detail, with softer color/contrast like the island.
+color = ImageEnhance.Color(color).enhance(.65)
+color = ImageEnhance.Contrast(color).enhance(.88)
+color.save(args.output_dir / 'rock-color.webp', quality=78, method=6)
 
-# LOLA float TIFF values are kilometers above the 1737.4 km reference sphere.
-# Derivatives use spherical distances and wrap longitude, avoiding a seam.
-height = np.asarray(Image.open(args.source_dir / 'lola-elevation-4.tif').resize((512, 256), Image.Resampling.BILINEAR), dtype=np.float64)
-h, w = height.shape
-latitude = np.pi / 2 - (np.arange(h) + .5) * np.pi / h
-cos_lat = np.cos(latitude)[:, None]
-east = (np.roll(height, -1, axis=1) - np.roll(height, 1, axis=1)) / (2 * (2 * np.pi / w) * 1737.4 * np.maximum(cos_lat, .12))
-south = np.gradient(height, axis=0) / ((np.pi / h) * 1737.4)
-# Modest relief amplification; taper the sparse polar data to avoid pinching.
-polar = np.clip((cos_lat - .03) / .15, 0, 1)
-normal = np.stack([-east * 2.5 * polar, south * 2.5 * polar, np.ones_like(height)], axis=-1)
-normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
-rgb = np.uint8(np.clip((normal * .5 + .5) * 255, 0, 255))
-Image.fromarray(rgb).save(args.output_dir / 'lola-normal.webp', quality=90, method=6)
-for path in sorted(args.output_dir.glob('*.webp')):
+normal = np.asarray(Image.open(args.source_dir / 'rock-normal-1k.jpg').convert('RGB').resize((512, 512), Image.Resampling.LANCZOS), dtype=np.float64) / 127.5 - 1
+normal /= np.maximum(np.linalg.norm(normal, axis=-1, keepdims=True), 1e-8)
+Image.fromarray(np.uint8(np.clip((normal * .5 + .5) * 255, 0, 255))).save(args.output_dir / 'rock-normal.webp', quality=86, method=6)
+
+# CPU geometry displacement only needs a small height sample, not a GPU map.
+height = Image.open(args.source_dir / 'rock-height-1k.jpg').convert('L').resize((64, 64), Image.Resampling.LANCZOS)
+height.save(args.output_dir / 'rock-height.png', optimize=True)
+for name in ['rock-color.webp', 'rock-normal.webp', 'rock-height.png']:
+    path = args.output_dir / name
     print(f'{path.name}: {path.stat().st_size} bytes')
