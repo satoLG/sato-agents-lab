@@ -2,9 +2,10 @@ import * as T from '../vendor/three.module.min.js';
 import {OrbitControls} from '../vendor/OrbitControls.js';
 import {createOrbWater,createOrbCore,WATER_RADIUS} from './orb-water.js';
 import {createOrbIsland} from './orb-island.js';
+import {createOrbDepth} from './orb-depth.js';
 
 const WORLD_POSITION=new T.Vector3(4.4,4.7,9.8);
-const WORLD_TARGET=new T.Vector3(0,.30,0);
+const WORLD_TARGET=new T.Vector3(0,.45,0);
 const ISLAND_POSITION=new T.Vector3(1.65,3.65,3.35);
 const ISLAND_TARGET=new T.Vector3(0,2.20,0);
 const BASE_DISTANCE=WORLD_POSITION.distanceTo(WORLD_TARGET);
@@ -66,7 +67,7 @@ function createHalo() {
   }));
 }
 
-export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{}}={}) {
+export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{}}={}) {
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
   if(!context)throw new Error('WEBGL_UNAVAILABLE');
@@ -75,6 +76,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
   container.appendChild(canvas);
+  onProgress(.12);
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(36,1,.05,150);
   camera.position.copy(WORLD_POSITION);
   const controls=new OrbitControls(camera,canvas);
@@ -83,6 +85,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   controls.minDistance=4.8;controls.maxDistance=17;controls.minPolarAngle=.035;controls.maxPolarAngle=Math.PI-.035;
   controls.autoRotate=false;controls.autoRotateSpeed=.30;
   const environment=createEnvironment(renderer);scene.environment=environment.texture;
+  onProgress(.26);
   scene.add(new T.HemisphereLight('#b2dbe6','#0c1825',1.5));
   const sun=new T.DirectionalLight('#ffe8c5',2.8);sun.position.set(-3,7,4);sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-3,right:3,top:4,bottom:-3,near:.1,far:18});sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-.001;sun.shadow.normalBias=.025;scene.add(sun);
@@ -93,17 +96,23 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     const x=p.getX(i),y=p.getY(i),z=p.getZ(i),bump=1+Math.sin(x*5+z*2)*Math.cos(y*6-z*3)*.006;
     p.setXYZ(i,x*bump,y*bump,z*bump);
   }
-  coreGeometry.computeVertexNormals();world.add(new T.Mesh(coreGeometry,core.material));
+  coreGeometry.computeVertexNormals();
+  const nucleus=new T.Mesh(coreGeometry,core.material);nucleus.name='submerged-nucleus';
+  // The permanently submerged globe is separated from the water by a gap.
+  // Only external contact geometry should contribute intersection foam.
+  nucleus.userData.orbFoamExclude=true;world.add(nucleus);
   const water=createOrbWater(),mobile=window.matchMedia('(max-width:760px)').matches;
   const ocean=new T.Mesh(new T.SphereGeometry(WATER_RADIUS,mobile?96:144,mobile?64:96),water.material);
   ocean.name='wobbly-ocean';ocean.receiveShadow=true;world.add(ocean);
-  const island=createOrbIsland();world.add(island.group);world.add(createHalo());
+  const island=await createOrbIsland();world.add(island.group);world.add(createHalo());
+  onProgress(.58);
   const stars=createStars();scene.add(stars.group);
   // A restrained glow behind the orb adds depth without flattening the stars.
   const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=128;
   const ctx=glowCanvas.getContext('2d'),gradient=ctx.createRadialGradient(64,64,0,64,64,64);
   gradient.addColorStop(0,'rgba(18,72,102,.16)');gradient.addColorStop(.4,'rgba(16,52,81,.08)');gradient.addColorStop(1,'rgba(2,8,13,0)');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
   const glowTexture=new T.CanvasTexture(glowCanvas),glow=new T.Sprite(new T.SpriteMaterial({map:glowTexture,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));glow.scale.set(24,24,1);glow.position.set(0,0,-18);scene.add(glow);
+  const depth=createOrbDepth(renderer,scene,water.uniforms);
 
   let paused=reducedMotion,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
   const emitCamera=()=>{dirty=true;onCameraChange(BASE_DISTANCE/camera.position.distanceTo(controls.target));};
@@ -114,9 +123,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     const isMobile=width<=760,dpr=Math.min(window.devicePixelRatio||1,isMobile?1.5:1.75);
     renderer.setPixelRatio(dpr);renderer.setSize(width,height,false);stars.dpr.value=dpr;
     camera.aspect=width/height;
-    // On phones, reserve the lower quarter for the title and controls.
-    camera.setViewOffset(width,height,isMobile?0:-width*.075,isMobile?height*.11:0,width,height);
-    camera.fov=isMobile?46:36;camera.updateProjectionMatrix();dirty=true;
+    camera.clearViewOffset();camera.fov=isMobile?46:36;camera.updateProjectionMatrix();depth.resize();dirty=true;
   }
   const observer=new ResizeObserver(resize);observer.observe(container);resize();controls.update();
   function setView(next,{instant=false}={}) {
@@ -162,21 +169,25 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     if(transition){dirty=true;const t=T.MathUtils.clamp((now-transition.start)/900,0,1),ease=t*t*(3-2*t);camera.position.lerpVectors(transition.fromPosition,transition.position,ease);controls.target.lerpVectors(transition.fromTarget,transition.target,ease);if(t===1)transition=null;}
     controls.autoRotate=automatic&&!paused&&!transition;controls.update(delta);
     // Paused scenes redraw for camera/settings changes, then release the GPU.
-    if((!paused||dirty)&&now-lastRendered>=1000/30){renderer.render(scene,camera);dirty=false;lastRendered=now;}
+    if((!paused||dirty)&&now-lastRendered>=1000/30){depth.capture(camera);renderer.render(scene,camera);dirty=false;lastRendered=now;}
   }
   const shaderErrors=[];
   renderer.debug.onShaderError=(gl,program,vs,fs)=>{shaderErrors.push(gl.getProgramInfoLog(program)||gl.getShaderInfoLog(vs)||gl.getShaderInfoLog(fs));};
   try {
+    onProgress(.70);
     await renderer.compileAsync(scene,camera);
+    onProgress(.88);
+    depth.capture(camera);
     renderer.render(scene,camera);
     if(shaderErrors.length)throw new Error('SHADER_ERROR');
   } catch(error) {dispose();throw error;}
   renderer.debug.onShaderError=(gl,program)=>{console.error('orb shader:',gl.getProgramInfoLog(program));onError('Não foi possível desenhar o oceano neste navegador. Tente recarregar a página.');};
   setView('world',{instant:true});container.dataset.ready='true';raf=requestAnimationFrame(render);
+  onProgress(1);
   function dispose() {
     if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
     const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)for(const m of Array.isArray(object.material)?object.material:[object.material])materials.add(m);});
-    for(const g of geometries)g.dispose();for(const m of materials)m.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
+    for(const g of geometries)g.dispose();for(const m of materials){for(const key of ['map','alphaMap'])m[key]?.dispose();m.dispose();}depth.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
   }
   return {
     setView,zoom,dispose,

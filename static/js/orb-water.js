@@ -24,19 +24,26 @@ float orbFbm(vec3 p) {
 `;
 
 export function createOrbWater() {
-  const uniforms = {orbTime:{value:0}, orbStrength:{value:.55}};
+  const uniforms = {
+    orbTime:{value:0},orbStrength:{value:.9},
+    _SceneDepth:{value:null},_SceneResolution:{value:new T.Vector2(1,1)},
+    _CameraNear:{value:.05},_CameraFar:{value:150},
+    _EdgeFoamWidth:{value:.065},_EdgeFoamIntensity:{value:.62},
+    _EdgeFoamColor:{value:new T.Color(1,.97,1)},
+  };
   const material = new T.MeshPhysicalMaterial({
     color:'#47b8de', metalness:0, roughness:.16,
-    transmission:.70, thickness:.48, ior:1.333,
+    transmission:1, thickness:.48, ior:1.333,
     attenuationColor:'#327dae', attenuationDistance:2.8,
     clearcoat:1, clearcoatRoughness:.13, envMapIntensity:1.15,
     // Physical transmission draws the opaque core through the moving surface.
-    transparent:true, opacity:.94, depthWrite:false,
+    transparent:true, opacity:1, depthWrite:false,
   });
   const displacement = `
     uniform float orbTime;
     uniform float orbStrength;
     varying vec3 vOrbPosition;
+    varying highp float vOrbEyeDepth;
     ${noiseGLSL}
     vec3 orbDisplace(vec3 p) {
       vec3 n = normalize(p);
@@ -66,8 +73,27 @@ export function createOrbWater() {
         vec3 objectTangent = vec3(tangent.xyz);
       #endif
     `);
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = orbDisplace(position); vOrbPosition = transformed;');
-    shader.fragmentShader = `uniform float orbTime; varying vec3 vOrbPosition; ${noiseGLSL}` + shader.fragmentShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = orbDisplace(position); vOrbPosition = transformed; vOrbEyeDepth = -(modelViewMatrix * vec4(transformed,1.)).z;');
+    shader.fragmentShader = `uniform float orbTime; varying vec3 vOrbPosition;
+      varying highp float vOrbEyeDepth;
+      uniform highp sampler2D _SceneDepth;
+      uniform vec2 _SceneResolution;
+      uniform float _CameraNear, _CameraFar, _EdgeFoamWidth, _EdgeFoamIntensity;
+      uniform vec3 _EdgeFoamColor;
+      // satoLG/portfolio OceanShaders.ts: stable depth linearization and
+      // analytic eye depth retain the mobile precision fix from the original.
+      float linearizeDepthBuffer(float depth,float near,float far) {
+        return (near*far)/(far*(1.0-depth)+depth*near);
+      }
+      float calcEdgeFoam(vec2 screenUv) {
+        float sceneDepth=texture2D(_SceneDepth,screenUv).x;
+        if(sceneDepth>=.9999)return 0.;
+        float sceneLinear=linearizeDepthBuffer(sceneDepth,_CameraNear,_CameraFar);
+        float depthDiff=sceneLinear-vOrbEyeDepth;
+        if(depthDiff<=0.)return 0.;
+        return 1.-smoothstep(0.,_EdgeFoamWidth,depthDiff);
+      }
+      ${noiseGLSL}` + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
       float orbDepth = orbFbm(vOrbPosition * 1.5 + vec3(0., orbTime*.035, 0.));
@@ -79,8 +105,14 @@ export function createOrbWater() {
       float caustic = pow(1. - abs(sin(causticPhase * 20.)), 22.);
       totalEmissiveRadiance += vec3(.03,.20,.23) * caustic * .12;
     `);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
+      float orbEdgeFoamRaw=calcEdgeFoam(gl_FragCoord.xy/max(_SceneResolution,vec2(1.)));
+      float edgeFoam=clamp(orbEdgeFoamRaw*_EdgeFoamIntensity,0.,1.);
+      outgoingLight=mix(outgoingLight,max(outgoingLight,_EdgeFoamColor),edgeFoam);
+      #include <opaque_fragment>
+    `);
   };
-  material.customProgramCacheKey = () => 'orb-physical-water-v1';
+  material.customProgramCacheKey = () => 'orb-physical-water-intersection-v2';
   return {material, uniforms};
 }
 
