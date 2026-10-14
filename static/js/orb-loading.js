@@ -3,9 +3,10 @@ export function createOrbLoading({reducedMotion=false}={}) {
   const overlay=document.getElementById('orb-loading'),button=document.getElementById('orb-start');
   const percent=document.getElementById('orb-loading-percent'),progress=document.getElementById('orb-progress'),blur=document.getElementById('orb-blur');
   overlay.hidden=false;overlay.classList.remove('leaving');blur.hidden=false;blur.classList.remove('fade-out');
-  button.disabled=true;button.className='';button.style.animation='';button.style.setProperty('--fill-level','0%');button.setAttribute('aria-label','Carregando orb');
+  button.disabled=true;button.className='';button.style.animation='';button.style.opacity='';button.style.transform='';button.style.setProperty('--fill-level','0%');button.setAttribute('aria-label','Carregando orb');
   let target=0,displayed=0,raf=0,timer=0,stopped=false,resolveReady;
   const start=performance.now(),ready=new Promise(resolve=>{resolveReady=resolve;});
+  let lastFrame=start;
   function burst() {
     if(reducedMotion)return;
     const rect=button.getBoundingClientRect(),parent=overlay.getBoundingClientRect();
@@ -21,13 +22,19 @@ export function createOrbLoading({reducedMotion=false}={}) {
     if(stopped)return;
     const timed=Math.min((now-start)/6000,1);
     const effective=reducedMotion?target:Math.min(target,timed+target*.3);
-    const increment=reducedMotion?1:Math.max(.0035,Math.min(.012,(effective-displayed)*.1));
+    // Preserve the original 60 Hz pace without making completion depend on
+    // frame count when shader preparation or compositing slows the browser.
+    const delta=Math.max(0,(now-lastFrame)/1000);lastFrame=now;
+    const increment=reducedMotion?1:Math.max(.21*delta,Math.min(.72*delta,(effective-displayed)*(1-Math.exp(-6*delta))));
     displayed=Math.min(displayed+increment,effective);
     const value=Math.floor(displayed*100);percent.textContent=String(value);progress.setAttribute('aria-valuenow',String(value));
     button.style.setProperty('--fill-level',displayed*105+'%');
     const blurValue=(reducedMotion?0:50*(1-displayed))+'px';blur.style.backdropFilter='blur('+blurValue+')';blur.style.webkitBackdropFilter='blur('+blurValue+')';
     if(displayed>=.99&&target>=1) {
-      percent.textContent='100';progress.setAttribute('aria-valuenow','100');button.style.setProperty('--fill-level','105%');button.classList.add('celebrate-bounce');burst();
+      percent.textContent='100';progress.setAttribute('aria-valuenow','100');button.style.setProperty('--fill-level','105%');
+      // Pin the settled pose before removing the animation. Its fill state
+      // disappears with animation:none and must never hide the ready button.
+      button.style.opacity='1';button.style.transform='scale(1)';button.classList.add('celebrate-bounce');burst();
       timer=setTimeout(()=>{if(stopped)return;button.style.animation='none';button.classList.remove('celebrate-bounce');button.classList.add('loaded');button.disabled=false;button.setAttribute('aria-label','Entrar na orb');resolveReady(true);},reducedMotion?0:600);
     } else raf=requestAnimationFrame(animate);
   }

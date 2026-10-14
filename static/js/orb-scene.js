@@ -3,12 +3,14 @@ import {OrbitControls} from '../vendor/OrbitControls.js';
 import {createOrbWater,createOrbCore,WATER_RADIUS} from './orb-water.js';
 import {createOrbIsland} from './orb-island.js';
 import {createOrbDepth} from './orb-depth.js';
+import {sphereDistanceForDiameter} from './orb-camera.js';
 
 const WORLD_POSITION=new T.Vector3(4.4,4.7,9.8);
 const WORLD_TARGET=new T.Vector3(0,.45,0);
 const ISLAND_POSITION=new T.Vector3(1.65,3.65,3.35);
 const ISLAND_TARGET=new T.Vector3(0,2.20,0);
 const BASE_DISTANCE=WORLD_POSITION.distanceTo(WORLD_TARGET);
+const INTRO_DIRECTION=WORLD_POSITION.clone().sub(WORLD_TARGET).normalize();
 
 function createEnvironment(renderer) {
   // An HDR light field provides broad sky reflections and soft sun streaks.
@@ -67,7 +69,7 @@ function createHalo() {
   }));
 }
 
-export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{}}={}) {
+export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},getLoadingDiameter=()=>140}={}) {
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
   if(!context)throw new Error('WEBGL_UNAVAILABLE');
@@ -80,9 +82,10 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(36,1,.05,150);
   camera.position.copy(WORLD_POSITION);
   const controls=new OrbitControls(camera,canvas);
+  controls.enabled=false;
   controls.target.copy(WORLD_TARGET);controls.enableDamping=true;controls.dampingFactor=.065;
   controls.enablePan=false;controls.rotateSpeed=.48;controls.zoomSpeed=.7;
-  controls.minDistance=4.8;controls.maxDistance=17;controls.minPolarAngle=.035;controls.maxPolarAngle=Math.PI-.035;
+  controls.minDistance=4.8;controls.maxDistance=Infinity;controls.minPolarAngle=.035;controls.maxPolarAngle=Math.PI-.035;
   controls.autoRotate=false;controls.autoRotateSpeed=.30;
   const environment=createEnvironment(renderer);scene.environment=environment.texture;
   onProgress(.26);
@@ -114,27 +117,36 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const glowTexture=new T.CanvasTexture(glowCanvas),glow=new T.Sprite(new T.SpriteMaterial({map:glowTexture,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));glow.scale.set(24,24,1);glow.position.set(0,0,-18);scene.add(glow);
   const depth=createOrbDepth(renderer,scene,water.uniforms);
 
-  let paused=reducedMotion,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
+  let paused=true,intro=true,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
   const emitCamera=()=>{dirty=true;onCameraChange(BASE_DISTANCE/camera.position.distanceTo(controls.target));};
   controls.addEventListener('change',emitCamera);
-  controls.addEventListener('start',()=>{transition=null;automatic=false;controls.autoRotate=false;onManualOrbit();});
+  controls.addEventListener('start',()=>{transition=null;controls.maxDistance=Math.max(view==='island'?8:17,camera.position.distanceTo(controls.target));automatic=false;controls.autoRotate=false;onManualOrbit();});
   function resize() {
     const {width,height}=container.getBoundingClientRect();if(!width||!height)return;
     const isMobile=width<=760,dpr=Math.min(window.devicePixelRatio||1,isMobile?1.5:1.75);
     renderer.setPixelRatio(dpr);renderer.setSize(width,height,false);stars.dpr.value=dpr;
     camera.aspect=width/height;
-    camera.clearViewOffset();camera.fov=isMobile?46:36;camera.updateProjectionMatrix();depth.resize();dirty=true;
+    camera.clearViewOffset();camera.fov=isMobile?46:36;
+    if(intro){
+      const distance=sphereDistanceForDiameter(WATER_RADIUS,height,getLoadingDiameter(),camera.fov);
+      controls.target.set(0,0,0);camera.position.copy(INTRO_DIRECTION).multiplyScalar(distance);
+      camera.far=Math.max(150,distance+12);controls.update();emitCamera();
+    }
+    camera.updateProjectionMatrix();depth.resize();dirty=true;
   }
   const observer=new ResizeObserver(resize);observer.observe(container);resize();controls.update();
-  function setView(next,{instant=false}={}) {
+  function setView(next,{instant=false,duration=900}={}) {
     view=next==='island'?'island':'world';container.dataset.view=view;
     controls.minDistance=view==='island'?1.6:4.8;
-    controls.maxDistance=view==='island'?8:17;
+    const finalMaxDistance=view==='island'?8:17;
+    // Keep the distant loading pose while easing in; restoring the regular
+    // orbit bound too early would clamp the camera and turn the zoom into a jump.
+    controls.maxDistance=Math.max(finalMaxDistance,camera.position.distanceTo(controls.target));
     controls.maxPolarAngle=view==='island'?Math.PI*.48:Math.PI-.035;
     const position=view==='island'?ISLAND_POSITION:WORLD_POSITION,target=view==='island'?ISLAND_TARGET:WORLD_TARGET;
     transition=null;
-    if(instant||reducedMotion){camera.position.copy(position);controls.target.copy(target);controls.update();emitCamera();}
-    else transition={start:performance.now(),fromPosition:camera.position.clone(),fromTarget:controls.target.clone(),position:position.clone(),target:target.clone()};
+    if(instant||reducedMotion){camera.position.copy(position);controls.target.copy(target);controls.maxDistance=finalMaxDistance;controls.update();emitCamera();}
+    else transition={start:performance.now(),duration,finalMaxDistance,fromPosition:camera.position.clone(),fromTarget:controls.target.clone(),position:position.clone(),target:target.clone()};
   }
   function zoom(factor) {
     transition=null;
@@ -143,7 +155,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     camera.position.copy(controls.target).add(offset);controls.update();emitCamera();
   }
   const keydown=event=>{
-    if(event.target!==container)return;
+    if(event.target!==container||!controls.enabled)return;
     if(['+','=','-','_','0','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))event.preventDefault();
     if(event.key==='+'||event.key==='=')zoom(.87);
     else if(event.key==='-'||event.key==='_')zoom(1.15);
@@ -166,7 +178,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     if(document.hidden)return;
     if(!paused){elapsed+=delta*speed;world.position.y=Math.sin(elapsed*.42)*.035;stars.group.rotation.y=elapsed*.0015;island.update(elapsed);}
     water.uniforms.orbTime.value=elapsed;core.time.value=elapsed;stars.time.value=elapsed;
-    if(transition){dirty=true;const t=T.MathUtils.clamp((now-transition.start)/900,0,1),ease=t*t*(3-2*t);camera.position.lerpVectors(transition.fromPosition,transition.position,ease);controls.target.lerpVectors(transition.fromTarget,transition.target,ease);if(t===1)transition=null;}
+    if(transition){dirty=true;const t=T.MathUtils.clamp((now-transition.start)/transition.duration,0,1),ease=t*t*(3-2*t);camera.position.lerpVectors(transition.fromPosition,transition.position,ease);controls.target.lerpVectors(transition.fromTarget,transition.target,ease);if(t===1){controls.maxDistance=transition.finalMaxDistance;transition=null;}}
     controls.autoRotate=automatic&&!paused&&!transition;controls.update(delta);
     // Paused scenes redraw for camera/settings changes, then release the GPU.
     if((!paused||dirty)&&now-lastRendered>=1000/30){depth.capture(camera);renderer.render(scene,camera);dirty=false;lastRendered=now;}
@@ -182,7 +194,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     if(shaderErrors.length)throw new Error('SHADER_ERROR');
   } catch(error) {dispose();throw error;}
   renderer.debug.onShaderError=(gl,program)=>{console.error('orb shader:',gl.getProgramInfoLog(program));onError('Não foi possível desenhar o oceano neste navegador. Tente recarregar a página.');};
-  setView('world',{instant:true});container.dataset.ready='true';raf=requestAnimationFrame(render);
+  container.dataset.view='intro';emitCamera();container.dataset.ready='true';raf=requestAnimationFrame(render);
   onProgress(1);
   function dispose() {
     if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
@@ -191,6 +203,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   }
   return {
     setView,zoom,dispose,
+    enter(){if(!intro)return;intro=false;controls.enabled=true;setView('world',{duration:2800});},
     setPaused(value){paused=value;dirty=true;},
     setAutoOrbit(value){automatic=value;},
     setStrength(value){water.uniforms.orbStrength.value=value;dirty=true;},

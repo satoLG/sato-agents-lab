@@ -36,3 +36,19 @@ test('foliage is the reference leaf-card cloud with radial normals, not a solid 
   g.dispose();
  }
 });
+
+test('orb intro camera matches the loading circle in portrait and landscape',async()=>{
+ const {sphereDistanceForDiameter}=await import('../static/js/orb-camera.js');
+ const geometry=new T.SphereGeometry(2.05,144,96),position=geometry.attributes.position;
+ const direction=new T.Vector3(4.4,4.25,9.8).normalize(),point=new T.Vector3();
+ for(const [width,height,diameter,fov] of [[1100,850,136,36],[390,844,120,46],[1920,1080,144,36],[844,390,120,36]]){
+  const camera=new T.PerspectiveCamera(fov,width/height,.05,300);
+  camera.position.copy(direction).multiplyScalar(sphereDistanceForDiameter(2.05,height,diameter,fov));camera.lookAt(0,0,0);camera.updateMatrixWorld();
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(let i=0;i<position.count;i++){point.fromBufferAttribute(position,i).project(camera);minX=Math.min(minX,point.x);maxX=Math.max(maxX,point.x);minY=Math.min(minY,point.y);maxY=Math.max(maxY,point.y);}
+  assert.ok(Math.abs((maxX-minX)*width/2-diameter)<.3,'globe width must match the circle');
+  assert.ok(Math.abs((maxY-minY)*height/2-diameter)<.3,'globe height must match the circle');
+  assert.ok(Math.abs((maxX+minX)*width/4)<.2&&Math.abs((maxY+minY)*height/4)<.2,'globe must be centered behind the circle');
+ }
+ geometry.dispose();
+});
