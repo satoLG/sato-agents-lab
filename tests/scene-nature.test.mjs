@@ -71,5 +71,35 @@ test('moon makes a slow circle in the initial camera plane and drives the tide a
   assert.ok(water.uniforms.orbMoonDirection.value.distanceTo(p.normalize())<1e-10,'tide direction must follow the actual moon');
  }
  assert.ok(moon.mesh.position.distanceTo(start)<1e-10,'one period must close the orbit');
- moon.mesh.geometry.dispose();moon.mesh.material.map.dispose();moon.mesh.material.gradientMap.dispose();moon.mesh.material.dispose();water.material.dispose();
+ moon.mesh.geometry.dispose();moon.mesh.material.map?.dispose();moon.mesh.material.normalMap?.dispose();moon.mesh.material.dispose();water.material.dispose();
+});
+
+test('island beach slopes gently and joins beneath the submerged core',async()=>{
+ const {terrainHeight,terrainGeometry,coastRadius}=await import('../static/js/orb-island.js');
+ const {CORE_RADIUS}=await import('../static/js/orb-water.js');
+ const geometry=terrainGeometry(),positions=geometry.attributes.position,blend=geometry.attributes.coreBlend;
+ const rim=new Map();
+ for(let i=0;i<positions.count;i++){
+  assert.ok(Number.isFinite(positions.getY(i)));assert.ok(blend.getX(i)>=0&&blend.getX(i)<=1);
+  const x=positions.getX(i),z=positions.getZ(i),radius=Math.hypot(x,z),angle=Math.atan2(z,x).toFixed(4);
+  if(radius>0&&(!rim.has(angle)||radius>rim.get(angle).radius))rim.set(angle,{radius,x,y:positions.getY(i),z});
+ }
+ assert.ok(rim.size>90);for(const p of rim.values())assert.ok(Math.hypot(p.x,p.y,p.z)<CORE_RADIUS-.02,'outer cap must enter the core, hiding its boundary');
+ for(let j=0;j<24;j++){
+  const a=j*Math.PI/12,c=coastRadius(a),e=.001;
+  for(let ratio=.72;ratio<1.16;ratio+=.04){const d=c*ratio;const slope=Math.abs((terrainHeight(Math.cos(a)*(d+e),Math.sin(a)*(d+e))-terrainHeight(Math.cos(a)*(d-e),Math.sin(a)*(d-e)))/(2*e));assert.ok(slope<1.35,'visible beach must avoid a steep ledge');}
+ }
+ geometry.dispose();
+});
+
+test('velvet grass is short and uses the exact ground color at each root',async()=>{
+ const {createHomeGrass}=await import('../static/js/home-grass.js');
+ const {grassColorAt}=await import('../static/js/orb-ground.js');
+ const root=new T.Group();createHomeGrass(root,{size:1,density:16,heightAt:()=>0,waterAt:()=>({center:0,width:0}),exclude:()=>false,heightScale:.58,widthScale:1.3,velvet:true,colorAt:grassColorAt});
+ const grass=root.children[0],a=grass.geometry.attributes;
+ for(let i=0;i<grass.geometry.instanceCount;i++){
+  assert.ok(a.bladeHeight.getX(i)<.39);const color=grassColorAt(a.bladeCenter.getX(i),a.bladeCenter.getZ(i));
+  assert.ok(Math.abs(a.bladeColor.getX(i)-color.r)<1e-6&&Math.abs(a.bladeColor.getY(i)-color.g)<1e-6&&Math.abs(a.bladeColor.getZ(i)-color.b)<1e-6);
+ }
+ assert.ok(grass.material.isMeshStandardMaterial);grass.geometry.dispose();grass.material.dispose();
 });
