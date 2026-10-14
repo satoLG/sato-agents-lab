@@ -3,65 +3,96 @@ import {createTreeGrove,createGroveResources,createContactShadows} from './scene
 import {createHomeGrass} from './home-grass.js';
 import {loadFoliageTexture} from './folio-foliage.js';
 import {updateNature} from './nature-motion.js';
+import {CORE_RADIUS,WATER_RADIUS} from './orb-water.js';
+import {grassColorAt,landColorAt,orbGroundGLSL} from './orb-ground.js';
 
 export function coastRadius(angle) {
   return .92 * (1 + .09*Math.sin(angle*3+.7) + .055*Math.cos(angle*5-1.2));
 }
 export function terrainHeight(x,z) {
-  const d=Math.hypot(x,z),r=d/coastRadius(Math.atan2(z,x));
-  const plateau=2.155 + .035*Math.exp(-((x+.18)**2+(z+.20)**2)/.25)
-    + .007*Math.sin(x*11+z*4)*Math.cos(z*9-x*3);
-  const shore=Math.sqrt(Math.max(0,2.065**2-d*d))-.065*T.MathUtils.smoothstep(r,.92,1.12);
-  return T.MathUtils.lerp(plateau,shore,T.MathUtils.smoothstep(r,.56,1.07));
+  const d=Math.hypot(x,z),coast=coastRadius(Math.atan2(z,x));
+  const plateau=2.145+.025*Math.exp(-((x+.18)**2+(z+.20)**2)/.25);
+  const end=Math.min(CORE_RADIUS*.95,coast*1.9);
+  const beach=Math.sqrt(Math.max(0,(WATER_RADIUS+.022)**2-d*d));
+  const beachBlend=T.MathUtils.smoothstep(d,coast*.44,coast*1.16);
+  const globe=Math.sqrt(Math.max(0,(CORE_RADIUS-.035)**2-d*d));
+  const coreBlend=T.MathUtils.smoothstep(d,coast*1.2,end);
+  return T.MathUtils.lerp(T.MathUtils.lerp(plateau,beach,beachBlend),globe,coreBlend);
 }
-
-function terrainGeometry() {
-  const rings=30,segments=128,positions=[],colors=[],indices=[];
-  const sand=new T.Color('#d8c69b'),wetSand=new T.Color('#8b8e68');
-  const grass=new T.Color('#769c49'),shadeGrass=new T.Color('#2e6445');
+export function terrainGeometry() {
+  const rings=44,segments=96,positions=[],colors=[],blends=[],indices=[];
   for(let ring=0;ring<=rings;ring++)for(let j=0;j<=segments;j++) {
-    const f=ring/rings,a=j/segments*Math.PI*2,d=coastRadius(a)*f*1.12;
-    const x=Math.cos(a)*d,z=Math.sin(a)*d;
-    positions.push(x,terrainHeight(x,z),z);
-    const color=sand.clone();
-    if(f<.69)color.copy(grass).lerp(shadeGrass,.24+.18*Math.sin(x*13+z*17));
-    else if(f<.77)color.lerp(grass,(.77-f)/.08*.85);
-    else color.lerp(wetSand,T.MathUtils.smoothstep(f,.88,1.));
-    color.multiplyScalar(.96+.04*Math.sin(x*80)*Math.cos(z*74));colors.push(color.r,color.g,color.b);
+    const a=j/segments*Math.PI*2,coast=coastRadius(a),end=Math.min(CORE_RADIUS*.95,coast*1.9),d=end*ring/rings;
+    const x=Math.cos(a)*d,z=Math.sin(a)*d,color=landColorAt(x,z,d/coast);
+    positions.push(x,terrainHeight(x,z),z);colors.push(color.r,color.g,color.b);
+    blends.push(T.MathUtils.smoothstep(d,coast*1.08,end*.95));
     if(ring&&j){const b=ring*(segments+1)+j,a0=b-segments-1;indices.push(a0-1,a0,b-1,b-1,a0,b);}
   }
-  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setAttribute('coreBlend',new T.Float32BufferAttribute(blends,1));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+function landMaterial() {
+  const material=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide});
+  material.onBeforeCompile=shader=>{
+    shader.vertexShader='attribute float coreBlend; varying float vCoreBlend; varying vec3 vLandPosition;\n'+shader.vertexShader;
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCoreBlend=coreBlend;vLandPosition=position;');
+    shader.fragmentShader=`varying float vCoreBlend; varying vec3 vLandPosition; ${orbGroundGLSL}`+shader.fragmentShader;
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,orbRockSurface(vLandPosition),vCoreBlend);');
+  };
+  material.customProgramCacheKey=()=> 'orb-land-continuous-ground-v1';return material;
+}
+
+function addRocks(island) {
+  const material=new T.MeshStandardMaterial({color:'#66756f',roughness:1,metalness:0,flatShading:true});
+  let seed=9871;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const dummy=new T.Object3D();
+  for(let variant=0;variant<3;variant++){
+    const geometry=new T.IcosahedronGeometry(1,0),p=geometry.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+      const bump=.76+.40*(.5+.5*Math.sin(x*19+y*31+z*43+variant*7));
+      p.setXYZ(i,x*bump*(.85+variant*.13),y*bump,z*bump*(1.1-variant*.08));
+    }
+    geometry.computeVertexNormals();
+    const rocks=new T.InstancedMesh(geometry,material,3);rocks.name='island-rock';rocks.castShadow=true;rocks.receiveShadow=true;
+    for(let j=0;j<3;j++){
+      const i=variant*3+j,a=i*2.39996+.12*random(),coast=coastRadius(a);
+      const r=i<6?coast*(.16+random()*.46):coast*(.96+random()*.18);
+      const x=Math.cos(a)*r,z=Math.sin(a)*r,size=.024+random()*.019;
+      dummy.position.set(x,terrainHeight(x,z)+size*.18,z);dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
+    }
+    rocks.instanceMatrix.needsUpdate=true;rocks.computeBoundingSphere();island.add(rocks);
+  }
 }
 
 export async function createOrbIsland() {
   await loadFoliageTexture();
   const island=new T.Group();island.name='orb-island';
-  const land=new T.Mesh(terrainGeometry(),new T.MeshStandardMaterial({vertexColors:true,roughness:.95,side:T.DoubleSide}));
+  const land=new T.Mesh(terrainGeometry(),landMaterial());
   land.name='island-shore';land.receiveShadow=true;island.add(land);
 
   // Use the forest's actual stand, foliage SDF, colors and wind at miniature scale.
   const treeScale=.14,treeRoot=new T.Group();treeRoot.scale.setScalar(treeScale);island.add(treeRoot);
   const locations=[[-.40,-.12,.92,.28],[.21,-.35,.78,.25],[.43,.14,.67,.23],[-.15,.37,.73,.25]];
   const trees=locations.map(([x,z,height,radius])=>({x:x/treeScale,z:z/treeScale,y:terrainHeight(x,z)/treeScale,height:height/treeScale,radius:radius/treeScale}));
-  createTreeGrove(treeRoot,trees,{seed:627,detail:true,shadows:true,resources:createGroveResources(true)});
+  const grove=createTreeGrove(treeRoot,trees,{seed:627,detail:true,shadows:true,resources:createGroveResources(true)});
+  // Only the leaf shader moves in this stand. Its opaque wood stays fixed;
+  // actual transforms/buffer edits still invalidate the depth automatically.
+  grove.getObjectByName('branching-trunks').userData.dynamic=false;
   createContactShadows(treeRoot,trees);
 
-  // The same camera-facing forest blades, denser and taller than the old tufts.
+  // Short, dense blades share the ground's color and upward lighting normals.
   const grassScale=.14,grassRoot=new T.Group();grassRoot.scale.setScalar(grassScale);island.add(grassRoot);
   const grass=createHomeGrass(grassRoot,{
-    size:2.25/grassScale,centerZ:0,density:86,
+    size:2.25/grassScale,centerZ:0,density:104,heightScale:.58,widthScale:1.3,velvet:true,
+    colorAt:(x,z)=>grassColorAt(x*grassScale,z*grassScale),
+    normalAt:(x,z)=>{x*=grassScale;z*=grassScale;const e=.01;return new T.Vector3(-(terrainHeight(x+e,z)-terrainHeight(x-e,z))/(2*e),1,-(terrainHeight(x,z+e)-terrainHeight(x,z-e))/(2*e)).normalize();},
     heightAt:(x,z)=>terrainHeight(x*grassScale,z*grassScale)/grassScale,
     waterAt:()=>({center:0,width:0}),
-    exclude:(x,z)=>Math.hypot(x*grassScale,z*grassScale)/coastRadius(Math.atan2(z,x))>.73,
+    exclude:(x,z)=>Math.hypot(x*grassScale,z*grassScale)/coastRadius(Math.atan2(z,x))>.67,
   });
   grassRoot.traverse(object=>{if(object.isMesh){object.userData.orbFoamExclude=true;object.geometry.boundingSphere=new T.Sphere(new T.Vector3(0,2.16/grassScale,0),2.25/grassScale);}});
 
-  const rockMaterial=new T.MeshStandardMaterial({color:'#818679',roughness:1,flatShading:true});
-  for(let i=0;i<18;i++) {
-    const a=i*2.39996,r=i<10?.23+(i%4)*.10:coastRadius(a)*.93;
-    const x=Math.cos(a)*r,z=Math.sin(a)*r;
-    const rock=new T.Mesh(new T.IcosahedronGeometry(.035+(i%3)*.023,1),rockMaterial);
-    rock.name='island-rock';rock.position.set(x,terrainHeight(x,z)+.012,z);rock.scale.set(1.3,.7+(i%2)*.4,1);rock.rotation.set(i*.4,i*1.1,i*.8);rock.castShadow=true;island.add(rock);
-  }
+  addRocks(island);
   return {group:island,update(time){updateNature(time);grass.tick(time);}};
 }

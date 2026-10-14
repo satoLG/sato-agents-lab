@@ -26,3 +26,15 @@ def test_lab_asset_version_cannot_silently_serve_another_release(client):
     prefix = f'/lab-assets/{app_module.LAB_ASSET_VERSION}/'
     assert client.get(prefix + 'missing.js').status_code == 404
     assert client.get(prefix + '../app.py').status_code == 404
+
+
+def test_orb_lunar_maps_are_local_and_lightweight(client):
+    prefix = f'/lab-assets/{app_module.LAB_ASSET_VERSION}/textures/orb-moon/'
+    total = 0
+    for name in ['lroc-color.webp', 'lola-normal.webp']:
+        response = client.get(prefix + name)
+        assert response.status_code == 200
+        assert response.mimetype == 'image/webp'
+        assert response.data[:4] == b'RIFF' and response.data[8:12] == b'WEBP'
+        total += len(response.data)
+    assert total < 120_000

@@ -61,10 +61,11 @@ test.describe('orb desktop',()=>{
     await expect(page.locator('#orb-progress')).toHaveAttribute('aria-valuenow','100');await page.locator('#orb-start').click();await expect(page.locator('#orb-loading')).toBeHidden();
     await expect(page.locator('#orb-settings')).toHaveCount(0);await expect(page.locator('header,nav,input,aside')).toHaveCount(0);
     const details=await page.evaluate(()=>{
-      const {water,world,renderer}=orbQA,grass=world.getObjectByName('camera-facing-procedural-grass'),trees=world.getObjectByName('wind-canopies');
-      return {strength:water.uniforms.orbStrength.value,transmission:water.material.transmission,grass:grass.geometry.instanceCount,cards:trees.geometry.attributes.position.count/4,texture:trees.material.alphaMap.image.src,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false)};
+      const {water,world,renderer,moon}=orbQA,grass=world.getObjectByName('camera-facing-procedural-grass'),trees=world.getObjectByName('wind-canopies');
+      return {strength:water.uniforms.orbStrength.value,transmission:water.material.transmission,roughness:water.material.roughness,moonColor:moon.mesh.material.map.image.src,moonNormal:moon.mesh.material.normalMap.image.src,grass:grass.geometry.instanceCount,cards:trees.geometry.attributes.position.count/4,texture:trees.material.alphaMap.image.src,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false)};
     });
     expect(details.strength).toBeGreaterThan(.55);expect(details.transmission).toBe(1);expect(details.grass).toBeGreaterThan(1000);expect(details.cards).toBe(80);expect(details.texture).toContain('folio-2025/foliageSDF.png');expect(details.programs).toBe(true);
+    expect(details.roughness).toBeGreaterThan(.2);expect(details.moonColor).toContain('lroc-color.webp');expect(details.moonNormal).toContain('lola-normal.webp');
     await page.screenshot({path:info.outputPath('orb-world.png')});const before=await pixels(page);
     await page.locator('#orb-scene').focus();await page.keyboard.press('ArrowRight');await expect.poll(()=>pixels(page)).not.toBe(before);
     await page.keyboard.press('+');await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(1);
@@ -134,6 +135,47 @@ test.describe('orb desktop',()=>{
     expect(result.first.near-result.first.far).toBeGreaterThan(.01);expect(result.opposite.far-result.opposite.near).toBeGreaterThan(.01);
     expect(Math.abs(result.first.near-result.opposite.far)).toBeLessThan(.003);expect(Math.abs(result.first.far-result.opposite.near)).toBeLessThan(.003);
     expect(Math.abs(result.waves0.near-result.waves8.near)).toBeGreaterThan(.003);expect(Math.abs(result.waves0.far-result.waves8.far)).toBeGreaterThan(.003);expect(errors).toEqual([]);
+  });
+
+  test('opaque depth is reused for lunar motion and invalidated by contact geometry',async({page})=>{
+    await exposeScene(page);await enter(page);
+    const result=await page.evaluate(()=>{
+      const {T,scene,depth,camera,water,moon}=orbQA;
+      depth.capture(camera);const still=depth.capture(camera);moon.update(30);water.uniforms.orbTime.value=5;const lunar=depth.capture(camera);
+      const probe=new T.Mesh(new T.BoxGeometry(.1,.1,.1),new T.MeshBasicMaterial());scene.add(probe);const added=depth.capture(camera);
+      probe.position.x=.3;const moved=depth.capture(camera);probe.visible=false;const hidden=depth.capture(camera);
+      camera.position.x+=.1;const orbit=depth.capture(camera);const settled=depth.capture(camera);
+      probe.geometry.dispose();probe.material.dispose();scene.remove(probe);return {still,lunar,added,moved,hidden,orbit,settled};
+    });
+    expect(result).toEqual({still:false,lunar:false,added:true,moved:true,hidden:true,orbit:true,settled:false});
+    await page.evaluate(()=>{const capture=orbQA.depth.capture;window.depthRepaints=0;orbQA.depth.capture=(...args)=>{const painted=capture(...args);if(painted)window.depthRepaints++;return painted;};});
+    await page.locator('#orb-scene').focus();await page.keyboard.press('Space');
+    await expect.poll(()=>page.evaluate(()=>orbQA.water.uniforms.orbTime.value),{timeout:10000}).toBeGreaterThan(.2);
+    await page.keyboard.press('Space');expect(await page.evaluate(()=>window.depthRepaints)).toBeLessThanOrEqual(1);
+  });
+
+  test('foam extends beyond an opaque edge and stays thin on a steep contact',async({page})=>{
+    test.setTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    await exposeScene(page);await enter(page);
+    const result=await page.evaluate(async()=>{
+      const {T,scene,world,water,depth,renderer,ocean}=orbQA;
+      for(const child of scene.children)if(child!==world&&!child.isLight)child.visible=false;
+      for(const child of world.children)child.visible=child===ocean;
+      water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;
+      const original=water.material.onBeforeCompile;water.material.onBeforeCompile=shader=>{original(shader);shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','gl_FragColor=vec4(vec3(orbEdgeFoamRaw),1.);');};
+      water.material.customProgramCacheKey=()=> 'orb-foam-edge-qa';water.material.transmission=0;water.material.needsUpdate=true;
+      renderer.toneMapping=T.NoToneMapping;renderer.outputColorSpace=T.LinearSRGBColorSpace;renderer.setPixelRatio(1);renderer.setSize(360,300,false);
+      const direction=new T.Vector3(4.4,4.25,9.8).normalize(),camera=new T.PerspectiveCamera(36,1.2,.05,150);camera.position.copy(direction).multiplyScalar(6);camera.lookAt(0,0,0);
+      const probe=new T.Mesh(new T.PlaneGeometry(.6,.42),new T.MeshBasicMaterial({color:0xffffff,side:T.DoubleSide}));probe.position.copy(direction).multiplyScalar(2.062);probe.lookAt(direction.clone().multiplyScalar(6));probe.rotateX(.55);world.add(probe);
+      const target=new T.WebGLRenderTarget(360,300),foam=new Uint8Array(360*300*4),mask=new Uint8Array(foam.length);
+      await renderer.compileAsync(scene,camera);depth.capture(camera);probe.visible=false;
+      renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,360,300,foam);
+      ocean.visible=false;probe.visible=true;renderer.setClearColor(0);renderer.clear();renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,360,300,mask);renderer.setRenderTarget(null);
+      let beyond=0,maxThickness=0,total=0;
+      for(let x=0;x<360;x++){let run=0;for(let y=0;y<300;y++){const i=(y*360+x)*4;if(foam[i]>45){run++;total++;if(mask[i]<10)beyond++;maxThickness=Math.max(maxThickness,run);}else run=0;}}
+      target.dispose();probe.geometry.dispose();probe.material.dispose();world.remove(probe);return {beyond,maxThickness,total};
+    });
+    expect(result.total).toBeGreaterThan(30);expect(result.beyond).toBeGreaterThan(0);expect(result.maxThickness).toBeLessThan(9);expect(errors).toEqual([]);
   });
 });
 
