@@ -1,9 +1,10 @@
 import * as T from '../vendor/three.module.min.js';
 import {OrbitControls} from '../vendor/OrbitControls.js';
-import {createOrbWater,createOrbCore,WATER_RADIUS} from './orb-water.js';
+import {createOrbWater,createOrbCore,CORE_RADIUS,WATER_RADIUS} from './orb-water.js';
 import {createOrbIsland} from './orb-island.js';
 import {createOrbDepth} from './orb-depth.js';
 import {sphereDistanceForDiameter} from './orb-camera.js';
+import {createOrbMoon,MOON_RADIUS,MOON_ORBIT_RADIUS} from './orb-moon.js';
 
 const WORLD_POSITION=new T.Vector3(4.4,4.7,9.8);
 const WORLD_TARGET=new T.Vector3(0,.45,0);
@@ -80,6 +81,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   container.appendChild(canvas);
   onProgress(.12);
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(36,1,.05,150);
+  const worldPosition=WORLD_POSITION.clone();
   camera.position.copy(WORLD_POSITION);
   const controls=new OrbitControls(camera,canvas);
   controls.enabled=false;
@@ -94,7 +96,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-3,right:3,top:4,bottom:-3,near:.1,far:18});sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-.001;sun.shadow.normalBias=.025;scene.add(sun);
   const blueLight=new T.DirectionalLight('#72c2e6',1.8);blueLight.position.set(5,1,-4);scene.add(blueLight);
   const world=new T.Group();world.name='orb-world';scene.add(world);
-  const core=createOrbCore(),coreGeometry=new T.SphereGeometry(1.84,96,64),p=coreGeometry.attributes.position;
+  const core=createOrbCore(),coreGeometry=new T.SphereGeometry(CORE_RADIUS,96,64),p=coreGeometry.attributes.position;
   for(let i=0;i<p.count;i++) {
     const x=p.getX(i),y=p.getY(i),z=p.getZ(i),bump=1+Math.sin(x*5+z*2)*Math.cos(y*6-z*3)*.006;
     p.setXYZ(i,x*bump,y*bump,z*bump);
@@ -107,6 +109,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const water=createOrbWater(),mobile=window.matchMedia('(max-width:760px)').matches;
   const ocean=new T.Mesh(new T.SphereGeometry(WATER_RADIUS,mobile?96:144,mobile?64:96),water.material);
   ocean.name='wobbly-ocean';ocean.receiveShadow=true;world.add(ocean);
+  const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value});world.add(moon.mesh);
   const island=await createOrbIsland();world.add(island.group);world.add(createHalo());
   onProgress(.58);
   const stars=createStars();scene.add(stars.group);
@@ -118,15 +121,22 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const depth=createOrbDepth(renderer,scene,water.uniforms);
 
   let paused=true,intro=true,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
-  const emitCamera=()=>{dirty=true;onCameraChange(BASE_DISTANCE/camera.position.distanceTo(controls.target));};
+  const emitCamera=()=>{dirty=true;onCameraChange(worldPosition.distanceTo(WORLD_TARGET)/camera.position.distanceTo(controls.target));};
+  const orbitLimit=()=>view==='island'?8:Math.max(17,worldPosition.distanceTo(WORLD_TARGET)*1.45);
   controls.addEventListener('change',emitCamera);
-  controls.addEventListener('start',()=>{transition=null;controls.maxDistance=Math.max(view==='island'?8:17,camera.position.distanceTo(controls.target));automatic=false;controls.autoRotate=false;onManualOrbit();});
+  controls.addEventListener('start',()=>{transition=null;controls.maxDistance=Math.max(orbitLimit(),camera.position.distanceTo(controls.target));automatic=false;controls.autoRotate=false;onManualOrbit();});
   function resize() {
     const {width,height}=container.getBoundingClientRect();if(!width||!height)return;
     const isMobile=width<=760,dpr=Math.min(window.devicePixelRatio||1,isMobile?1.5:1.75);
     renderer.setPixelRatio(dpr);renderer.setSize(width,height,false);stars.dpr.value=dpr;
     camera.aspect=width/height;
     camera.clearViewOffset();camera.fov=isMobile?46:36;
+    // Fit the full lunar orbit, including the moon's own radius, on the
+    // shortest screen dimension. Manual zoom remains available after entry.
+    const envelope=MOON_ORBIT_RADIUS+MOON_RADIUS+WORLD_TARGET.length();
+    const worldDistance=Math.max(BASE_DISTANCE,sphereDistanceForDiameter(envelope,height,Math.min(width,height)*.92,camera.fov));
+    worldPosition.copy(WORLD_TARGET).addScaledVector(INTRO_DIRECTION,worldDistance);
+    if(transition&&view==='world')transition.position.copy(worldPosition);
     if(intro){
       const distance=sphereDistanceForDiameter(WATER_RADIUS,height,getLoadingDiameter(),camera.fov);
       controls.target.set(0,0,0);camera.position.copy(INTRO_DIRECTION).multiplyScalar(distance);
@@ -138,12 +148,12 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   function setView(next,{instant=false,duration=900}={}) {
     view=next==='island'?'island':'world';container.dataset.view=view;
     controls.minDistance=view==='island'?1.6:4.8;
-    const finalMaxDistance=view==='island'?8:17;
+    const finalMaxDistance=orbitLimit();
     // Keep the distant loading pose while easing in; restoring the regular
     // orbit bound too early would clamp the camera and turn the zoom into a jump.
     controls.maxDistance=Math.max(finalMaxDistance,camera.position.distanceTo(controls.target));
     controls.maxPolarAngle=view==='island'?Math.PI*.48:Math.PI-.035;
-    const position=view==='island'?ISLAND_POSITION:WORLD_POSITION,target=view==='island'?ISLAND_TARGET:WORLD_TARGET;
+    const position=view==='island'?ISLAND_POSITION:worldPosition,target=view==='island'?ISLAND_TARGET:WORLD_TARGET;
     transition=null;
     if(instant||reducedMotion){camera.position.copy(position);controls.target.copy(target);controls.maxDistance=finalMaxDistance;controls.update();emitCamera();}
     else transition={start:performance.now(),duration,finalMaxDistance,fromPosition:camera.position.clone(),fromTarget:controls.target.clone(),position:position.clone(),target:target.clone()};
@@ -178,6 +188,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     if(document.hidden)return;
     if(!paused){elapsed+=delta*speed;world.position.y=Math.sin(elapsed*.42)*.035;stars.group.rotation.y=elapsed*.0015;island.update(elapsed);}
     water.uniforms.orbTime.value=elapsed;core.time.value=elapsed;stars.time.value=elapsed;
+    moon.update(elapsed);
     if(transition){dirty=true;const t=T.MathUtils.clamp((now-transition.start)/transition.duration,0,1),ease=t*t*(3-2*t);camera.position.lerpVectors(transition.fromPosition,transition.position,ease);controls.target.lerpVectors(transition.fromTarget,transition.target,ease);if(t===1){controls.maxDistance=transition.finalMaxDistance;transition=null;}}
     controls.autoRotate=automatic&&!paused&&!transition;controls.update(delta);
     // Paused scenes redraw for camera/settings changes, then release the GPU.
@@ -199,7 +210,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   function dispose() {
     if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
     const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)for(const m of Array.isArray(object.material)?object.material:[object.material])materials.add(m);});
-    for(const g of geometries)g.dispose();for(const m of materials){for(const key of ['map','alphaMap'])m[key]?.dispose();m.dispose();}depth.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
+    for(const g of geometries)g.dispose();for(const m of materials){for(const key of ['map','alphaMap','gradientMap'])m[key]?.dispose();m.dispose();}depth.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
   }
   return {
     setView,zoom,dispose,

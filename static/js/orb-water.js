@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 
+export const CORE_RADIUS = 1.84;
 export const WATER_RADIUS = 2.05;
 
 // Continuous 3D value noise: no UV seam at the poles or the back of the globe.
@@ -25,7 +26,7 @@ float orbFbm(vec3 p) {
 
 export function createOrbWater() {
   const uniforms = {
-    orbTime:{value:0},orbStrength:{value:.9},
+    orbTime:{value:0},orbStrength:{value:.9},orbMoonDirection:{value:new T.Vector3(1,0,0)},
     _SceneDepth:{value:null},_SceneResolution:{value:new T.Vector2(1,1)},
     _CameraNear:{value:.05},_CameraFar:{value:150},
     _EdgeFoamWidth:{value:.065},_EdgeFoamIntensity:{value:.62},
@@ -42,6 +43,7 @@ export function createOrbWater() {
   const displacement = `
     uniform float orbTime;
     uniform float orbStrength;
+    uniform vec3 orbMoonDirection;
     varying vec3 vOrbPosition;
     varying highp float vOrbEyeDepth;
     ${noiseGLSL}
@@ -53,7 +55,13 @@ export function createOrbWater() {
       float swell = sin(q.x*1.4 + q.z*.8 + orbTime*.55) * sin(q.y*1.6 - q.z*.7 + orbTime*.38) * .027;
       // The beach remains readable even when the open ocean is rough.
       float shore = 1. - .66 * smoothstep(.84, .97, n.y);
-      float radius = ${WATER_RADIUS.toFixed(2)} + (largeWave + smallWave + swell) * (orbStrength * 1.65) * shore;
+      float alignment = dot(n, normalize(orbMoonDirection));
+      // Both tidal lobes remain above the resting radius. The lunar side
+      // rises slightly more; the far side and the equator keep moving too.
+      float tide = .012 + .028 * alignment * alignment + .008 * alignment;
+      float waveGain = 1. + .18 * alignment;
+      float radius = ${WATER_RADIUS.toFixed(2)} + tide * shore + (largeWave + smallWave + swell) * (orbStrength * 1.65) * shore * waveGain;
+      radius = max(${(CORE_RADIUS+.06).toFixed(2)}, radius);
       return n * radius;
     }
   `;
@@ -112,7 +120,7 @@ export function createOrbWater() {
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'orb-physical-water-intersection-v2';
+  material.customProgramCacheKey = () => 'orb-physical-water-lunar-tides-v3';
   return {material, uniforms};
 }
 
