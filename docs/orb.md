@@ -37,9 +37,20 @@ o primeiro render com profundidade. Chega a 100% somente quando a cena está
 pronta; a entrada fica bloqueada até então. Movimento reduzido elimina espera
 e animações decorativas. Falhas interrompem o loading e mostram recuperação.
 
+O círculo centralizado mede entre 120 e 144 px. A distância inicial da câmera
+é calculada a partir desse diâmetro, da altura do canvas e do campo de visão,
+para alinhar a esfera ao loading mesmo ao redimensionar a tela. Ao concluir,
+o botão mantém seu estado visível e apresenta o play. O clique libera os
+controles imediatamente e aproxima a câmera ao enquadramento padrão em
+2,8 segundos; um gesto pode interromper essa transição. Com movimento reduzido,
+a câmera assume diretamente o enquadramento padrão. O progresso usa o tempo
+entre frames para manter seu ritmo mesmo em dispositivos mais lentos.
+
 ## Verificação
 
 Os testes de navegador bloqueiam uma textura para verificar progresso real,
 conferem a ausência de painéis, validam controles de teclado/toque e usam uma
 malha independente parcialmente submersa para medir a máscara de espuma na
 GPU. Sem contato ou com o objeto profundamente submerso, a máscara fica vazia.
+O fluxo com animações normais também verifica a visibilidade e o clique do
+play, o alinhamento responsivo e as posições intermediária e final da câmera.

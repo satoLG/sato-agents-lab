@@ -16,6 +16,7 @@ async function start() {
     const {createOrbScene}=await import('./orb-scene.js');
     scene=await createOrbScene(container,{
       reducedMotion:motionPreference.matches,onProgress:value=>loader.setProgress(value),
+      getLoadingDiameter:()=>parseFloat(getComputedStyle($('orb-start')).width)||140,
       onCameraChange:zoom=>{container.dataset.zoom=zoom.toFixed(2);},onError:error,
     });
     scene.setPaused(true);
@@ -26,10 +27,10 @@ async function start() {
 }
 $('orb-start').addEventListener('click',()=>{
   if(!scene||entered||$('orb-start').disabled)return;
-  entered=true;document.body.dataset.started='true';container.inert=false;scene.setPaused(paused);
-  $('orb-start').classList.add('bounce-out');$('orb-blur').classList.add('fade-out');
+  entered=true;document.body.dataset.started='true';container.inert=false;scene.enter();scene.setPaused(paused);
+  $('orb-start').classList.add('bounce-out');$('orb-loading').classList.add('leaving');$('orb-blur').classList.add('fade-out');
   const duration=motionPreference.matches?0:600;
-  timers.push(setTimeout(()=>{$('orb-loading').classList.add('leaving');$('orb-loading').hidden=true;},duration));
+  timers.push(setTimeout(()=>{$('orb-loading').hidden=true;},duration));
   timers.push(setTimeout(()=>{$('orb-blur').hidden=true;},motionPreference.matches?0:2000));
   container.focus({preventScroll:true});$('orb-status').textContent='Arraste para explorar. Use a roda ou dois dedos para aproximar.';
 });

@@ -4,7 +4,7 @@ const {createHash}=require('node:crypto');
 async function exposeScene(page) {
   await page.route('**/js/orb-scene.js',async route=>{
     const response=await route.fetch();
-    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island};return {\n    setView,zoom,dispose,');
+    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island,controls,get transitioning(){return Boolean(transition);}};return {\n    setView,zoom,dispose,');
     await route.fulfill({response,body});
   });
 }
@@ -17,6 +17,17 @@ async function enter(page) {
 async function pixels(page) {
   const {width,height}=page.viewportSize();
   return createHash('sha256').update(await page.screenshot({clip:{x:Math.floor(width/2-64),y:Math.floor(height/2-64),width:128,height:128}})).digest('hex');
+}
+async function loadingFit(page) {
+  return page.evaluate(()=>{
+    const {T,camera,ocean}=orbQA,stage=document.querySelector('#orb-scene').getBoundingClientRect(),button=document.querySelector('#orb-start').getBoundingClientRect();
+    const positions=ocean.geometry.attributes.position,point=new T.Vector3();let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    for(let i=0;i<positions.count;i++){point.fromBufferAttribute(positions,i).project(camera);minX=Math.min(minX,point.x);maxX=Math.max(maxX,point.x);minY=Math.min(minY,point.y);maxY=Math.max(maxY,point.y);}
+    return {diameter:button.width,planetWidth:(maxX-minX)*stage.width/2,planetHeight:(maxY-minY)*stage.height/2,planetX:stage.x+stage.width/2+(maxX+minX)*stage.width/4,planetY:stage.y+stage.height/2-(maxY+minY)*stage.height/4,buttonX:button.x+button.width/2,buttonY:button.y+button.height/2};
+  });
+}
+function expectLoadingFit(fit) {
+  expect(fit.diameter).toBeGreaterThan(100);expect(Math.abs(fit.planetWidth-fit.diameter)).toBeLessThan(1);expect(Math.abs(fit.planetHeight-fit.diameter)).toBeLessThan(1);expect(Math.abs(fit.planetX-fit.buttonX)).toBeLessThan(1);expect(Math.abs(fit.planetY-fit.buttonY)).toBeLessThan(1);
 }
 
 test.describe('orb desktop',()=>{
@@ -34,6 +45,7 @@ test.describe('orb desktop',()=>{
     await expect(page.locator('.wave-wrapper')).toHaveCount(3);
     await page.screenshot({path:info.outputPath('orb-loading.png')});release();
     await expect(page.locator('#orb-start')).toBeEnabled({timeout:45000});
+    expectLoadingFit(await loadingFit(page));
     await expect(page.locator('#orb-progress')).toHaveAttribute('aria-valuenow','100');await page.locator('#orb-start').click();await expect(page.locator('#orb-loading')).toBeHidden();
     await expect(page.locator('#orb-settings')).toHaveCount(0);await expect(page.locator('header,nav,input,aside')).toHaveCount(0);
     const details=await page.evaluate(()=>{
@@ -76,15 +88,51 @@ test.describe('orb desktop',()=>{
   });
 });
 
+test.describe('orb with normal motion',()=>{
+  test.use({viewport:{width:1100,height:850},reducedMotion:'no-preference'});
+  test('play stays visible, the entry zoom is gradual and the canvas accepts input',async({page},info)=>{
+    test.setTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    await exposeScene(page);
+    await page.route('**/js/orb.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('scene.setPaused(true);','window.orbController=scene;scene.setPaused(true);')});});
+    await page.goto('/orb',{waitUntil:'domcontentloaded'});await expect(page.locator('#orb-start')).toBeEnabled({timeout:45000});
+    await expect(page.locator('#orb-start')).toBeVisible();
+    await expect.poll(()=>page.locator('#orb-start').evaluate(el=>Number(getComputedStyle(el).opacity))).toBe(1);
+    await expect.poll(()=>page.locator('.start-icon').evaluate(el=>Number(getComputedStyle(el).opacity))).toBe(1);
+    expect(await page.locator('#orb-start').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
+    expectLoadingFit(await loadingFit(page));
+    await page.screenshot({path:info.outputPath('orb-ready-play.png')});
+    // A resize before play must recompute camera distance, keeping the circle fit.
+    await page.setViewportSize({width:390,height:844});await expect.poll(async()=>Math.abs((await loadingFit(page)).planetWidth-(await loadingFit(page)).diameter)).toBeLessThan(1);expectLoadingFit(await loadingFit(page));
+    await page.setViewportSize({width:1100,height:850});await expect.poll(async()=>Math.abs((await loadingFit(page)).planetWidth-(await loadingFit(page)).diameter)).toBeLessThan(1);
+    const before=await page.evaluate(()=>orbQA.camera.position.distanceTo(orbQA.controls.target));
+    await page.locator('#orb-start').click();
+    // Freeze water only during readback on software WebGL; the real camera
+    // transition still advances and is checked through its actual matrices.
+    await page.evaluate(()=>orbController.setPaused(true));
+    const intermediate=await page.evaluate(()=>({distance:orbQA.camera.position.distanceTo(orbQA.controls.target),transitioning:orbQA.transitioning,inert:document.querySelector('#orb-scene').inert,hit:document.elementFromPoint(600,450).tagName}));
+    expect(intermediate.transitioning).toBe(true);expect(intermediate.inert).toBe(false);expect(intermediate.distance).toBeGreaterThan(17);expect(intermediate.distance).toBeLessThanOrEqual(before);
+    expect(intermediate.hit).toBe('CANVAS');
+    await expect(page.locator('#orb-loading')).toBeHidden();
+    await expect.poll(()=>page.evaluate(()=>orbQA.transitioning),{timeout:12000}).toBe(false);
+    const finalPosition=await page.evaluate(()=>orbQA.camera.position.toArray());for(const [i,value]of [4.4,4.7,9.8].entries())expect(finalPosition[i]).toBeCloseTo(value,5);await expect(page.locator('#orb-scene')).toHaveAttribute('data-zoom','1.00');
+    await page.screenshot({path:info.outputPath('orb-after-zoom.png')});
+    const theta=await page.evaluate(()=>orbQA.controls.getAzimuthalAngle());
+    await page.mouse.move(600,450);await page.mouse.down();await page.mouse.move(680,470,{steps:4});await page.mouse.up();
+    await expect.poll(()=>page.evaluate(()=>orbQA.controls.getAzimuthalAngle())).not.toBe(theta);
+    const zoom=Number(await page.locator('#orb-scene').getAttribute('data-zoom'));await page.mouse.wheel(0,-180);await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(zoom);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('orb on a phone',()=>{
   test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   test('clean screen supports touch orbit and two-finger zoom',async({page},info)=>{
-    const errors=[];page.on('pageerror',e=>errors.push(String(e)));await enter(page);
+    const errors=[];page.on('pageerror',e=>errors.push(String(e)));await exposeScene(page);await enter(page);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
-    await page.screenshot({path:info.outputPath('orb-mobile.png')});const before=await pixels(page),cdp=await page.context().newCDPSession(page);
+    await page.screenshot({path:info.outputPath('orb-mobile.png')});const before=await page.evaluate(()=>orbQA.controls.getAzimuthalAngle()),cdp=await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:230,y:330}]});
     for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:230+i*14,y:330+i*4}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(()=>pixels(page)).not.toBe(before);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(()=>page.evaluate(()=>orbQA.controls.getAzimuthalAngle())).not.toBe(before);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:160,y:340},{x:230,y:340}]});
     for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:160-i*4,y:340},{x:230+i*4,y:340}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(1);
