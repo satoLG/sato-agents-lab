@@ -91,6 +91,7 @@ ROUTES = [
     "/",
     "/dashboard",
     "/lab",
+    "/orb",
     "/api/lab/state",
     "/api/stats",
     "/api/activity/heatmap?days=365",

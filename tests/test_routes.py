@@ -28,6 +28,32 @@ def test_model_inspector_without_vm_or_navigation_link(client):
         assert 'href="/models"' not in client.get(route).get_data(as_text=True)
 
 
+def test_orb_is_standalone_and_serves_versioned_local_assets(client):
+    from html.parser import HTMLParser
+
+    class Assets(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.urls = []
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == 'script' or (tag == 'link' and attrs.get('rel') == 'stylesheet'):
+                self.urls.append(attrs.get('src') or attrs.get('href'))
+
+    response = client.get('/orb')
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'Um mundo' in body and 'id="orb-scene"' in body
+    assets = Assets()
+    assets.feed(body)
+    assert len(assets.urls) == 2
+    for url in assets.urls:
+        assert url.startswith('/lab-assets/')
+        assert client.get(url).status_code == 200
+    assert 'js/home.js' not in body and 'js/lab.js' not in body
+
+
 def test_banco_vazio_sem_tabelas(vm, client):
     vm.db(["CREATE TABLE outra_coisa (id INTEGER)"])
     check_all(client, "banco sem as tabelas esperadas")

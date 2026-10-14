@@ -22,7 +22,7 @@ web_chat.configure(app)
 _static_root = Path(app.static_folder)
 _lab_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
 _lab_digest = hashlib.sha256()
-for _path in [Path(app.root_path) / 'templates/lab.html', Path(app.root_path) / 'templates/home.html', *_lab_files]:
+for _path in [Path(app.root_path) / 'templates/lab.html', Path(app.root_path) / 'templates/home.html', Path(app.root_path) / 'templates/orb.html', *_lab_files]:
     _lab_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
     _lab_digest.update(b'\0')
     _lab_digest.update(_path.read_bytes())
@@ -102,6 +102,11 @@ def laboratory():
 @app.get("/models")
 def model_inspector():
     return render_template("models.html", lab_asset_version=LAB_ASSET_VERSION)
+
+
+@app.get("/orb")
+def orb():
+    return render_template("orb.html", lab_asset_version=LAB_ASSET_VERSION)
 
 
 @app.route("/lab-assets/<version>/<path:filename>")

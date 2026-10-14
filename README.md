@@ -12,6 +12,23 @@ python3 app.py                 # http://127.0.0.1:8080
 
 Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explorar.
 
+## orb
+
+`/orb` é uma cena independente: um núcleo esférico sob uma camada de água azul
+semitransparente, com uma pequena ilha parcialmente submersa no topo e estrelas
+ao redor. O shader de vértices deforma a água e recalcula suas normais; o material
+físico mantém transmissão, refração e reflexos. A ilha tem relevo, areia, rochas,
+grama e palmeiras. A referência visual é a aula
+[Wobbly Sphere](https://threejs-journey.com/lessons/wobbly-sphere-shader) do Three.js
+Journey; a implementação é local, sem dependências de CDN ou da telemetria.
+
+Arraste para orbitar; use a roda, dois dedos ou os botões para zoom. **O mundo** e
+**A ilha** mudam o enquadramento. **Ajustar** controla ondulação, velocidade e
+transparência. Também há órbita automática, pausa, tela cheia e restauração da
+câmera. Com foco na cena, setas giram, `+`/`-` ajustam o zoom e `0` restaura a vista.
+Movimento reduzido começa com a animação pausada; a câmera permanece interativa.
+Sem WebGL 2, a página apresenta uma mensagem e opção de recarregar.
+
 ## UI e telemetria compartilhadas
 
 `fragments/site-ui.html` e `sato-ui.css` definem navegação, superfícies e loading
