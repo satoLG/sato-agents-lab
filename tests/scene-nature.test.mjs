@@ -52,3 +52,24 @@ test('orb intro camera matches the loading circle in portrait and landscape',asy
  }
  geometry.dispose();
 });
+
+test('moon makes a slow circle in the initial camera plane and drives the tide axis',async()=>{
+ const {createOrbMoon,MOON_ORBIT_PERIOD,MOON_RADIUS}=await import('../static/js/orb-moon.js');
+ const {createOrbWater,CORE_RADIUS,WATER_RADIUS}=await import('../static/js/orb-water.js');
+ const normal=new T.Vector3(4.4,4.25,9.8).normalize(),water=createOrbWater();
+ const moon=createOrbMoon({orbitNormal:normal,moonDirection:water.uniforms.orbMoonDirection.value});
+ const camera=new T.PerspectiveCamera(36,1100/850,.05,150);camera.position.set(4.4,4.7,9.8);camera.lookAt(0,.45,0);camera.updateMatrixWorld();
+ const center=new T.Vector3().project(camera),start=moon.mesh.position.clone();let screenRadius;
+ assert.equal(moon.mesh.geometry.parameters.radius/CORE_RADIUS,.5);assert.equal(MOON_RADIUS,CORE_RADIUS*.5);assert.ok(MOON_ORBIT_PERIOD>=240);
+ for(let i=0;i<=24;i++){
+  moon.update(MOON_ORBIT_PERIOD*i/24);
+  const p=moon.mesh.position.clone(),projected=p.clone().project(camera);
+  assert.ok(p.length()-MOON_RADIUS>WATER_RADIUS+.1,'moon must clear the ocean throughout its orbit');
+  assert.ok(Math.abs(p.dot(normal))<1e-10,'orbit must remain in the initial camera plane');
+  const radius=Math.hypot((projected.x-center.x)*550,(projected.y-center.y)*425);
+  screenRadius??=radius;assert.ok(Math.abs(radius-screenRadius)<1e-8,'perspective must show a circle');
+  assert.ok(water.uniforms.orbMoonDirection.value.distanceTo(p.normalize())<1e-10,'tide direction must follow the actual moon');
+ }
+ assert.ok(moon.mesh.position.distanceTo(start)<1e-10,'one period must close the orbit');
+ moon.mesh.geometry.dispose();moon.mesh.material.map.dispose();moon.mesh.material.gradientMap.dispose();moon.mesh.material.dispose();water.material.dispose();
+});

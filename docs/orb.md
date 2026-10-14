@@ -5,6 +5,21 @@ no mundo, com OrbitControls, zoom por roda/pinça e atalhos descritos no rótulo
 acessível da cena. A água começa com ondulação de 90% e transmissão física de
 100%; os reflexos e a absorção azul continuam visíveis.
 
+A lua tem metade do raio do núcleo sob a água (0,92 contra 1,84), com textura
+local de crateras ilustradas, manchas lavanda e iluminação em faixas suaves.
+Sua órbita circular fica no plano perpendicular à direção da câmera inicial,
+com raio de 3,4 e uma volta a cada cinco minutos. O plano permanece fixo ao
+usar OrbitControls. O enquadramento de entrada acomoda a órbita inteira na
+menor dimensão da tela; a câmera pode ser aproximada manualmente depois.
+
+A direção da lua alimenta o shader da água em coordenadas do planeta. Dois
+volumes de maré permanecem presentes, com uma pequena preferência pelo lado
+próximo da lua. A altura de maré é sempre positiva, e a amplitude das ondas
+varia de 82% a 118% da base conforme a orientação; nenhum lado fica parado.
+A deformação e as normais usam a mesma função, preservando reflexos e espuma
+de contato. O núcleo permanece submerso. Pausar o movimento também pausa a
+órbita e a maré, e movimento reduzido mantém a cena estática por padrão.
+
 ## Fontes reutilizadas
 
 Os trechos do [portfólio](https://github.com/satoLG/portfolio) foram adaptados da
@@ -42,8 +57,9 @@ O círculo centralizado mede entre 120 e 144 px. A distância inicial da câmera
 para alinhar a esfera ao loading mesmo ao redimensionar a tela. Ao concluir,
 o botão mantém seu estado visível e apresenta o play. O clique libera os
 controles imediatamente e aproxima a câmera ao enquadramento padrão em
-2,8 segundos; um gesto pode interromper essa transição. Com movimento reduzido,
-a câmera assume diretamente o enquadramento padrão. O progresso usa o tempo
+2,8 segundos, agora incluindo toda a órbita lunar; um gesto pode interromper
+essa transição. Com movimento reduzido, a câmera assume diretamente o
+enquadramento padrão. O progresso usa o tempo
 entre frames para manter seu ritmo mesmo em dispositivos mais lentos.
 
 ## Verificação
@@ -54,3 +70,7 @@ malha independente parcialmente submersa para medir a máscara de espuma na
 GPU. Sem contato ou com o objeto profundamente submerso, a máscara fica vazia.
 O fluxo com animações normais também verifica a visibilidade e o clique do
 play, o alinhamento responsivo e as posições intermediária e final da câmera.
+Os testes da lua verificam a trajetória circular projetada, a proporção de
+tamanho e a visibilidade da órbita no desktop e no celular. A leitura da
+superfície na GPU confirma que a maré troca de lado ao inverter a posição da
+lua, mantém água no lado oposto e preserva ondas em ambos os lados.

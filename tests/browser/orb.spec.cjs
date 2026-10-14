@@ -4,7 +4,7 @@ const {createHash}=require('node:crypto');
 async function exposeScene(page) {
   await page.route('**/js/orb-scene.js',async route=>{
     const response=await route.fetch();
-    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island,controls,get transitioning(){return Boolean(transition);}};return {\n    setView,zoom,dispose,');
+    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island,moon,worldPosition,controls,get transitioning(){return Boolean(transition);}};return {\n    setView,zoom,dispose,');
     await route.fulfill({response,body});
   });
 }
@@ -28,6 +28,18 @@ async function loadingFit(page) {
 }
 function expectLoadingFit(fit) {
   expect(fit.diameter).toBeGreaterThan(100);expect(Math.abs(fit.planetWidth-fit.diameter)).toBeLessThan(1);expect(Math.abs(fit.planetHeight-fit.diameter)).toBeLessThan(1);expect(Math.abs(fit.planetX-fit.buttonX)).toBeLessThan(1);expect(Math.abs(fit.planetY-fit.buttonY)).toBeLessThan(1);
+}
+async function expectMoonOrbitFits(page) {
+  const bounds=await page.evaluate(()=>{
+    const {T,moon,camera}=orbQA,stage=document.querySelector('#orb-scene').getBoundingClientRect(),p=new T.Vector3(),positions=moon.mesh.geometry.attributes.position;
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    for(let t=0;t<300;t+=37.5){moon.update(t);moon.mesh.updateMatrixWorld();for(let i=0;i<positions.count;i++){
+      p.fromBufferAttribute(positions,i).applyMatrix4(moon.mesh.matrixWorld).project(camera);
+      const x=(p.x+1)*stage.width/2,y=(1-p.y)*stage.height/2;minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+    }}
+    moon.update(0);return {minX,maxX,minY,maxY,width:stage.width,height:stage.height};
+  });
+  expect(bounds.minX).toBeGreaterThan(0);expect(bounds.minY).toBeGreaterThan(0);expect(bounds.maxX).toBeLessThan(bounds.width);expect(bounds.maxY).toBeLessThan(bounds.height);
 }
 
 test.describe('orb desktop',()=>{
@@ -86,6 +98,43 @@ test.describe('orb desktop',()=>{
     });
     expect(counts.empty).toBe(0);expect(counts.contact).toBeGreaterThan(30);expect(counts.deep).toBe(0);expect(errors).toEqual([]);
   });
+
+  test('lunar tide follows the orbit and keeps water on the opposite side',async({page},info)=>{
+    test.setTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    await exposeScene(page);await enter(page);
+    await page.screenshot({path:info.outputPath('orb-moon.png')});
+    const before=await page.evaluate(()=>orbQA.moon.mesh.position.toArray());
+    await page.locator('#orb-scene').focus();await page.keyboard.press('Space');
+    await expect.poll(()=>page.evaluate(()=>orbQA.moon.mesh.position.toArray())).not.toEqual(before);
+    await page.keyboard.press('Space');
+    const tracking=await page.evaluate(()=>orbQA.water.uniforms.orbMoonDirection.value.distanceTo(orbQA.moon.mesh.position.clone().normalize()));expect(tracking).toBeLessThan(1e-8);
+    const result=await page.evaluate(async()=>{
+      const {T,scene,world,water,renderer,ocean,moon}=orbQA;
+      world.position.set(0,0,0);for(const child of scene.children)if(child!==world&&!child.isLight)child.visible=false;
+      for(const child of world.children)child.visible=child===ocean;
+      // Read the actual physical water's displaced radius on the GPU. Turn
+      // off short waves first to isolate the slower lunar tide.
+      water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;
+      const original=water.material.onBeforeCompile;
+      water.material.onBeforeCompile=shader=>{original(shader);shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','gl_FragColor=vec4(vec3((length(vOrbPosition)-2.05+.2)/.4),1.);');};
+      water.material.customProgramCacheKey=()=> 'orb-lunar-radius-qa';water.material.transmission=0;water.material.needsUpdate=true;
+      renderer.toneMapping=T.NoToneMapping;renderer.outputColorSpace=T.LinearSRGBColorSpace;
+      const camera=new T.PerspectiveCamera(18,1,.05,150),target=new T.WebGLRenderTarget(65,65),data=new Uint8Array(4);
+      moon.update(0);const near=moon.mesh.position.clone().normalize(),far=near.clone().negate(),equator=new T.Vector3().crossVectors(near,new T.Vector3(0,1,0)).normalize();
+      camera.position.copy(near).multiplyScalar(8);camera.lookAt(0,0,0);await renderer.compileAsync(scene,camera);
+      function height(direction){camera.position.copy(direction).multiplyScalar(8);camera.lookAt(0,0,0);renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,32,32,1,1,data);renderer.setRenderTarget(null);return data[0]/255*.4-.2;}
+      const first={near:height(near),far:height(far),equator:height(equator)};
+      moon.update(150);const opposite={near:height(near),far:height(far),equator:height(equator)};
+      // With waves restored, both faces must continue changing over time.
+      water.uniforms.orbStrength.value=.9;const waves0={near:height(near),far:height(far)};
+      water.uniforms.orbTime.value=8;const waves8={near:height(near),far:height(far)};
+      target.dispose();return {first,opposite,waves0,waves8};
+    });
+    for(const tide of [result.first,result.opposite]){expect(tide.near).toBeGreaterThan(.02);expect(tide.far).toBeGreaterThan(.02);expect(tide.equator).toBeGreaterThan(.006);}
+    expect(result.first.near-result.first.far).toBeGreaterThan(.01);expect(result.opposite.far-result.opposite.near).toBeGreaterThan(.01);
+    expect(Math.abs(result.first.near-result.opposite.far)).toBeLessThan(.003);expect(Math.abs(result.first.far-result.opposite.near)).toBeLessThan(.003);
+    expect(Math.abs(result.waves0.near-result.waves8.near)).toBeGreaterThan(.003);expect(Math.abs(result.waves0.far-result.waves8.far)).toBeGreaterThan(.003);expect(errors).toEqual([]);
+  });
 });
 
 test.describe('orb with normal motion',()=>{
@@ -114,12 +163,14 @@ test.describe('orb with normal motion',()=>{
     expect(intermediate.hit).toBe('CANVAS');
     await expect(page.locator('#orb-loading')).toBeHidden();
     await expect.poll(()=>page.evaluate(()=>orbQA.transitioning),{timeout:12000}).toBe(false);
-    const finalPosition=await page.evaluate(()=>orbQA.camera.position.toArray());for(const [i,value]of [4.4,4.7,9.8].entries())expect(finalPosition[i]).toBeCloseTo(value,5);await expect(page.locator('#orb-scene')).toHaveAttribute('data-zoom','1.00');
+    const final=await page.evaluate(()=>({position:orbQA.camera.position.toArray(),expected:orbQA.worldPosition.toArray()}));for(const [i,value]of final.expected.entries())expect(final.position[i]).toBeCloseTo(value,5);await expect(page.locator('#orb-scene')).toHaveAttribute('data-zoom','1.00');
+    await expectMoonOrbitFits(page);
     await page.screenshot({path:info.outputPath('orb-after-zoom.png')});
     const theta=await page.evaluate(()=>orbQA.controls.getAzimuthalAngle());
     await page.mouse.move(600,450);await page.mouse.down();await page.mouse.move(680,470,{steps:4});await page.mouse.up();
     await expect.poll(()=>page.evaluate(()=>orbQA.controls.getAzimuthalAngle())).not.toBe(theta);
     const zoom=Number(await page.locator('#orb-scene').getAttribute('data-zoom'));await page.mouse.wheel(0,-180);await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(zoom);
+    await page.mouse.wheel(0,650);await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeLessThan(.9);
     expect(errors).toEqual([]);
   });
 });
@@ -128,6 +179,7 @@ test.describe('orb on a phone',()=>{
   test.use({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   test('clean screen supports touch orbit and two-finger zoom',async({page},info)=>{
     const errors=[];page.on('pageerror',e=>errors.push(String(e)));await exposeScene(page);await enter(page);
+    await expectMoonOrbitFits(page);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
     await page.screenshot({path:info.outputPath('orb-mobile.png')});const before=await page.evaluate(()=>orbQA.controls.getAzimuthalAngle()),cdp=await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:230,y:330}]});
@@ -136,6 +188,9 @@ test.describe('orb on a phone',()=>{
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:160,y:340},{x:230,y:340}]});
     for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:160-i*4,y:340},{x:230+i*4,y:340}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(1);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:140,y:340},{x:250,y:340}]});
+    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:140+i*8,y:340},{x:250-i*8,y:340}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeLessThan(.9);
     expect(errors).toEqual([]);
   });
 });
