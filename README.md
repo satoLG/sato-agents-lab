@@ -30,6 +30,9 @@ Fontes e adaptações estão em [docs/orb.md](docs/orb.md).
 
 Arraste para orbitar; use a roda ou dois dedos para zoom. Com foco na cena, setas
 giram, `+`/`-` ajustam o zoom, `0` restaura a vista e espaço pausa/retoma.
+O Play inicia um som suave de mar; o botão de som e `M` permitem silenciar.
+A lua rochosa orbita e gira lentamente, orientando a maré. Junto à ilha, a água
+cobre mais a areia existente e mantém uma faixa de praia exposta ao redor da grama.
 Movimento reduzido começa com a animação pausada e a câmera interativa. Sem
 WebGL 2, a página apresenta uma mensagem e opção de recarregar.
 
