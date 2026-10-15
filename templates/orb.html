@@ -1,3 +1,4 @@
+{% macro icon(name) -%}<svg aria-hidden="true" focusable="false"><use href="{{ url_for('lab_asset', version=lab_asset_version, filename='icons/lucide.svg') }}#{{ name }}"/></svg>{%- endmacro %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -7,15 +8,24 @@
   <meta name="description" content="Uma ilha em um oceano esférico transparente, flutuando no espaço. Explore orb em 3D.">
   <title>orb · Um mundo à deriva</title>
   <link rel="icon" href="{{ url_for('static', filename='sato-logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/sato-ui.css') }}">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/orb.css') }}">
 </head>
 <body data-page="orb">
   <main id="orb-experience" aria-label="orb, um mundo à deriva">
-    <div id="orb-scene" tabindex="0" role="region" aria-label="Mundo 3D. Arraste para orbitar; use a roda ou dois dedos para zoom. No teclado: setas para girar, mais e menos para zoom, zero para restaurar a vista e espaço para pausar ou retomar."></div>
+    <div id="orb-scene" tabindex="0" role="region" aria-label="Mundo 3D. Arraste para orbitar; use a roda ou dois dedos para zoom. Clique no Sato ou pressione E para controlar. Ao caminhar: WASD ou setas, espaço para pulo duplo e Escape para sair."></div>
     <div id="orb-blur" aria-hidden="true"></div>
-    <button id="orb-sound" type="button" aria-label="Silenciar som do mar" aria-pressed="true" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-muted" d="m16 9 6 6m0-6-6 6"/></svg>
+    <button id="orb-sound" class="glass scene-icon" type="button" aria-label="Silenciar som do mar" aria-pressed="true" hidden>
+      <span class="sound-waves">{{ icon('volume-2') }}</span><span class="sound-muted">{{ icon('volume-x') }}</span>
     </button>
+    <button id="orb-sato-invite" class="glass scene-icon" type="button" aria-label="Acordar Sato" aria-controls="orb-scene" hidden>{{ icon('power') }}</button>
+    <div id="orb-play-controls" hidden>
+      <button id="orb-walk-exit" class="glass scene-icon" type="button" aria-label="Voltar à órbita">{{ icon('arrow-left') }}</button>
+      <p class="sr-only">WASD ou setas para andar; arraste para olhar; espaço ou Pular para pulo duplo; Escape para sair. No celular, use o direcional e Pular.</p>
+      <div id="orb-stick" role="group" aria-label="Direção de caminhada"><span id="orb-stick-knob" aria-hidden="true"></span></div>
+      <button id="orb-jump" class="glass scene-icon" type="button" aria-label="Pular. Pulo duplo disponível." data-jumps="0">{{ icon('arrow-up') }}<span class="jump-dots" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
     <div id="orb-loading" aria-label="Carregando orb">
       <button id="orb-start" type="button" aria-label="Carregando orb" disabled>
         <span class="water-fill" aria-hidden="true">

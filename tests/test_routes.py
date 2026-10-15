@@ -47,7 +47,7 @@ def test_orb_is_standalone_and_serves_versioned_local_assets(client):
     assert 'Um mundo' in body and 'id="orb-scene"' in body
     assets = Assets()
     assets.feed(body)
-    assert len(assets.urls) == 2
+    assert len(assets.urls) == 4
     for url in assets.urls:
         assert url.startswith('/lab-assets/')
         assert client.get(url).status_code == 200

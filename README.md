@@ -17,7 +17,7 @@ Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explora
 `/orb` é uma cena independente e sem painéis: um núcleo esférico sob água azul
 com transmissão em 100% e ondulação em 90%, uma ilha maior e mais plana no topo
 e estrelas ao redor. O shader de vértices deforma a água e recalcula suas normais;
-o material físico mantém refração e reflexos. A ilha usa as mesmas árvores da
+o material físico mantém refração e um brilho branco. A ilha usa as mesmas árvores da
 floresta e sua grama procedural, com maior densidade e volume. A referência
 visual da água é a aula
 [Wobbly Sphere](https://threejs-journey.com/lessons/wobbly-sphere-shader) do Three.js
@@ -33,6 +33,21 @@ giram, `+`/`-` ajustam o zoom, `0` restaura a vista e espaço pausa/retoma.
 O Play inicia um som suave de mar; o botão de som e `M` permitem silenciar.
 A lua rochosa orbita e gira lentamente, orientando a maré. Junto à ilha, a água
 cobre mais a areia existente e mantém uma faixa de praia exposta ao redor da grama.
+Essa faixa tem um vai e vem suave, e a água mantém apenas o brilho de uma luz
+branca, sem sombras ou imagens da lua e das árvores na refração.
+
+Sato começa dormindo, sentado no centro da ilha. Um ícone circular discreto,
+com o mesmo estilo do controle de mensagens da home, o acorda. Os controles
+usam os ícones, cores, superfícies e fonte compartilhados do site.
+A adaptação usa o casco, os braços,
+a antena e o estilo de olho do modelo original; as pernas seguem os braços,
+mais curtas. O display preto acompanha a esfera do corpo. Clique nele ou pressione `E`
+com foco na cena para controlar. `WASD`/setas andam pelo planeta acompanhando
+a gravidade; espaço ou Pular permitem pulo duplo. Arraste para olhar e use
+`Esc` ou Voltar à órbita para sair. No celular, use o direcional e Pular com
+dois dedos. Há colisões com ilha, pedras e troncos, pegadas na areia e espuma,
+partículas e ondulações ao caminhar e pular no mar. Os sons dos movimentos
+mudam entre grama, areia, rocha e água, com efeitos próprios para pulos e pousos.
 Movimento reduzido começa com a animação pausada e a câmera interativa. Sem
 WebGL 2, a página apresenta uma mensagem e opção de recarregar.
 

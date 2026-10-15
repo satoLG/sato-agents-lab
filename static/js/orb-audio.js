@@ -2,7 +2,7 @@
 // with WebGL. The AudioContext is created only inside the user's Play gesture.
 export function createOrbAmbience({onChange=()=>{}}={}) {
   let context=null,master=null,started=false,muted=false,hidden=false,disposed=false;
-  const sources=[];
+  const sources=[],voices=new Set();let noiseBuffer=null,lastContact=-1;
   function notify(){onChange({muted,available:Boolean(context)&&!disposed});}
   function fade() {
     if(!context||disposed)return;
@@ -15,6 +15,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
     if(!Audio)return false;
     context=new Audio({latencyHint:'playback'});
     const buffer=context.createBuffer(1,22050*24,22050),data=buffer.getChannelData(0);
+    noiseBuffer=buffer;
     let seed=9241,b0=0,b1=0,b2=0;
     for(let i=0;i<data.length;i++) {
       seed=(Math.imul(seed,1664525)+1013904223)>>>0;const white=seed/2147483648-1;
@@ -54,6 +55,24 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       if(!muted&&!hidden)context.resume().catch(()=>{});
       fade();notify();
     },
+    playContact({type,surface,impact=1,double=false}) {
+      if(!context||!started||disposed||muted||hidden)return;
+      const now=context.currentTime;if(type==='step'&&now-lastContact<.075)return;lastContact=now;
+      const settings={grass:[.075,1700,.17],sand:[.11,2400,.22],rock:[.055,3600,.14],water:[.19,1900,.34]}[surface]??[.08,1500,.15];
+      const duration=type==='step'?settings[0]:type==='jump'?.14:settings[0]*1.8;
+      const gain=context.createGain(),filter=context.createBiquadFilter(),noise=context.createBufferSource(),tone=context.createOscillator();
+      const volume=settings[2]*(type==='land'?Math.min(1.8,.8+impact*.3):type==='jump'?.8:1);
+      gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(volume,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+      filter.type='lowpass';filter.frequency.setValueAtTime(settings[1],now);filter.frequency.exponentialRampToValueAtTime(surface==='water'?450:800,now+duration);filter.Q.value=surface==='rock'?1.2:.5;
+      noise.buffer=noiseBuffer;noise.playbackRate.value=surface==='sand'?.85:surface==='water'?.7:1.1;
+      noise.connect(filter).connect(gain).connect(master);
+      const toneGain=context.createGain();toneGain.gain.setValueAtTime(type==='step'?.025:.045,now);toneGain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+      tone.type='sine';tone.frequency.setValueAtTime(type==='jump'?(double?330:220):surface==='rock'?330:surface==='water'?130:95,now);
+      tone.frequency.exponentialRampToValueAtTime(type==='jump'?440:50,now+duration);tone.connect(toneGain).connect(master);
+      const voice={stop(){try{noise.stop();tone.stop();}catch {}gain.disconnect();filter.disconnect();toneGain.disconnect();noise.disconnect();tone.disconnect();voices.delete(voice);}};
+      if(voices.size>=10)voices.values().next().value.stop();voices.add(voice);noise.onended=()=>voice.stop();
+      noise.start(now,(now*1.73)%20,duration);tone.start(now);tone.stop(now+duration+.01);
+    },
     setHidden(value) {
       hidden=value;if(!context||disposed)return;
       if(hidden){master.gain.cancelScheduledValues(context.currentTime);master.gain.setValueAtTime(0,context.currentTime);context.suspend().catch(()=>{});}
@@ -62,6 +81,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
     dispose() {
       if(disposed)return;disposed=true;
       for(const source of sources){try{source.stop();source.disconnect();}catch {}}
+      for(const voice of [...voices])voice.stop();
       master?.disconnect();context?.close().catch(()=>{});notify();
     },
     get muted(){return muted;},

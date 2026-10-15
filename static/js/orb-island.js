@@ -41,11 +41,11 @@ function landMaterial() {
   material.customProgramCacheKey=()=> 'orb-land-continuous-ground-v1';return material;
 }
 
-function addRocks(island) {
+export function addIslandRocks(island) {
   const material=new T.MeshStandardMaterial({color:'#66756f',roughness:1,metalness:0,flatShading:true});
   let seed=9871;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-  const dummy=new T.Object3D();
+  const dummy=new T.Object3D(),meshes=[];
   for(let variant=0;variant<3;variant++){
     const geometry=new T.IcosahedronGeometry(1,0),p=geometry.attributes.position;
     for(let i=0;i<p.count;i++){
@@ -58,11 +58,16 @@ function addRocks(island) {
     for(let j=0;j<3;j++){
       const i=variant*3+j,a=i*2.39996+.12*random(),coast=coastRadius(a);
       const r=i<6?coast*(.16+random()*.46):coast*(.96+random()*.18);
-      const x=Math.cos(a)*r,z=Math.sin(a)*r,size=.024+random()*.019;
-      dummy.position.set(x,terrainHeight(x,z)+size*.18,z);dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
+      const x=Math.cos(a)*r,z=Math.sin(a)*r,outer=i>=6,size=outer?.14+random()*.035:.024+random()*.019;
+      dummy.position.set(x,terrainHeight(x,z)+size*.18,z);
+      // Large stepping stones remain above the highest coastal water, while
+      // the smaller stones inside the grass keep their existing proportions.
+      if(outer)dummy.position.normalize().multiplyScalar(2.17);
+      dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
     }
-    rocks.instanceMatrix.needsUpdate=true;rocks.computeBoundingSphere();island.add(rocks);
+    rocks.instanceMatrix.needsUpdate=true;rocks.computeBoundingSphere();island.add(rocks);meshes.push(rocks);
   }
+  return meshes;
 }
 
 export async function createOrbIsland() {
@@ -93,6 +98,7 @@ export async function createOrbIsland() {
   });
   grassRoot.traverse(object=>{if(object.isMesh){object.userData.orbFoamExclude=true;object.geometry.boundingSphere=new T.Sphere(new T.Vector3(0,2.16/grassScale,0),2.25/grassScale);}});
 
-  addRocks(island);
-  return {group:island,update(time){updateNature(time);grass.tick(time);}};
+  const rocks=addIslandRocks(island);
+  const trunks=locations.map(([x,z,height])=>({x,z,y:terrainHeight(x,z),height,radius:.018}));
+  return {group:island,land,rocks,trunks,trees:treeRoot,grass:grassRoot,update(time){updateNature(time);grass.tick(time);}};
 }
