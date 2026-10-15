@@ -315,7 +315,10 @@ test('latest messages fold above the robot, reopen and fold again without losing
   await expect(page.locator('#home-speech')).toContainText('Última resposta salva.');await expect(page.locator('#conversation-title')).toHaveCount(0);
   await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});await expect(page.locator('#chat-peek')).toHaveCSS('opacity','1');
   const head=await page.locator('#robot-touch').boundingBox(),peek=await page.locator('#chat-peek').boundingBox();expect(peek.y+peek.height/2).toBeLessThan(head.y);await expect(page.locator('#home-speech')).toHaveCSS('opacity','0');
-  await page.screenshot({path:testInfo.outputPath('collapsed-mobile.png')});await page.locator('#chat-peek').click();await page.mouse.move(0,0);await expect(page.locator('#home-speech')).toHaveCSS('opacity','1');await expect(page.locator('#last-question')).toContainText('Última pergunta');
+  await page.screenshot({path:testInfo.outputPath('collapsed-mobile.png')});
+  // This control follows the floating head. Click its visible center instead
+  // of waiting for an intentionally moving target to become stationary.
+  const peekNow=await page.locator('#chat-peek').boundingBox();await page.mouse.click(peekNow.x+peekNow.width/2,peekNow.y+peekNow.height/2);await page.mouse.move(0,0);await expect(page.locator('#home-speech')).toHaveCSS('opacity','1');await expect(page.locator('#last-question')).toContainText('Última pergunta');
   await page.screenshot({path:testInfo.outputPath('revealed-mobile.png')});await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});
   await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText('Última resposta salva.');await page.locator('#history-sessions').click();await page.locator('#history-new').click();await expect(page.locator('#chat-peek')).toBeHidden();
  }finally{await context.close();}

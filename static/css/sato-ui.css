@@ -1,10 +1,14 @@
-/* Shared companion palette, surfaces and controls across all three routes. */
+/* Shared companion palette, surfaces and controls across the site. */
 :root{--accent:#b1e9fb;--accent-dark:#13506b;--surface:#142331f0;--surface-2:#1a3343;--surface-3:#214858;--answer:#152b3bec;--question:#214858f2;--ink:#f4f9fc;--ink-2:#d0e0e8;--muted:#bbd0db;--border:#d4edff24;--border-strong:#d4edff40;--scene-glass:var(--surface);--scene-border:var(--border);--scene-ink:var(--ink);--page:#111b21;--r-1:12px;--r-2:18px;--r-3:24px}
 body{color:var(--ink);background:var(--page)}
 .glass,body[data-page=dashboard] .card,body[data-page=dashboard] .stat,body[data-page=dashboard] .seg,body[data-page=dashboard] .graph-shell{background:var(--surface);border:0;box-shadow:0 12px 42px #0003;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:var(--ink)}
 button,a,input,textarea,select{-webkit-tap-highlight-color:transparent}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 [hidden]{display:none!important}
+/* The home message toggle and scene actions share one discreet control. */
+.scene-icon{display:grid;place-items:center;flex-shrink:0;width:48px;height:48px;padding:0;border:0;border-radius:50%;color:var(--accent);cursor:pointer;transition:background .2s,color .2s;touch-action:manipulation}
+.scene-icon svg{display:block;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.scene-icon:hover{background:var(--surface-2)}.scene-icon:focus-visible{outline:none;background:color-mix(in srgb,var(--accent) 16%,var(--surface))}.scene-icon:active{background:var(--surface-3)}
 .site-nav{display:flex;align-items:center;gap:4px;padding:4px;border-radius:999px}
 .site-nav a{display:flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;font-size:12px;font-weight:700;color:var(--muted);text-decoration:none;white-space:nowrap}
 .site-nav a:hover,.site-nav a[aria-current=page]{background:#ffffff0d;color:var(--ink)}

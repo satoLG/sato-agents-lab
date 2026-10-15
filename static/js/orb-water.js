@@ -10,6 +10,9 @@ export const WATER_RADIUS = 2.05;
 export const orbWaterSurfaceGLSL=`
   uniform float orbTime,orbStrength;
   uniform vec3 orbMoonDirection;
+  uniform float orbInteractionTime;
+  uniform vec4 orbRippleCenters[8];
+  uniform float orbRippleStrengths[8];
   ${orbNoiseGradientGLSL}
   vec2 orbSmooth(float lo,float hi,float x) {
     float t=clamp((x-lo)/(hi-lo),0.,1.);
@@ -41,15 +44,17 @@ export const orbWaterSurfaceGLSL=`
       float coastDerivative=.92*(.27*cos(3.*angle+.7)-.275*sin(5.*angle-1.2));
       // A readable sand band surrounds the grass. Adjust only the water's
       // contact point, preserving every vertex of the existing island.
-      float contact=.92;
-      float d=contact*coast,dd=contact*coastDerivative,x=d*ca,z=d*sa;
+      float contact=.92+.014*sin(orbTime*.9+angle*3.)+.008*sin(orbTime*1.37-angle*5.);
+      float contactDerivative=.042*cos(orbTime*.9+angle*3.)-.040*cos(orbTime*1.37-angle*5.);
+      float d=contact*coast,dd=contact*coastDerivative+contactDerivative*coast,x=d*ca,z=d*sa;
       float dx=dd*ca-d*sa,dz=dd*sa+d*ca;
       float mound=.025*exp(-((x+.18)*(x+.18)+(z+.20)*(z+.20))/.25);
       float plateau=2.145+mound;
       float dp=-8.*mound*((x+.18)*dx+(z+.20)*dz);
       float beach=sqrt(2.072*2.072-d*d),db=-d*dd/beach;
-      float blend=orbSmooth(.44,1.16,contact).x;
-      float height=mix(plateau,beach,blend),dh=mix(dp,db,blend);
+      vec2 beachBlend=orbSmooth(.44,1.16,contact);
+      float blend=beachBlend.x;
+      float height=mix(plateau,beach,blend),dh=mix(dp,db,blend)+(beach-plateau)*beachBlend.y*contactDerivative;
       float level=sqrt(d*d+height*height),dl=(d*dd+height*dh)/level;
       float ratio=2.18*h/coast;
       vec3 ratioGradient=2.18*(vec3(n.x,0.,n.z)/(h*coast)-h*coastDerivative*angleGradient/(coast*coast));
@@ -60,6 +65,20 @@ export const orbWaterSurfaceGLSL=`
       radius+=(level-${WATER_RADIUS.toFixed(2)})*mask;
       gradient+=dl*angleGradient*mask+(level-${WATER_RADIUS.toFixed(2)})*maskGradient;
     }
+    for(int i=0;i<8;i++) {
+      float age=orbInteractionTime-orbRippleCenters[i].w;
+      if(age<0.||age>1.6||orbRippleStrengths[i]<.001)continue;
+      vec3 delta=n-orbRippleCenters[i].xyz;
+      float chord=length(delta),distance=chord*2.1;
+      if(distance>.65)continue;
+      vec3 dg=2.1*delta/max(.001,chord);
+      float front=(distance-age*.22)/.055;
+      float envelope=exp(-front*front-age*2.)*smoothstep(0.,.08,age)*(1.-smoothstep(1.2,1.6,age))*orbRippleStrengths[i];
+      vec4 turbulence=orbNoiseGradient(n*7.+vec3(age*.4));
+      float phase=distance*45.-age*12.+turbulence.x*.7;
+      radius+=.007*envelope*sin(phase);
+      gradient+=.007*envelope*(cos(phase)*(45.*dg+turbulence.yzw*4.9)-sin(phase)*2.*front/.055*dg);
+    }
     if(radius<${(CORE_RADIUS+.06).toFixed(2)})return vec4(${(CORE_RADIUS+.06).toFixed(2)},0.,0.,0.);
     return vec4(radius,gradient);
   }
@@ -68,6 +87,7 @@ export const orbWaterSurfaceGLSL=`
 export function createOrbWater() {
   const uniforms = {
     orbTime:{value:0},orbStrength:{value:.9},orbMoonDirection:{value:new T.Vector3(1,0,0)},
+    orbInteractionTime:{value:0},orbRippleCenters:{value:Array.from({length:8},()=>new T.Vector4(0,1,0,-10))},orbRippleStrengths:{value:new Float32Array(8)},
     _SceneDepth:{value:null},_SceneResolution:{value:new T.Vector2(1,1)},
     _CameraNear:{value:.05},_CameraFar:{value:150},
     _EdgeFoamWidth:{value:.035},_EdgeFoamIntensity:{value:.54},_SceneTexelSize:{value:new T.Vector2(1,1)},
@@ -77,7 +97,7 @@ export function createOrbWater() {
     color:'#47b8de', metalness:0, roughness:.23,
     transmission:1, thickness:.48, ior:1.333,
     attenuationColor:'#327dae', attenuationDistance:2.8,
-    clearcoat:0, specularIntensity:.32, envMapIntensity:.42,
+    clearcoat:0, specularIntensity:0, envMapIntensity:0,
     // Physical transmission draws the opaque core through the moving surface.
     transparent:true, opacity:1, depthWrite:false,
   });
@@ -146,6 +166,11 @@ export function createOrbWater() {
       float causticPhase = orbNoise(vOrbPosition*5.5+vec3(orbTime*.09,0.,-orbTime*.13));
       float caustic = pow(1. - abs(sin(causticPhase * 20.)), 22.);
       totalEmissiveRadiance += vec3(.03,.20,.23) * caustic * .12;
+      // One white light only. Object silhouettes and environment streaks do
+      // not become highlights; the water also receives no projected shadows.
+      vec3 whiteLight=normalize((viewMatrix*vec4(-.32,.78,.48,0.)).xyz);
+      vec3 whiteHalf=normalize(whiteLight+normalize(vViewPosition));
+      totalEmissiveRadiance+=vec3(.55)*pow(max(0.,dot(normal,whiteHalf)),130.);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
       float orbEdgeFoamRaw=calcEdgeFoam(gl_FragCoord.xy/max(_SceneResolution,vec2(1.)));
@@ -153,9 +178,20 @@ export function createOrbWater() {
       outgoingLight=mix(outgoingLight,max(outgoingLight,_EdgeFoamColor),edgeFoam);
       #include <opaque_fragment>
     `);
+    shader.fragmentShader=shader.fragmentShader.replace('#include <transmission_fragment>',`
+      #include <transmission_fragment>
+      // Rays that miss the submerged core see black space. Keep that rim blue
+      // instead of drawing an apparent black reflection around the ocean.
+      totalDiffuse=max(totalDiffuse,vec3(.009,.055,.10));
+    `);
   };
-  material.customProgramCacheKey = () => 'orb-physical-water-covered-coast-v5';
-  return {material, uniforms};
+  material.customProgramCacheKey = () => 'orb-water-one-light-living-coast-v6';
+  let ripple=0;
+  return {material,uniforms,emitRipple(point,amount=1){
+    const n=point.clone().normalize(),i=ripple++%8;
+    uniforms.orbRippleCenters.value[i].set(n.x,n.y,n.z,uniforms.orbInteractionTime.value);
+    uniforms.orbRippleStrengths.value[i]=amount;
+  }};
 }
 
 export function createOrbCore() {

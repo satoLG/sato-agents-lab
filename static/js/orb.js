@@ -26,6 +26,7 @@ async function start() {
       reducedMotion:motionPreference.matches,onProgress:value=>loader.setProgress(value),
       getLoadingDiameter:()=>parseFloat(getComputedStyle($('orb-start')).width)||140,
       onCameraChange:zoom=>{container.dataset.zoom=zoom.toFixed(2);},onError:error,
+      onContact:event=>ambience?.playContact(event),
     });
     scene.setPaused(true);
     if(await loader.ready)$('orb-status').textContent='Seu mundo está pronto. Ative Entrar na orb para explorar.';
@@ -43,7 +44,7 @@ $('orb-start').addEventListener('click',()=>{
   timers.push(setTimeout(()=>{$('orb-blur').hidden=true;},motionPreference.matches?0:2000));
   container.focus({preventScroll:true});$('orb-status').textContent='Arraste para explorar. Use a roda ou dois dedos para aproximar. M ativa ou silencia o som do mar.';
 });
-container.addEventListener('keydown',event=>{if(event.code==='Space'&&entered){event.preventDefault();paused=!paused;scene?.setPaused(paused);$('orb-status').textContent=paused?'Movimento pausado.':'Movimento retomado.';}else if(event.key.toLowerCase()==='m'&&entered){event.preventDefault();ambience?.toggleMuted();}});
+container.addEventListener('keydown',event=>{if(event.code==='Space'&&entered&&!scene?.playing){event.preventDefault();paused=!paused;scene?.setPaused(paused);$('orb-status').textContent=paused?'Movimento pausado.':'Movimento retomado.';}else if(event.key.toLowerCase()==='m'&&entered){event.preventDefault();ambience?.toggleMuted();}});
 $('orb-sound').addEventListener('click',()=>ambience?.toggleMuted());
 document.addEventListener('visibilitychange',()=>ambience?.setHidden(document.hidden));
 $('orb-retry').addEventListener('click',()=>location.reload());

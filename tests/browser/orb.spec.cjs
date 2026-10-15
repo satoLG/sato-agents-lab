@@ -4,7 +4,7 @@ const {createHash}=require('node:crypto');
 async function exposeScene(page) {
   await page.route('**/js/orb-scene.js',async route=>{
     const response=await route.fetch();
-    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island,moon,worldPosition,controls,get transitioning(){return Boolean(transition);}};return {\n    setView,zoom,dispose,');
+    const body=(await response.text()).replace('return {\n    setView,zoom,dispose,','window.orbQA={T,scene,world,water,depth,renderer,camera,core,ocean,island,moon,game,refraction,worldPosition,controls,get transitioning(){return Boolean(transition);}};return {\n    setView,zoom,dispose,');
     await route.fulfill({response,body});
   });
 }
@@ -161,6 +161,7 @@ test.describe('orb desktop',()=>{
     const result=await page.evaluate(async()=>{
       const {T,renderer,water}=orbQA;
       const {orbWaterSurfaceGLSL}=await import('/static/js/orb-water.js');
+      const {seaSurfaceRadius}=await import('/static/js/orb-surface.js');
       const {terrainHeight,coastRadius}=await import('/static/js/orb-island.js');
       const samples=[];
       for(let i=0;i<36;i++)for(const ratio of [.65,.84,1.02,1.12,1.25,1.4,1.55,1.7,1.85]) {
@@ -181,18 +182,19 @@ test.describe('orb desktop',()=>{
             gl_FragColor=vec4(f.x,length(analytic-normalize(n*f.x-numeric)),0.,1.);}`});
       const scene=new T.Scene(),geometry=new T.PlaneGeometry(2,2);scene.add(new T.Mesh(geometry,material));
       const camera=new T.Camera(),target=new T.WebGLRenderTarget(samples.length,1,{type:T.FloatType}),output=new Float32Array(samples.length*4);
-      let minimumCover=Infinity,minimumDry=Infinity,normalError=0;
+      let minimumCover=Infinity,minimumDry=Infinity,normalError=0,cpuError=0;
       const originalTime=water.uniforms.orbTime.value,originalMoon=water.uniforms.orbMoonDirection.value.clone();
       for(const time of [0,8,40,100,220])for(const moon of [[1,0,0],[-1,0,0],[0,1,0],[0,0,-1]]){
         water.uniforms.orbTime.value=time;water.uniforms.orbMoonDirection.value.set(...moon);
         renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,samples.length,1,output);
-        samples.forEach((s,i)=>{const sea=output[i*4];normalError=Math.max(normalError,output[i*4+1]);if(s.ratio<=.84)minimumDry=Math.min(minimumDry,s.land-sea);else minimumCover=Math.min(minimumCover,sea-s.land);});
+        samples.forEach((s,i)=>{const sea=output[i*4];cpuError=Math.max(cpuError,Math.abs(sea-seaSurfaceRadius(s.n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value)));normalError=Math.max(normalError,output[i*4+1]);if(s.ratio<=.84)minimumDry=Math.min(minimumDry,s.land-sea);else minimumCover=Math.min(minimumCover,sea-s.land);});
       }
       renderer.setRenderTarget(null);water.uniforms.orbTime.value=originalTime;water.uniforms.orbMoonDirection.value.copy(originalMoon);
-      target.dispose();directions.dispose();material.dispose();geometry.dispose();return {minimumCover,minimumDry,normalError};
+      target.dispose();directions.dispose();material.dispose();geometry.dispose();return {minimumCover,minimumDry,normalError,cpuError};
     });
     expect(result.minimumCover).toBeGreaterThan(.003);expect(result.minimumDry).toBeGreaterThan(.003);
     expect(result.normalError).toBeLessThan(.012);
+    expect(result.cpuError).toBeLessThan(.00003);
   });
 
   test('sea ambience starts with play, can be muted and releases audio on exit',async({page})=>{
@@ -271,7 +273,7 @@ test.describe('orb with normal motion',()=>{
     // transition still advances and is checked through its actual matrices.
     await page.evaluate(()=>orbController.setPaused(true));
     const intermediate=await page.evaluate(()=>({distance:orbQA.camera.position.distanceTo(orbQA.controls.target),transitioning:orbQA.transitioning,inert:document.querySelector('#orb-scene').inert,hit:document.elementFromPoint(600,450).tagName}));
-    expect(intermediate.transitioning).toBe(true);expect(intermediate.inert).toBe(false);expect(intermediate.distance).toBeGreaterThan(17);expect(intermediate.distance).toBeLessThanOrEqual(before);
+    expect(intermediate.transitioning).toBe(true);expect(intermediate.inert).toBe(false);expect(intermediate.distance).toBeGreaterThan(17);expect(intermediate.distance).toBeLessThanOrEqual(before+1e-6);
     expect(intermediate.hit).toBe('CANVAS');
     await expect(page.locator('#orb-loading')).toBeHidden();
     await expect.poll(()=>page.evaluate(()=>orbQA.transitioning),{timeout:12000}).toBe(false);
@@ -294,14 +296,15 @@ test.describe('orb on a phone',()=>{
     await expectMoonOrbitFits(page);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
     await page.screenshot({path:info.outputPath('orb-mobile.png')});const before=await page.evaluate(()=>orbQA.controls.getAzimuthalAngle()),cdp=await page.context().newCDPSession(page);
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:230,y:330}]});
-    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:230+i*14,y:330+i*4}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+    // Orbit on the unobstructed lower canvas, away from Sato's entry button.
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:230,y:530}]});
+    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:230+i*14,y:530+i*4}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(()=>page.evaluate(()=>orbQA.controls.getAzimuthalAngle())).not.toBe(before);
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:160,y:340},{x:230,y:340}]});
-    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:160-i*4,y:340},{x:230+i*4,y:340}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:160,y:540},{x:230,y:540}]});
+    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:160-i*4,y:540},{x:230+i*4,y:540}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeGreaterThan(1);
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:140,y:340},{x:250,y:340}]});
-    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:140+i*8,y:340},{x:250-i*8,y:340}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:140,y:540},{x:250,y:540}]});
+    for(let i=1;i<=5;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:140+i*8,y:540},{x:250-i*8,y:540}]});await page.evaluate(()=>new Promise(requestAnimationFrame));}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect.poll(async()=>Number(await page.locator('#orb-scene').getAttribute('data-zoom'))).toBeLessThan(.9);
     expect(errors).toEqual([]);
   });

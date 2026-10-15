@@ -6,6 +6,8 @@ import {createOrbDepth} from './orb-depth.js';
 import {sphereDistanceForDiameter} from './orb-camera.js';
 import {createOrbMoon,loadOrbMoonTextures,MOON_RADIUS,MOON_ORBIT_RADIUS} from './orb-moon.js';
 import {createOceanGeometry} from './orb-geometry.js';
+import {createOrbGame} from './orb-game.js';
+import {createOrbRefractionFilter} from './orb-refraction.js';
 
 const WORLD_POSITION=new T.Vector3(4.4,4.7,9.8);
 const WORLD_TARGET=new T.Vector3(0,.45,0);
@@ -72,7 +74,7 @@ function createHalo() {
   }));
 }
 
-export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},getLoadingDiameter=()=>140}={}) {
+export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},onContact=()=>{},getLoadingDiameter=()=>140}={}) {
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
   if(!context)throw new Error('WEBGL_UNAVAILABLE');
@@ -113,7 +115,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const ocean=new T.Mesh(createOceanGeometry(WATER_RADIUS,mobile?24:28),water.material);
   // Vertex displacement includes the raised coastal water and the lunar swell.
   ocean.geometry.boundingSphere.radius=WATER_RADIUS+.35;
-  ocean.name='wobbly-ocean';ocean.receiveShadow=true;world.add(ocean);
+  ocean.name='wobbly-ocean';ocean.receiveShadow=false;world.add(ocean);
   const [moonTextures,island]=await Promise.all([loadOrbMoonTextures(),createOrbIsland()]);
   const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value,textures:moonTextures});
   moon.mesh.userData.orbFoamExclude=true;world.add(moon.mesh,island.group,createHalo());
@@ -125,6 +127,14 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   gradient.addColorStop(0,'rgba(18,72,102,.16)');gradient.addColorStop(.4,'rgba(16,52,81,.08)');gradient.addColorStop(1,'rgba(2,8,13,0)');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
   const glowTexture=new T.CanvasTexture(glowCanvas),glow=new T.Sprite(new T.SpriteMaterial({map:glowTexture,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));glow.scale.set(24,24,1);glow.position.set(0,0,-18);scene.add(glow);
   const depth=createOrbDepth(renderer,scene,water.uniforms);
+  const game=createOrbGame({world,island,water,camera,canvas,container,controls,reducedMotion,onContact,
+    onActivate(){transition=null;automatic=false;controls.autoRotate=false;container.dataset.view='walk';},
+    onExit(){setView('world');},
+  });
+  const refraction=createOrbRefractionFilter(renderer);
+  refraction.add(moon.mesh);refraction.add(island.trees);refraction.add(island.grass);
+  refraction.add(island.land,{cutoff:2.08});for(const rock of island.rocks)refraction.add(rock,{cutoff:2.14});
+  refraction.add(game.avatar.root,{cutoff:2.08});
 
   let paused=true,intro=true,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
   const emitCamera=()=>{dirty=true;onCameraChange(worldPosition.distanceTo(WORLD_TARGET)/camera.position.distanceTo(controls.target));};
@@ -193,13 +203,18 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
     const delta=previous?Math.min((now-previous)/1000,.05):0;previous=now;
     if(document.hidden)return;
     if(!paused)elapsed+=delta*speed;
+    water.uniforms.orbTime.value=elapsed;moon.update(elapsed);
+    const gameActive=game.update(delta,{time:elapsed,animate:!paused&&!intro});
+    if(gameActive)dirty=true;
     if(transition){dirty=true;const t=T.MathUtils.clamp((now-transition.start)/transition.duration,0,1),ease=t*t*(3-2*t);camera.position.lerpVectors(transition.fromPosition,transition.position,ease);controls.target.lerpVectors(transition.fromTarget,transition.target,ease);if(t===1){controls.maxDistance=transition.finalMaxDistance;transition=null;}}
-    controls.autoRotate=automatic&&!paused&&!transition;controls.update(delta);
+    controls.autoRotate=automatic&&!paused&&!transition&&!game.playing;if(!game.playing)controls.update(delta);
     // Paused scenes redraw for camera/settings changes, then release the GPU.
     if((!paused||dirty)&&now-lastRendered>=1000/30){
       water.uniforms.orbTime.value=elapsed;core.time.value=elapsed;stars.time.value=elapsed;
-      moon.update(elapsed);stars.group.rotation.y=elapsed*.0015;island.update(elapsed);
-      if(depth.capture(camera))renderer.shadowMap.needsUpdate=true;
+      stars.group.rotation.y=elapsed*.0015;island.update(elapsed);
+      // Walking changes the camera and Sato's contact depth, but every shadow
+      // caster stays static. Sato receives no cast shadow, so reuse this map.
+      if(depth.capture(camera)&&!game.playing)renderer.shadowMap.needsUpdate=true;
       renderer.render(scene,camera);dirty=false;lastRendered=now;
     }
   }
@@ -218,18 +233,19 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   container.dataset.view='intro';emitCamera();container.dataset.ready='true';raf=requestAnimationFrame(render);
   onProgress(1);
   function dispose() {
-    if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
+    if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();game.dispose();refraction.dispose();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
     const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)for(const m of Array.isArray(object.material)?object.material:[object.material])materials.add(m);});
     for(const g of geometries)g.dispose();for(const m of materials){for(const key of ['map','alphaMap','normalMap','gradientMap'])m[key]?.dispose();m.dispose();}depth.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
   }
   return {
     setView,zoom,dispose,
-    enter(){if(!intro)return;intro=false;controls.enabled=true;setView('world',{duration:2800});},
+    enter(){if(!intro)return;intro=false;controls.enabled=true;game.setEnabled(true);setView('world',{duration:2800});},
+    get playing(){return game.playing;},
     setPaused(value){paused=value;dirty=true;},
     setAutoOrbit(value){automatic=value;},
     setStrength(value){water.uniforms.orbStrength.value=value;dirty=true;},
     setSpeed(value){speed=value;},
     setClarity(value){water.material.transmission=value;water.material.opacity=1;dirty=true;},
-    reset(){setView('world');},
+    reset(){if(game.playing)game.setMode(false);else setView('world');},
   };
 }

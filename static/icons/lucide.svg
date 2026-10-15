@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg">
+<symbol id="power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.36 5.64a9 9 0 1 1-12.72 0"/></symbol>
 <symbol id="arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7" />
   <path d="M12 19V5" /></symbol>
 <symbol id="arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10" />
