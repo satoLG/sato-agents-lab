@@ -12,7 +12,8 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     const right=new T.Vector3().crossVectors(up,heading).normalize(),point=position.clone();
     if(type==='step')point.addScaledVector(right,(foot++%2?1:-1)*.035).addScaledVector(heading,.012);
     const contact=type==='step'?surface.sample(point.clone().normalize()):support;
-    onEvent({type,surface:contact.surface,point:type==='step'?contact.point.clone():point,up:up.clone(),normal:contact.normal.clone(),heading:heading.clone(),speed:velocity.length(),...extra});
+    const waterDepth=Math.max(0,contact.waterRadius-point.length()),wet=waterDepth>.008;
+    onEvent({type,surface:wet?'water':contact.groundSurface??contact.surface,groundSurface:contact.groundSurface,waterDepth,waterRadius:contact.waterRadius,point:type==='step'?contact.point.clone():point,up:up.clone(),normal:contact.normal.clone(),heading:heading.clone(),speed:velocity.length(),...extra});
   }
   function jump() {
     if(!grounded&&jumps>=2)return false;
@@ -35,7 +36,7 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
       // A jump can clear that side once its feet are above the actual mesh.
       probe.copy(nextUp).addScaledVector(travelDirection,ORB_MOTOR.radius/radius).normalize();
       const ahead=surface.sample(probe,time);
-      if(ahead.surface==='rock'&&ahead.radius>radius+ORB_MOTOR.step&&ahead.radius>support.radius+ORB_MOTOR.step)blocked=true;
+      if(ahead.groundSurface==='rock'&&ahead.radius>radius+ORB_MOTOR.step&&ahead.radius>support.radius+ORB_MOTOR.step)blocked=true;
       if(next.radius>radius+ORB_MOTOR.step&&next.radius>support.radius+ORB_MOTOR.step)blocked=true;
       if(surface.blockedByTrunk?.(nextUp.clone().multiplyScalar(radius),ORB_MOTOR.radius,ORB_MOTOR.height))blocked=true;
       if(!blocked) {
@@ -61,7 +62,7 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
   sync();
   return {
     position,up,heading,velocity,jump,
-    get grounded(){return grounded;},get verticalSpeed(){return verticalSpeed;},get jumps(){return jumps;},get support(){return support;},
+    get waterDepth(){return Math.max(0,support.waterRadius-radius);},get grounded(){return grounded;},get verticalSpeed(){return verticalSpeed;},get jumps(){return jumps;},get support(){return support;},
     update(dt,{direction=new T.Vector3(),amount=0,time=0}={}) {
       accumulator+=Math.min(.05,Math.max(0,dt));
       while(accumulator>=FIXED){step(FIXED,time,direction,amount);accumulator-=FIXED;}

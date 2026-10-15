@@ -1,13 +1,14 @@
+import {createCoreGeometry} from '../static/js/orb-core-surface.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../static/vendor/three.module.min.js';
 import {createOrbSato} from '../static/js/orb-sato.js';
 import {terrainGeometry,addIslandRocks,coastRadius,terrainHeight} from '../static/js/orb-island.js';
 import {createOrbWater} from '../static/js/orb-water.js';
-import {createOrbSurface,seaSurfaceRadius,coastContactRatio} from '../static/js/orb-surface.js';
+import {createOrbSurface,seaSurfaceRadius,coastContactRatio,coreSurfaceRadius} from '../static/js/orb-surface.js';
 import {createOrbMotor,ORB_MOTOR} from '../static/js/orb-motor.js';
 import {createOrbTrails} from '../static/js/orb-trails.js';
-import {createOrbCameraCollision} from '../static/js/orb-camera-collision.js';
+
 
 // The existing companion factory creates its legacy optic halo before the orb
 // removes that mechanical assembly. Match its headless authoring fixture.
@@ -25,16 +26,18 @@ test('orb adapts the original Sato hull, eye and flippers with short legs and a 
  let eye=0;const forbidden=[];s.root.traverse(o=>{if(o.name==='sato-single-eye')eye++;if(/battery|emitter|seam|shutter|magnetic/.test(o.name))forbidden.push(o.name);});
  assert.equal(eye,1);assert.deepEqual(forbidden,[]);
  const arm=s.arms[0].joint.children[0].geometry,leg=s.legs[0].joint.children[0].geometry;arm.computeBoundingBox();leg.computeBoundingBox();
- assert.equal(leg,arm,'legs must reuse the actual original flipper geometry');
+ assert.equal(leg,arm,'legs must share the adapted flipper geometry');
  assert.ok((leg.boundingBox.max.y-leg.boundingBox.min.y)*s.legs[0].joint.scale.y<arm.boundingBox.max.y-arm.boundingBox.min.y);
  assert.ok(s.root.getObjectByName('spherical-hull'),'must preserve the original companion hull');
  const display=s.display.geometry;
  for(let i=0;i<display.attributes.position.count;i++){const p=new T.Vector3().fromBufferAttribute(display.attributes.position,i);assert.ok(Math.abs(p.length()-.542)<1e-6,'display must follow the spherical shell');}
  assert.equal(s.root.userData.animation,'sleep');assert.equal(s.faceUniforms.sleep.value,1);
  const restingScale=s.body.scale.y;s.update(.05,{time:1});assert.notEqual(s.body.scale.y,restingScale,'sleep must breathe');
- s.wakeUp();assert.equal(s.waking,true);s.bounce(2.5);const scales=[];
- for(let i=0;i<120;i++){s.update(1/60,{time:i/60,speed:.58,playing:true,grounded:i<30||i>70,verticalSpeed:1});scales.push(s.body.scale.y);s.root.updateMatrixWorld(true);s.root.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));}
+ s.wakeUp();assert.equal(s.waking,true);s.bounce(2.5);const scales=[],armScales=[],legScales=[];
+ for(let i=0;i<120;i++){s.update(1/60,{time:i/60,speed:.58,playing:true,grounded:i<30||i>70,verticalSpeed:1});scales.push(s.body.scale.y);armScales.push(s.arms[0].joint.scale.y);legScales.push(s.legs[0].joint.scale.y);s.root.updateMatrixWorld(true);s.root.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));}
  assert.ok(Math.max(...scales)-Math.min(...scales)>.05);assert.ok(s.root.position.length()===0,'visual animation cannot move the physics root');
+ assert.ok(Math.max(...armScales)-Math.min(...armScales)>.08);assert.ok(Math.max(...legScales)-Math.min(...legScales)>.08);
+ assert.ok(s.antenna.position.z>.15);assert.ok(s.antenna.getObjectByName('sato-curled-antenna'));
  assert.equal(s.waking,false);assert.ok(s.faceUniforms.sleep.value<.001,'wake must reopen the original iris');
  s.update(.05,{time:4.37,playing:true});assert.ok(s.faceUniforms.blink.value>.8,'blink stays inside the screen shader');
  s.rest();for(let i=0;i<40;i++)s.update(.05,{time:5+i*.05});assert.equal(s.root.userData.animation,'sleep');
@@ -113,17 +116,47 @@ test('sand footprints and foam particles use bounded pools and water ripples exp
  for(let i=0;i<150;i++)trails.emit({...base,type:'step',surface:'sand'});
  assert.equal(trails.footprintTotal,150);assert.equal(trails.footprints.count,96);assert.equal(trails.activeParticles,0);
  for(let i=0;i<20;i++)trails.emit({...base,type:i%2?'jump':'land',surface:'water'});
- assert.ok(trails.activeParticles>0&&trails.activeParticles<=80);assert.equal(water.uniforms.orbRippleCenters.value.length,8);
+ assert.ok(trails.activeParticles>0&&trails.activeParticles<=240);assert.equal(water.uniforms.orbRippleCenters.value.length,8);
  trails.update(.016,.016);for(let i=0;i<trails.particles.count;i++){const m=new T.Matrix4();trails.particles.getMatrixAt(i,m);assert.ok(m.elements.every(Number.isFinite));}
  trails.update(3,3);assert.equal(trails.activeParticles,0);assert.equal(trails.particles.visible,false);
 });
 
-test('follow camera finds a clear angle instead of hiding Sato behind a canopy',()=>{
- const trees=new T.Group(),crowns=new T.InstancedMesh(new T.SphereGeometry(.24,8,6),new T.MeshBasicMaterial(),1);
- crowns.name='wind-canopies';crowns.setMatrixAt(0,new T.Matrix4().makeTranslation(0,.18,.36));trees.add(crowns);
- const collision=createOrbCameraCollision(trees),target=new T.Vector3(),back=new T.Vector3(0,0,1),up=new T.Vector3(0,1,0);
- assert.ok(collision.clearance(target,back,up,.47,1.65)<.5);
- const room=collision.resolve(target,back,up,.47,1.65);
- assert.ok(room>.95);assert.ok(Math.abs(back.x)>.1);assert.ok(Math.abs(back.dot(up))<1e-8);
- assert.ok(collision.clearance(target,back,up,.47,1.65)>.95);
+test('water never supports the body: feet stay on the solid floor as tides change',()=>{
+ const {motor,surface,water,events}=fixture();motor.place(new T.Vector3(0,0,1));
+ const floor=motor.position.length();assert.ok(Math.abs(floor-coreSurfaceRadius(motor.up))<1e-7);
+ for(const time of [0,5,15,30]){motor.update(1/60,{time});assert.ok(Math.abs(motor.position.length()-floor)<1e-7);assert.ok(motor.waterDepth>.12);assert.equal(motor.support.surface,'water');assert.equal(motor.support.groundSurface,'rock');}
+ for(let i=0;i<60;i++)motor.update(1/120,{direction:motor.heading.clone(),amount:1});
+ assert.ok(events.some(e=>e.type==='step'&&e.surface==='water'&&e.waterDepth>.12));
+ const depthBefore=motor.waterDepth;motor.jump();assert.equal(events.at(-1).surface,'water');
+ for(let i=0;i<30;i++)motor.update(1/120);
+ assert.ok(motor.waterDepth<depthBefore-.16,'jump lifts the body through the water');motor.jump();
+ assert.equal(events.at(-1).surface,motor.waterDepth>.008?'water':'rock','wet audio follows actual immersion, not the floor material');
+});
+
+test('deeper immersion produces more foam, emitted at sea level rather than on the seabed',()=>{
+ const base={type:'step',surface:'water',point:new T.Vector3(0,1.84,0),waterRadius:2.05,normal:new T.Vector3(0,1,0),up:new T.Vector3(0,1,0),heading:new T.Vector3(0,0,1)};
+ const shallow=createOrbTrails(createOrbWater()),deep=createOrbTrails(createOrbWater());
+ shallow.emit({...base,waterDepth:.02});deep.emit({...base,waterDepth:.25});
+ assert.ok(deep.activeParticles>shallow.activeParticles*2);deep.update(.001,.001);
+ const matrix=new T.Matrix4(),position=new T.Vector3();deep.particles.getMatrixAt(0,matrix);position.setFromMatrixPosition(matrix);assert.ok(position.y>2.05,'splash must start at the water surface');
+});
+
+test('offshore stones are separated from the beach and have broad radial flat tops',()=>{
+ const {rocks,surface}=fixture(),matrix=new T.Matrix4(),center=new T.Vector3();
+ for(let i=0;i<3;i++){
+  rocks[2].getMatrixAt(i,matrix);center.setFromMatrixPosition(matrix);
+  assert.ok(Math.hypot(center.x,center.z)/coastRadius(Math.atan2(center.z,center.x))>1.25);
+  const up=center.clone().normalize(),tangent=new T.Vector3().crossVectors(up,new T.Vector3(0,1,0)).normalize();
+  const top=surface.sample(up),side=surface.sample(up.clone().addScaledVector(tangent,.035));
+  assert.equal(top.groundSurface,'rock');assert.equal(side.groundSurface,'rock');assert.ok(top.normal.dot(up)>.99);assert.ok(Math.abs(top.radius-side.radius)<.012);
+ }
+});
+
+test('constant-time seafloor collision matches the actual rendered core triangles',()=>{
+ const mesh=new T.Mesh(createCoreGeometry(),new T.MeshBasicMaterial()),ray=new T.Raycaster();mesh.updateMatrixWorld();
+ for(let i=0;i<180;i++){
+  const n=new T.Vector3(Math.cos(i*2.399),Math.sin(i*.89),Math.sin(i*2.399)).normalize();ray.set(n.clone().multiplyScalar(3),n.clone().negate());
+  const hit=ray.intersectObject(mesh)[0];assert.ok(hit);assert.ok(Math.abs(coreSurfaceRadius(n)-hit.point.length())<1e-6);
+ }
+ mesh.geometry.dispose();mesh.material.dispose();
 });

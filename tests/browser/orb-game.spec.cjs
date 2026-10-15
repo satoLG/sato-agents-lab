@@ -61,13 +61,13 @@ test.describe('orb Sato controls',()=>{
   test.setTimeout(120000);const failures=errors(page);await enter(page);await page.locator('#orb-sato-invite').click();
   const result=await page.evaluate(async()=>{
    const {T,scene,world,renderer,water,ocean,game,depth}=orbQA;
-   water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;game.motor.place(new T.Vector3(0,0,1));
+   water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;game.motor.place(new T.Vector3(.20,.84,.50));
    for(let i=0;i<20;i++)game.update(.05,{time:0,animate:false});
    const actor=game.avatar.root;
    for(const child of scene.children)if(child!==world&&!child.isLight)child.visible=false;
    for(const child of world.children)child.visible=child===ocean||child===actor;
    renderer.setPixelRatio(1);renderer.setSize(256,256,false);
-   const camera=new T.PerspectiveCamera(42,1,.05,150);camera.position.copy(game.motor.position).addScaledVector(game.motor.up,.29).addScaledVector(game.motor.heading,.36);camera.up.copy(game.motor.up);camera.lookAt(game.motor.position.clone().addScaledVector(game.motor.up,.012));
+   const camera=new T.PerspectiveCamera(42,1,.05,150);camera.position.copy(game.motor.position).addScaledVector(game.motor.up,.6).addScaledVector(game.motor.heading,.65);camera.up.copy(game.motor.up);camera.lookAt(game.motor.position.clone().addScaledVector(game.motor.up,.14));
    const original=water.material.onBeforeCompile;water.material.onBeforeCompile=shader=>{original(shader);shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','gl_FragColor=vec4(vec3(orbEdgeFoamRaw),1.);');};water.material.transmission=0;water.material.customProgramCacheKey=()=> 'sato-real-foam-qa';water.material.needsUpdate=true;
    const target=new T.WebGLRenderTarget(256,256),bytes=new Uint8Array(256*256*4);await renderer.compileAsync(scene,camera);
    function mask(visible){actor.visible=visible;depth.capture(camera);actor.visible=false;renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,256,256,bytes);renderer.setRenderTarget(null);actor.visible=visible;let count=0;for(let i=0;i<bytes.length;i+=4)if(bytes[i]>45&&bytes[i+1]>45)count++;return count;}
@@ -98,6 +98,15 @@ test.describe('orb Sato touch controls',()=>{
   // Air control intentionally retains a little momentum after release.
   await expect.poll(()=>page.evaluate(()=>orbQA.game.motor.velocity.length()),{timeout:20000}).toBeLessThan(.05);
   await expect.poll(()=>page.evaluate(()=>orbQA.game.motor.grounded),{timeout:20000}).toBe(true);
+  const zoomBefore=await page.evaluate(()=>orbQA.game.cameraDistance);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:145,y:380,id:3},{x:245,y:380,id:4}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:95,y:380,id:3},{x:295,y:380,id:4}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeLessThan(zoomBefore*.8);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:95,y:380,id:5},{x:295,y:380,id:6}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:155,y:380,id:5},{x:235,y:380,id:6}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeGreaterThan(zoomBefore);
   await page.screenshot({path:info.outputPath('sato-mobile.png')});await page.locator('#orb-walk-exit').click();await expect(page.locator('#orb-play-controls')).toBeHidden();expect(failures).toEqual([]);
  });
 });
@@ -124,7 +133,66 @@ test('surface foley renders distinct footsteps, takeoff and landing without load
    return {index,rms:Math.sqrt(energy/samples.length),tail,duration:last/44100,crossings};
   });
  });
- for(const clip of clips){expect(clip.rms).toBeGreaterThan(.0001);expect(clip.rms).toBeLessThan(.1);expect(clip.duration).toBeLessThan(.5);}
+ for(const clip of clips){expect(clip.rms).toBeGreaterThan(.0001);expect(clip.rms).toBeLessThan(.1);expect(clip.duration).toBeLessThan(.6);}
+ expect(clips[3].rms).toBeGreaterThan(clips[1].rms*2);
  expect(clips[3].tail).toBeGreaterThan(clips[0].tail*5);expect(clips[5].duration).toBeGreaterThan(clips[3].duration);expect(clips[4].crossings).not.toBe(clips[3].crossings);
  expect(new Set(clips.map(c=>c.rms.toFixed(6))).size).toBe(6);expect(failures).toEqual([]);
+});
+
+test('follow camera keeps its distance while occluding geometry fades on the GPU',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page);await enter(page);await page.locator('#orb-sato-invite').click();
+ const result=await page.evaluate(async()=>{
+  const {T,game,camera,island,renderer}=orbQA;
+  for(let i=0;i<35;i++)game.update(.05,{time:0});
+  const before=camera.position.clone(),distance=game.cameraDistance;
+  island.trees.scale.multiplyScalar(3);
+  for(let i=0;i<35;i++)game.update(.05,{time:0});
+  const cameraShift=camera.position.distanceTo(before),target=game.motor.position.clone().addScaledVector(game.motor.up,.15),elevation=camera.position.clone().sub(target).normalize().dot(game.motor.up);
+  const {createOrbCameraOcclusion}=await import('/static/js/orb-camera-occlusion.js');
+  const scene=new T.Scene(),probe=new T.Mesh(new T.PlaneGeometry(1.6,1.6),new T.MeshBasicMaterial({color:'#ff0000'}));scene.add(probe);
+  const view=new T.PerspectiveCamera(40,1,.05,10);view.position.set(0,0,2);view.lookAt(0,0,0);
+  const fade=createOrbCameraOcclusion([probe]),rt=new T.WebGLRenderTarget(128,128),data=new Uint8Array(128*128*4);
+  function count(){renderer.setRenderTarget(rt);renderer.render(scene,view);renderer.readRenderTargetPixels(rt,0,0,128,128,data);let center=0,edge=0;for(let y=0;y<128;y++)for(let x=0;x<128;x++){const red=data[(y*128+x)*4]>100;if(x>54&&x<74&&y>54&&y<74)center+=red;if(x<15&&y>40&&y<80)edge+=red;}return {center,edge};}
+  fade.update(view.position,new T.Vector3(0,0,-.3),false,1);const solid=count();fade.update(view.position,new T.Vector3(0,0,-.3),true,1);const faded=count();
+  renderer.setRenderTarget(null);rt.dispose();probe.geometry.dispose();probe.material.dispose();
+  game.motor.place(new T.Vector3(0,0,1));window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyD'}));
+  for(let i=0;i<100;i++)game.update(1/60,{time:0});window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyD'}));
+  const cameraBack=camera.position.clone().sub(game.motor.position);cameraBack.addScaledVector(game.motor.up,-cameraBack.dot(game.motor.up)).normalize();
+  return {cameraShift,distance,elevation,solid,faded,behind:cameraBack.dot(game.motor.heading.clone().negate())};
+ });
+ expect(result.behind).toBeGreaterThan(.98);expect(result.cameraShift).toBeLessThan(.001);expect(result.distance).toBeGreaterThan(2);expect(result.elevation).toBeGreaterThan(.5);
+ expect(result.faded.center).toBeLessThan(result.solid.center*.3);expect(result.faded.edge).toBe(result.solid.edge);
+ await page.mouse.move(320,350);const before=await page.evaluate(()=>orbQA.game.cameraDistance);await page.mouse.wheel(0,350);await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeGreaterThan(before*1.2);expect(failures).toEqual([]);
+});
+
+test('water wakes expand from the contact point, break up with noise and expire on the GPU',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page);await enter(page);
+ const result=await page.evaluate(async()=>{
+  const {T,water,ocean,renderer}=orbQA,scene=new T.Scene();scene.add(ocean);water.material.transmission=0;
+  const original=water.material.onBeforeCompile;water.material.onBeforeCompile=shader=>{original(shader);shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>','gl_FragColor=vec4(vec3(min(wake,1.)),1.);');};water.material.customProgramCacheKey=()=> 'orb-wake-readback';water.material.needsUpdate=true;
+  water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;water.uniforms.orbInteractionTime.value=0;water.emitRipple(new T.Vector3(0,0,2),1.5);
+  const camera=new T.PerspectiveCamera(32,1,.05,20);camera.position.set(0,0,4);camera.lookAt(0,0,0);
+  const target=new T.WebGLRenderTarget(160,160),bytes=new Uint8Array(160*160*4);
+  function sample(time){water.uniforms.orbInteractionTime.value=time;renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,160,160,bytes);let count=0,spread=0,left=0,right=0;for(let y=0;y<160;y++)for(let x=0;x<160;x++){const v=bytes[(y*160+x)*4];if(v>12){count++;spread+=Math.hypot(x-80,y-80);if(x<80)left+=v;else right+=v;}}return {count,spread:spread/Math.max(1,count),left,right};}
+  const early=sample(.25),late=sample(.9),expired=sample(3);renderer.setRenderTarget(null);target.dispose();return {early,late,expired};
+ });
+ expect(result.early.count).toBeGreaterThan(20);expect(result.late.spread).toBeGreaterThan(result.early.spread*1.5);expect(result.early.left).not.toBe(result.early.right);expect(result.expired.count).toBe(0);expect(failures).toEqual([]);
+});
+
+test('submerged Sato remains visible without a displaced duplicate in the water',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page);await enter(page);await page.locator('#orb-sato-invite').click();
+ const result=await page.evaluate(()=>{
+  const {T,game,scene,world,renderer,ocean,water}=orbQA;water.uniforms.orbStrength.value=0;water.uniforms.orbTime.value=0;
+  game.motor.place(new T.Vector3(0,0,1));for(let i=0;i<20;i++)game.update(.05,{time:0});const actor=game.avatar.root;
+  for(const child of scene.children)if(child!==world&&!child.isLight)child.visible=false;
+  for(const child of world.children)child.visible=child===ocean||child===actor||child.name==='submerged-nucleus';
+  const camera=new T.PerspectiveCamera(42,1,.05,150);camera.position.copy(game.motor.position).addScaledVector(game.motor.up,.6).addScaledVector(game.motor.heading,.65);camera.up.copy(game.motor.up);camera.lookAt(game.motor.position.clone().addScaledVector(game.motor.up,.14));camera.updateMatrixWorld();
+  actor.updateWorldMatrix(true,true);const box=new T.Box3().setFromObject(actor),bounds={minX:1,minY:1,maxX:-1,maxY:-1};
+  for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=new T.Vector3(x,y,z).project(camera);bounds.minX=Math.min(bounds.minX,p.x);bounds.maxX=Math.max(bounds.maxX,p.x);bounds.minY=Math.min(bounds.minY,p.y);bounds.maxY=Math.max(bounds.maxY,p.y);}
+  const rt=new T.WebGLRenderTarget(192,192),present=new Uint8Array(192*192*4),absent=new Uint8Array(present.length);
+  renderer.setRenderTarget(rt);renderer.render(scene,camera);renderer.readRenderTargetPixels(rt,0,0,192,192,present);actor.visible=false;renderer.render(scene,camera);renderer.readRenderTargetPixels(rt,0,0,192,192,absent);renderer.setRenderTarget(null);actor.visible=true;
+  let inside=0,outside=0;for(let y=0;y<192;y++)for(let x=0;x<192;x++){const i=(y*192+x)*4,delta=Math.abs(present[i]-absent[i])+Math.abs(present[i+1]-absent[i+1])+Math.abs(present[i+2]-absent[i+2]);if(delta<15)continue;const px=x/192*2-1,py=y/192*2-1;if(px<bounds.minX-.03||px>bounds.maxX+.03||py<bounds.minY-.03||py>bounds.maxY+.03)outside++;else inside++;}
+  rt.dispose();return {inside,outside,depth:game.motor.waterDepth};
+ });
+ expect(result.depth).toBeGreaterThan(.18);expect(result.inside).toBeGreaterThan(30);expect(result.outside).toBeLessThan(5);expect(failures).toEqual([]);
 });

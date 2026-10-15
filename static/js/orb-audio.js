@@ -2,7 +2,7 @@
 // with WebGL. The AudioContext is created only inside the user's Play gesture.
 export function createOrbAmbience({onChange=()=>{}}={}) {
   let context=null,master=null,started=false,muted=false,hidden=false,disposed=false;
-  const sources=[],voices=new Set();let noiseBuffer=null,lastContact=-1;
+  const sources=[],voices=new Set();let noiseBuffer=null,waterBuffer=null,lastContact=-1;
   function notify(){onChange({muted,available:Boolean(context)&&!disposed});}
   function fade() {
     if(!context||disposed)return;
@@ -21,6 +21,12 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       seed=(Math.imul(seed,1664525)+1013904223)>>>0;const white=seed/2147483648-1;
       b0=.99765*b0+white*.099046;b1=.963*b1+white*.2965164;b2=.57*b2+white*1.0526913;
       data[i]=(b0+b1+b2+white*.1848)*.08;
+    }
+    waterBuffer=context.createBuffer(1,22050*2,22050);
+    const splashData=waterBuffer.getChannelData(0);let lowWater=0;
+    for(let i=0;i<splashData.length;i++){
+      seed=(Math.imul(seed,1664525)+1013904223)>>>0;const white=seed/2147483648-1;
+      lowWater+=.14*(white-lowWater);splashData[i]=white*.34+lowWater*.8;
     }
     // Blend the loop join rather than repeating a click every 24 seconds.
     const seam=1024,first=data[0];for(let i=0;i<seam;i++){const t=i/(seam-1),end=data.length-seam+i;data[end]=data[end]*(1-t)+first*t;}
@@ -55,9 +61,27 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       if(!muted&&!hidden)context.resume().catch(()=>{});
       fade();notify();
     },
-    playContact({type,surface,impact=1,double=false}) {
+    playContact({type,surface,impact=1,double=false,waterDepth=0}) {
       if(!context||!started||disposed||muted||hidden)return;
       const now=context.currentTime;if(type==='step'&&now-lastContact<.075)return;lastContact=now;
+      // Wet contact wins over the ground material. Splash wash and falling
+      // bubble chirps have their own envelopes, not the dry footstep patch.
+      if(surface==='water'||waterDepth>.008){
+        const immersion=Math.min(1,waterDepth/.27),landing=type==='land',jumping=type==='jump';
+        const duration=landing?.52:jumping?.38:.28,volume=(.48+immersion*.24)*(landing?Math.min(1.7,.9+impact*.25):jumping?1.15:1);
+        const gain=context.createGain(),filter=context.createBiquadFilter(),noise=context.createBufferSource(),nodes=[];
+        gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(volume,now+.018);gain.gain.exponentialRampToValueAtTime(volume*.28,now+duration*.48);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+        filter.type='lowpass';filter.Q.value=.8;filter.frequency.setValueAtTime(landing?5800:4200,now);filter.frequency.exponentialRampToValueAtTime(650,now+duration);
+        noise.buffer=waterBuffer;noise.connect(filter).connect(gain).connect(master);
+        for(let i=0;i<(landing?4:3);i++){
+          const bubble=context.createOscillator(),envelope=context.createGain(),start=now+.025+i*.047,end=start+.09;
+          bubble.type='sine';bubble.frequency.setValueAtTime(620+i*170+(jumping?180:0),start);bubble.frequency.exponentialRampToValueAtTime(150+i*35,end);
+          envelope.gain.setValueAtTime(.0001,start);envelope.gain.exponentialRampToValueAtTime(.045+immersion*.025,start+.009);envelope.gain.exponentialRampToValueAtTime(.0001,end);
+          bubble.connect(envelope).connect(master);bubble.start(start);bubble.stop(end+.01);nodes.push(bubble,envelope);
+        }
+        const voice={stop(){try{noise.stop();}catch{}for(const node of nodes){try{node.stop?.();}catch{}node.disconnect();}noise.disconnect();filter.disconnect();gain.disconnect();voices.delete(voice);}};
+        if(voices.size>=10)voices.values().next().value.stop();voices.add(voice);noise.onended=()=>voice.stop();noise.start(now,(now*.37)%1,duration);return;
+      }
       const settings={grass:[.075,1700,.17],sand:[.11,2400,.22],rock:[.055,3600,.14],water:[.19,1900,.34]}[surface]??[.08,1500,.15];
       const duration=type==='step'?settings[0]:type==='jump'?.14:settings[0]*1.8;
       const gain=context.createGain(),filter=context.createBiquadFilter(),noise=context.createBufferSource(),tone=context.createOscillator();

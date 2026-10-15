@@ -3,12 +3,12 @@ import {createOrbSato} from './orb-sato.js';
 import {createOrbMotor} from './orb-motor.js';
 import {createOrbSurface} from './orb-surface.js';
 import {createOrbTrails} from './orb-trails.js';
-import {createOrbCameraCollision} from './orb-camera-collision.js';
+import {createOrbCameraOcclusion} from './orb-camera-occlusion.js';
 
 export function createOrbGame({world,island,water,camera,canvas,container,controls,reducedMotion=false,onActivate=()=>{},onExit=()=>{},onContact=()=>{}}) {
   const avatar=createOrbSato(),trails=createOrbTrails(water);
   const antennaTip=avatar.antenna.getObjectByName('antenna-tip');
-  const cameraCollision=createOrbCameraCollision(island.trees);
+  const occlusion=createOrbCameraOcclusion([island.trees,...island.rocks]);
   const surface=createOrbSurface({land:island.land,rocks:island.rocks,trunks:island.trunks,water});
   const motor=createOrbMotor(surface,{onEvent:event=>{
     trails.emit(event);onContact(event);
@@ -18,14 +18,15 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
   world.add(avatar.root,trails.group);
   const invite=document.getElementById('orb-sato-invite'),hud=document.getElementById('orb-play-controls'),exit=document.getElementById('orb-walk-exit'),jumpButton=document.getElementById('orb-jump'),stick=document.getElementById('orb-stick'),knob=document.getElementById('orb-stick-knob');
   const keys=new Set(),touch=new T.Vector2(),back=new T.Vector3(4.4,0,9.8).normalize(),viewBack=new T.Vector3(),lastUp=motor.up.clone(),cameraTarget=new T.Vector3(),target=new T.Vector3(),desiredCamera=new T.Vector3(),right=new T.Vector3(),direction=new T.Vector3(),frame=new T.Matrix4(),transport=new T.Quaternion();
-  motor.heading.copy(back);let playing=false,enabled=false,seconds=0,cameraDistance=1.65,pitch=.47,pointer=null,stickPointer=null,lastMode='';
+  motor.heading.copy(back);let playing=false,enabled=false,seconds=0,cameraDistance=2.15,pitch=.64,pointer=null,stickPointer=null,lastMode='',manualLookUntil=0;
+  const pointers=new Map();let pinchDistance=0;
   const removers=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);removers.push(()=>node.removeEventListener(type,fn,options));}
-  function clearInput(){keys.clear();touch.set(0,0);motor.stop();knob.style.transform='translate(0,0)';}
+  function clearInput(){keys.clear();touch.set(0,0);motor.stop();pointers.clear();pinchDistance=0;pointer=null;stickPointer=null;knob.style.transform='translate(0,0)';}
   function setMode(next) {
     if(next===playing||next&&!enabled)return;
     playing=next;clearInput();hud.hidden=!playing;invite.hidden=true;container.dataset.mode=playing?'walk':'orbit';
-    if(playing){onActivate();controls.enabled=false;cameraTarget.copy(controls.target);back.copy(camera.position).sub(motor.position).addScaledVector(motor.up,-camera.position.clone().sub(motor.position).dot(motor.up));if(back.lengthSq()<.01)back.set(0,0,1);back.normalize();lastUp.copy(motor.up);avatar.wakeUp();}
+    if(playing){onActivate();controls.enabled=false;cameraTarget.copy(controls.target);back.copy(camera.position).sub(motor.position).addScaledVector(motor.up,-camera.position.clone().sub(motor.position).dot(motor.up));if(back.lengthSq()<.01)back.set(0,0,1);back.normalize();viewBack.copy(back);lastUp.copy(motor.up);avatar.wakeUp();}
     else {avatar.rest();camera.up.set(0,1,0);controls.target.copy(motor.position);controls.enabled=true;onExit();}
     container.focus({preventScroll:true});document.getElementById('orb-status').textContent=playing?'Controlando Sato. WASD ou setas para andar. Espaço ou botão Pular: pulo duplo. Escape para voltar à órbita.':'Explorando a órbita. Clique no Sato para caminhar novamente.';
   }
@@ -51,21 +52,32 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
   });
   listen(window,'keyup',event=>keys.delete(event.code));listen(window,'blur',clearInput);
   listen(document,'visibilitychange',()=>{if(document.hidden)clearInput();});
-  listen(canvas,'pointerdown',event=>{if(!enabled)return;pointer={id:event.pointerId,x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY};if(playing)canvas.setPointerCapture(event.pointerId);});
+  const zoomBy=factor=>{cameraDistance=T.MathUtils.clamp(cameraDistance*factor,1.25,4.2);};
+  const pinchSpan=()=>{const [a,b]=[...pointers.values()];return a&&b?Math.hypot(a.x-b.x,a.y-b.y):0;};
+  listen(canvas,'pointerdown',event=>{
+    if(!enabled)return;
+    pointer={id:event.pointerId,x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY};
+    if(playing){pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});pinchDistance=pinchSpan();canvas.setPointerCapture(event.pointerId);}
+  });
   listen(canvas,'pointermove',event=>{
-    if(!pointer||pointer.id!==event.pointerId||!playing)return;
-    back.applyAxisAngle(motor.up,-(event.clientX-pointer.x)*.006);pitch=T.MathUtils.clamp(pitch+(event.clientY-pointer.y)*.004,.19,1.05);pointer.x=event.clientX;pointer.y=event.clientY;
+    if(!playing||!pointers.has(event.pointerId))return;
+    const previous=pointers.get(event.pointerId),dx=event.clientX-previous.x,dy=event.clientY-previous.y;
+    pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if(pointers.size>1){const span=pinchSpan();if(pinchDistance>0&&span>0)zoomBy(pinchDistance/span);pinchDistance=span;return;}
+    back.copy(viewBack).applyAxisAngle(motor.up,-dx*.006);viewBack.copy(back);
+    pitch=T.MathUtils.clamp(pitch+dy*.004,.35,1.12);manualLookUntil=seconds+2.2;
   });
   function pointerEnd(event) {
+    pointers.delete(event.pointerId);pinchDistance=pinchSpan();
     if(!pointer||pointer.id!==event.pointerId)return;
-    if(!playing&&Math.hypot(event.clientX-pointer.startX,event.clientY-pointer.startY)<7) {
+    if(!playing&&event.type!=='pointercancel'&&Math.hypot(event.clientX-pointer.startX,event.clientY-pointer.startY)<7) {
       const rect=canvas.getBoundingClientRect(),screen=screenPosition();
       if(screen.visible&&Math.hypot(event.clientX-rect.left-screen.x,event.clientY-rect.top-screen.y)<28)setMode(true);
     }
     pointer=null;
   }
-  listen(canvas,'pointerup',pointerEnd);listen(canvas,'pointercancel',()=>{pointer=null;});
-  listen(canvas,'wheel',event=>{if(playing){event.preventDefault();cameraDistance=T.MathUtils.clamp(cameraDistance*Math.exp(event.deltaY*.001),.95,3.2);}},{passive:false});
+  listen(canvas,'pointerup',pointerEnd);listen(canvas,'pointercancel',pointerEnd);
+  listen(canvas,'wheel',event=>{if(playing){event.preventDefault();zoomBy(Math.exp(event.deltaY*.001));}},{passive:false});
   function moveStick(event) {
     if(event.pointerId!==stickPointer)return;
     const bounds=stick.getBoundingClientRect(),x=(event.clientX-bounds.x-bounds.width/2)/34,y=(event.clientY-bounds.y-bounds.height/2)/34;
@@ -79,31 +91,37 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
   function update(dt,{time=0,animate=true}={}) {
     const settling=avatar.settling;
     if(playing||animate||!motor.grounded||settling)seconds+=dt;
-    transport.setFromUnitVectors(lastUp,motor.up);back.applyQuaternion(transport).addScaledVector(motor.up,-back.dot(motor.up)).normalize();lastUp.copy(motor.up);
+    transport.setFromUnitVectors(lastUp,motor.up);back.applyQuaternion(transport).addScaledVector(motor.up,-back.dot(motor.up)).normalize();viewBack.applyQuaternion(transport).addScaledVector(motor.up,-viewBack.dot(motor.up)).normalize();lastUp.copy(motor.up);
     right.crossVectors(motor.up,back).normalize();
     const x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touch.x;
     const y=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)+touch.y;
     const amount=playing&&!avatar.waking?Math.min(1,Math.hypot(x,y)):0;direction.copy(right).multiplyScalar(x).addScaledVector(back,-y);if(direction.lengthSq()>0)direction.normalize();
     if(playing||!motor.grounded)motor.update(dt,{direction,amount,time});
     avatar.root.position.copy(motor.position);right.crossVectors(motor.up,motor.heading).normalize();frame.makeBasis(right,motor.up,motor.heading);avatar.root.quaternion.setFromRotationMatrix(frame);
-    avatar.root.userData.orbFoamExclude=motor.support.surface!=='water';
+    avatar.root.userData.orbFoamExclude=motor.waterDepth<=.008;
     avatar.update(playing||animate||settling?dt:0,{time:seconds,speed:playing?motor.velocity.length():0,grounded:motor.grounded,verticalSpeed:motor.verticalSpeed,playing,reduced:reducedMotion});
     trails.update(playing||animate||settling?dt:0,seconds);
     if(playing) {
-      target.copy(motor.position).addScaledVector(motor.up,.14);cameraTarget.lerp(target,reducedMotion?1:1-Math.exp(-dt*12));
-      // Automatic camera clearance must not rotate the player's held input.
-      viewBack.copy(back);const cameraRoom=cameraCollision.resolve(cameraTarget,viewBack,motor.up,pitch,cameraDistance);
-      desiredCamera.copy(cameraTarget).addScaledVector(viewBack,Math.cos(pitch)*cameraRoom).addScaledVector(motor.up,Math.sin(pitch)*cameraRoom);
-      const cameraUp=desiredCamera.clone().normalize(),safeRadius=surface.sample(cameraUp,time).radius+.14;
+      target.copy(motor.position).addScaledVector(motor.up,.15);cameraTarget.lerp(target,reducedMotion?1:1-Math.exp(-dt*12));
+      // Keep held input in its transported frame while the view catches up
+      // behind the heading. Otherwise holding sideways would turn forever.
+      if(amount>.05&&motor.velocity.length()>.04&&seconds>manualLookUntil){
+        const wanted=motor.heading.clone().negate();
+        const angle=Math.atan2(new T.Vector3().crossVectors(viewBack,wanted).dot(motor.up),viewBack.dot(wanted));
+        viewBack.applyAxisAngle(motor.up,angle*(1-Math.exp(-dt*2.4)));
+      } else if(amount===0)back.copy(viewBack);
+      desiredCamera.copy(cameraTarget).addScaledVector(viewBack,Math.cos(pitch)*cameraDistance).addScaledVector(motor.up,Math.sin(pitch)*cameraDistance);
+      const cameraUp=desiredCamera.clone().normalize(),ground=surface.sample(cameraUp,time),safeRadius=Math.max(ground.radius,ground.waterRadius)+.12;
       if(desiredCamera.length()<safeRadius)desiredCamera.setLength(safeRadius);
-      camera.position.lerp(desiredCamera,reducedMotion?1:1-Math.exp(-dt*7));camera.up.lerp(motor.up,reducedMotion?1:1-Math.exp(-dt*15)).normalize();camera.lookAt(cameraTarget);camera.updateMatrixWorld();
+      camera.position.lerp(desiredCamera,reducedMotion?1:1-Math.exp(-dt*6));camera.up.lerp(motor.up,reducedMotion?1:1-Math.exp(-dt*10)).normalize();camera.lookAt(cameraTarget);camera.updateMatrixWorld();
       const mode=`${motor.support.surface}-${motor.jumps}`;
       if(mode!==lastMode){jumpButton.dataset.jumps=String(motor.jumps);jumpButton.setAttribute('aria-label',motor.jumps===0?'Pular. Pulo duplo disponível.':motor.jumps===1?'Pular novamente. Segundo pulo disponível.':'Pular ao aterrissar.');container.dataset.surface=motor.support.surface;lastMode=mode;}
     } else {
       const screen=screenPosition();invite.hidden=!screen.visible;if(screen.visible)invite.style.transform=`translate(${screen.iconX}px,${screen.iconY}px) translate(-50%,-50%)`;
     }
+    occlusion.update(camera.position,cameraTarget,playing,dt);
     return playing||!motor.grounded||avatar.settling;
   }
   update(0,{animate:false});
-  return {avatar,motor,surface,trails,update,setMode,screenPosition,get playing(){return playing;},setEnabled(value){enabled=value;},dispose(){clearInput();for(const remove of removers)remove();hud.hidden=true;invite.hidden=true;delete container.dataset.mode;}};
+  return {avatar,motor,surface,trails,occlusion,get cameraDistance(){return cameraDistance;},update,setMode,screenPosition,get playing(){return playing;},setEnabled(value){enabled=value;},dispose(){clearInput();for(const remove of removers)remove();hud.hidden=true;invite.hidden=true;delete container.dataset.mode;}};
 }

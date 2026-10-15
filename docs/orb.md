@@ -1,10 +1,10 @@
 # orb
 
-`/orb` apresenta o canvas, um botão discreto de som e o convite para explorar
-com Sato após a entrada. A câmera permanece centralizada
+`/orb` apresenta o canvas, um botão discreto de som e o ícone para acordar
+Sato após a entrada. A câmera permanece centralizada
 no mundo, com OrbitControls, zoom por roda/pinça e atalhos descritos no rótulo
 acessível da cena. A água começa com ondulação de 90% e transmissão física de
-100%; a absorção azul e o brilho de um único ponto de luz branca continuam visíveis.
+100%; a coloração azul e o brilho de um único ponto de luz branca continuam visíveis.
 
 A lua tem 43% do raio do núcleo sob a água (0,7912 contra 1,84), com textura
 de rocha Rock Boulder Dry da Poly Haven (CC0). Cor e normal map em 512 × 512 e
@@ -54,7 +54,9 @@ curva suave junto ao nível da água e se enterra no núcleo; os dois materiais
 compartilham a textura 3D do planeta no trecho submerso. Nove pedras
 irregulares e foscas usam três malhas instanciadas com 20 faces cada. As seis
 internas continuam pequenas; as três externas são maiores e elevadas para
-permanecer acima da água e servir como plataformas de salto.
+permanecer acima da água e servir como plataformas de salto. Elas ficam entre
+1,32 e 1,48 vezes o raio da costa, com topos planos orientados pela gravidade
+local e laterais irregulares. A colisão continua usando seus triângulos reais.
 A atribuição da base de vegetação permanece em `scenic-environments.md`.
 
 ## Espuma e carregamento
@@ -72,6 +74,13 @@ suavemente a silhueta do modelo. A profundidade da água vem dos vértices
 deformados em view space; a
 linearização mantém a correção de precisão móvel do portfólio. Targets e
 texturas são redimensionados com o canvas e liberados ao sair.
+
+A costa adapta `ripplesNode` e `shoreNode` de
+[WaterSurface.js, folio-2025](https://github.com/brunosimon/folio-2025/blob/41046b57eeed8d156d9c3fd7fa259900baef7816/sources/Game/World/WaterSurface.js)
+(MIT, licença em `static/textures/folio-2025/LICENSE.txt`): fase baseada na
+profundidade, ruído com deslocamento por faixa e máscara rasa. A borda costeira
+chega a 4,5 pixels e seus contornos dinâmicos a 7; outras intersecções mantêm
+2,5 pixels. A máscara limita esse detalhe à praia, sem cobrir o oceano inteiro.
 
 O loading acompanha preparação, textura de folhagem, compilação dos shaders e
 o primeiro render com profundidade. Chega a 100% somente quando a cena está
@@ -97,8 +106,10 @@ de base tangente que marcava uma linha junto ao polo. A água mantém transmiss�
 de 100%, com roughness 0,23, sem reflexão do ambiente ou sombras projetadas.
 Um destaque branco explícito substitui os reflexos do ambiente. A refração
 existente do Three r180 é filtrada: lua, árvores e grama ficam fora dessa
-textura, enquanto a parte submersa do terreno e das pedras continua presente.
-Isso não exige outro passe da cena. Um mínimo de azul evita que os raios que
+textura. Terreno, pedras e Sato passam sem cortes radiais; espessura zero e
+IOR 1 mantêm sua imagem na posição real, evitando duplicatas refratadas. A
+coloração azul evita a faixa verde produzida pela areia e não há sombras
+projetadas nas superfícies submersas. Isso não exige outro passe da cena. Um mínimo de azul evita que os raios que
 enxergam o espaço preto criem uma faixa aparentemente refletida na borda.
 Alterações em modelos, buffers,
 visibilidade ou câmera continuam atualizando profundidade e sombras.
@@ -106,8 +117,11 @@ visibilidade ou câmera continuam atualizando profundidade e sombras.
 ## Sato e caminhada esférica
 
 `orb-sato.js` adapta diretamente o companion de `createRigFactory`: preserva
-seu casco esférico, braços em forma de nadadeira, materiais e antena. As duas
-pernas clonam a mesma geometria dos braços, encurtada, e a antena fica central.
+seu casco esférico, braços em forma de nadadeira e materiais. Braços e pernas
+compartilham a versão arredondada dessa estrutura contínua, mais curta e grossa,
+sem pés separados. A antena nasce perto da frente do casco, sobe em diagonal e
+termina em um caracol; uma mola acompanha passos, impulsos e aterrissagens.
+O shader flexiona a haste e sua ponta luminosa acompanha a mesma deformação.
 O display preto é uma calota da mesma esfera do casco, integrada à curvatura.
 Nele, o olho conserva o aro azul, a íris com 32 marcas radiais e as cores do
 modelo original. Sobrancelha, piscadas, olhares e alegria também são desenhados
@@ -115,7 +129,7 @@ nessa superfície. Bateria, linhas de manutenção, obturador mecânico e emisso
 de flutuação são removidos da versão da orb.
 As poses de sentar, levantar, andar rápido, pular e aterrissar usam juntas
 independentes, squash/stretch com mola amortecida e pequenos gestos dos braços.
-O segundo pulo também faz um giro curto. A raiz física não é deslocada pelas
+O segundo pulo comprime e estica corpo e membros, sem giro rígido. A raiz física não é deslocada pelas
 animações. Os modelos existentes da home e do laboratório não são alterados.
 
 Sato começa dormindo, sentado no centro da ilha, com o olho fechado no display,
@@ -126,31 +140,40 @@ paleta, vidro e sprite Lucide compartilhados do site. Sair, pular e silenciar
 seguem esse estilo. As instruções continuam acessíveis aos leitores de tela.
 Ao acordar, Sato abre o olho, se espreguiça com os braços e se levanta antes de
 andar; ao sair, volta ao descanso, mesmo com a animação ambiente pausada.
-Com movimento reduzido, essas transições e o giro do pulo são imediatos.
+Com movimento reduzido, as transições de entrada são imediatas e o balanço diminui.
 Clique nele, ative o ícone ou use
 `E`/`Enter` com foco na cena para assumir o controle. `WASD`/setas andam,
 `Espaço` pula e um segundo acionamento no ar executa o pulo duplo. Um terceiro
-pulo é bloqueado até a aterrissagem. Arraste para olhar e use a roda para
-ajustar a câmera. `Escape` ou Voltar à órbita devolvem OrbitControls.
+pulo é bloqueado até a aterrissagem. Arraste para olhar e use a roda ou pinça para
+ajustar a câmera entre 1,25 e 4,2 unidades. `Escape` ou Voltar à órbita devolvem OrbitControls.
 No celular, o direcional e Pular aceitam dois dedos simultâneos; o pulo usa
 pointerdown para não depender de cliques de compatibilidade do segundo dedo.
-A câmera consulta limites das copas instanciadas e procura um ângulo livre
-quando a vista pretendida encobre o personagem, sem raycast de cada folha.
+A câmera parte de 2,15 unidades a 0,64 radiano de elevação e acompanha a direção
+de caminhada por trás com amortecimento. O referencial do comando fica estável
+durante um movimento sustentado. Um arrasto mantém o olhar manual por 2,2 s.
+Folhas, troncos e pedras entre a câmera e Sato ficam até 84% transparentes por
+um dither espacial suave, preservando instâncias e testes de alpha, sem novos
+passes. Obstáculos não fazem a câmera girar nem reduzir sua distância.
 
 O motor integra a gravidade radial a 120 Hz, com passos limitados, preservando
 uma base tangente por transporte ao redor da esfera. Corpo e câmera acompanham
 essa base, inclusive na parte inferior do planeta. A velocidade é 0,58 unidade/s,
 a gravidade 4,8 e os impulsos de pulo 1,48 e 1,30. Raios atingem os triângulos
 reais da ilha e das pedras instanciadas. Uma sonda à frente da cápsula impede
-atravessar laterais de pedras; troncos também bloqueiam o corpo. A água é um
-piso caminhável que acompanha a mesma função de deformação do shader. O ruído
+atravessar laterais de pedras; troncos também bloqueiam o corpo. A água não é um
+colisor: pés se apoiam na ilha, nas pedras ou no núcleo submerso. O núcleo usa
+uma busca por célula angular que testa somente os dois triângulos candidatos,
+iguais aos da malha visível. A altura da água é consultada separadamente para
+calcular a imersão real, inclusive no ar, com a mesma deformação do shader. O ruído
 usa hash inteiro reproduzível em JS e GLSL, com equivalência verificada na GPU.
 
 Pegadas na areia usam um pool de 96 decalques, com desaparecimento em 18 s.
-Na água, os pés ficam 0,012 unidade imersos e entram na profundidade da espuma.
-Passos e pulos alimentam até oito ondulações locais com ruído e um pool de 80
-partículas de espuma com movimento balístico. As ondulações desaparecem em
-1,6 s. Rastros e partículas ficam fora do pre-pass de contato. Sato também fica
+Na água, pernas e corpo ficam submersos conforme a altura do fundo.
+Passos e pulos alimentam até oito perturbações locais: ruído desloca a frente,
+altera altura/normal e colore discretamente a esteira. Elas desaparecem em 2,2 s.
+Um pool de 240 partículas balísticas emite espuma na superfície do mar; a
+quantidade cresce com a profundidade de imersão, com rajadas maiores nos pulos
+e impactos. Rastros e partículas ficam fora do pre-pass de contato. Sato também fica
 fora dele enquanto está em terra, preservando o cache durante o idle.
 
 ## Som do mar e dos movimentos
@@ -165,7 +188,10 @@ O mesmo contexto produz passos distintos de grama, areia, rocha e água, além
 de impulsos e aterrissagens com envelopes próprios. Ruído filtrado, pequenas
 ressonâncias e tons curtos variam por superfície; a cadência segue a distância
 percorrida, sem passos no ar. As vozes são limitadas a dez e desconectadas ao
-terminar. O botão de som silencia a ambiência e todos os movimentos.
+terminar. Contato molhado tem prioridade sobre o material do fundo. Usa uma
+camada própria de splash com ruído amplo, borbulhas de frequência descendente
+e envelopes de 0,28/0,38/0,52 s para passo/pulo/impacto. Volume e densidade
+crescem com a imersão. O botão de som silencia a ambiência e todos os movimentos.
 
 ## Verificação
 
@@ -189,6 +215,12 @@ para verificar saída, silêncio, suspensão da aba e liberação ao sair.
 Os testes de caminhada completam uma volta passando pela face inferior,
 conferem gravidade, alinhamento, pulo duplo, laterais e topo das pedras e
 troncos. No navegador, cliques, teclado e dois dedos controlam o personagem;
-a espuma é lida na GPU usando seus próprios pés, e a textura de refração é
+a espuma é lida na GPU usando seu corpo parcialmente submerso, e a textura de refração é
 verificada diretamente. OfflineAudioContext renderiza os quatro tipos de
 passo, decolagem e aterrissagem, comparando envelopes e saída de áudio reais.
+
+A validação também compara o piso do núcleo com a malha renderizada, garante
+apoio estável enquanto a maré muda, verifica espuma proporcional à imersão e
+compara a saída de áudio molhado com areia. Readbacks da GPU confirmam a
+expansão e o desaparecimento da esteira e a transparência de obstáculos sem
+mover a câmera. Gestos reais de dois dedos verificam zoom nos dois sentidos.
