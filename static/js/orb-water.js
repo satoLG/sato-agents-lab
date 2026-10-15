@@ -2,7 +2,8 @@ import * as T from '../vendor/three.module.min.js';
 import {orbNoiseGLSL as noiseGLSL,orbNoiseGradientGLSL} from './orb-noise.js';
 import {orbGroundGLSL} from './orb-ground.js';
 
-export const CORE_RADIUS = 1.84;
+import {CORE_RADIUS} from './orb-core-surface.js';
+export {CORE_RADIUS};
 export const WATER_RADIUS = 2.05;
 
 // Radius and its exact gradient in sphere space. The shoreline envelope raises
@@ -67,17 +68,17 @@ export const orbWaterSurfaceGLSL=`
     }
     for(int i=0;i<8;i++) {
       float age=orbInteractionTime-orbRippleCenters[i].w;
-      if(age<0.||age>1.6||orbRippleStrengths[i]<.001)continue;
+      if(age<0.||age>2.2||orbRippleStrengths[i]<.001)continue;
       vec3 delta=n-orbRippleCenters[i].xyz;
       float chord=length(delta),distance=chord*2.1;
-      if(distance>.65)continue;
+      if(distance>.85)continue;
       vec3 dg=2.1*delta/max(.001,chord);
-      float front=(distance-age*.22)/.055;
-      float envelope=exp(-front*front-age*2.)*smoothstep(0.,.08,age)*(1.-smoothstep(1.2,1.6,age))*orbRippleStrengths[i];
-      vec4 turbulence=orbNoiseGradient(n*7.+vec3(age*.4));
-      float phase=distance*45.-age*12.+turbulence.x*.7;
-      radius+=.007*envelope*sin(phase);
-      gradient+=.007*envelope*(cos(phase)*(45.*dg+turbulence.yzw*4.9)-sin(phase)*2.*front/.055*dg);
+      float front=(distance-age*.28)/.10;
+      float envelope=exp(-front*front-age*1.1)*smoothstep(0.,.08,age)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i];
+      vec4 turbulence=orbNoiseGradient(n*28.+vec3(age*.8));
+      float phase=distance*45.-age*12.+turbulence.x*2.8;
+      radius+=.012*envelope*sin(phase);
+      gradient+=.012*envelope*(cos(phase)*(45.*dg+turbulence.yzw*78.4)-sin(phase)*2.*front/.10*dg);
     }
     if(radius<${(CORE_RADIUS+.06).toFixed(2)})return vec4(${(CORE_RADIUS+.06).toFixed(2)},0.,0.,0.);
     return vec4(radius,gradient);
@@ -94,8 +95,8 @@ export function createOrbWater() {
     _EdgeFoamColor:{value:new T.Color(1,.97,1)},
   };
   const material = new T.MeshPhysicalMaterial({
-    color:'#47b8de', metalness:0, roughness:.23,
-    transmission:1, thickness:.48, ior:1.333,
+    color:'#368ce5', metalness:0, roughness:.23,
+    transmission:1, thickness:0, ior:1,
     attenuationColor:'#327dae', attenuationDistance:2.8,
     clearcoat:0, specularIntensity:0, envMapIntensity:0,
     // Physical transmission draws the opaque core through the moving surface.
@@ -120,7 +121,8 @@ export function createOrbWater() {
       #endif
     `);
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = orbP; vOrbPosition = transformed; vOrbEyeDepth = -(modelViewMatrix * vec4(transformed,1.)).z;');
-    shader.fragmentShader = `uniform float orbTime; varying vec3 vOrbPosition;
+    shader.fragmentShader = `uniform float orbTime,orbInteractionTime; varying vec3 vOrbPosition;
+      uniform vec4 orbRippleCenters[8];uniform float orbRippleStrengths[8];
       varying highp float vOrbEyeDepth;
       uniform highp sampler2D _SceneDepth;
       uniform vec2 _SceneResolution, _SceneTexelSize;
@@ -136,16 +138,23 @@ export function createOrbWater() {
         float gap=linearizeDepthBuffer(depth,_CameraNear,_CameraFar)-waterDepth;
         return step(0.,gap)*(1.-smoothstep(0.,width,gap))*(1.-step(.9999,depth));
       }
+      float coastMask() {
+        vec3 n=normalize(vOrbPosition);float angle=atan(n.z,n.x);
+        float coast=.92*(1.+.09*sin(3.*angle+.7)+.055*cos(5.*angle-1.2));
+        float ratio=length(vOrbPosition.xz)/coast;
+        return smoothstep(.65,.8,n.y)*smoothstep(.77,.86,ratio)*(1.-smoothstep(1.04,1.16,ratio));
+      }
       float calcEdgeFoam(vec2 uv) {
         float sceneLinear=linearizeDepthBuffer(texture2D(_SceneDepth,uv).x,_CameraNear,_CameraFar);
         float gap=sceneLinear-vOrbEyeDepth;
         // Bound the projected contact band to 2.5 pixels, even on steep or
         // nearly parallel surfaces where a constant eye-depth width balloons.
         vec2 gapGradient=vec2(dFdx(gap),dFdy(gap));
-        float width=max(.0005,min(_EdgeFoamWidth,length(gapGradient)*2.5));
+        float shore=coastMask();
+        float width=max(.0005,min(_EdgeFoamWidth*mix(1.,3.3,shore),length(gapGradient)*mix(2.5,4.5,shore)));
         float foam=foamSample(uv,vOrbEyeDepth,width);
         vec2 waterGradient=vec2(dFdx(vOrbEyeDepth),dFdy(vOrbEyeDepth));
-        vec2 offset=_SceneTexelSize*1.5;
+        vec2 offset=_SceneTexelSize*mix(1.5,2.,shore);
         vec2 pixels=offset*_SceneResolution;
         // Neighbouring contact samples let foam softly extend past an opaque
         // silhouette instead of being cut off at the island/model boundary.
@@ -166,15 +175,42 @@ export function createOrbWater() {
       float causticPhase = orbNoise(vOrbPosition*5.5+vec3(orbTime*.09,0.,-orbTime*.13));
       float caustic = pow(1. - abs(sin(causticPhase * 20.)), 22.);
       totalEmissiveRadiance += vec3(.03,.20,.23) * caustic * .12;
+      // Expanding, noise-distorted wakes remain visible even away from the
+      // single specular light. Each contact retains its own world-space origin.
+      float wake=0.;vec3 wakeN=normalize(vOrbPosition);
+      for(int i=0;i<8;i++){
+        float age=orbInteractionTime-orbRippleCenters[i].w;
+        if(age<0.||age>2.2||orbRippleStrengths[i]<.001)continue;
+        float d=length(wakeN-orbRippleCenters[i].xyz)*2.1;
+        if(d>.85)continue;
+        float flow=orbNoise(vOrbPosition*22.+vec3(age*1.3,-age*.7,age*.5));
+        float front=(d-age*.28+(flow-.5)*.09)/.075;
+        float pattern=smoothstep(.35,.8,flow)*exp(-front*front-age*.8)*smoothstep(0.,.05,age)*(1.-smoothstep(1.7,2.2,age));
+        wake+=pattern*orbRippleStrengths[i];
+      }
+      totalEmissiveRadiance+=vec3(.12,.32,.39)*min(wake,1.4);
       // One white light only. Object silhouettes and environment streaks do
       // not become highlights; the water also receives no projected shadows.
       vec3 whiteLight=normalize((viewMatrix*vec4(-.32,.78,.48,0.)).xyz);
       vec3 whiteHalf=normalize(whiteLight+normalize(vViewPosition));
-      totalEmissiveRadiance+=vec3(.55)*pow(max(0.,dot(normal,whiteHalf)),130.);
+      // A mostly spherical light normal keeps this single highlight smooth
+      // instead of magnifying the water tessellation into white polygon blobs.
+      vec3 lightNormal=normalize(mix(normalize((viewMatrix*vec4(normalize(vOrbPosition),0.)).xyz),normal,.12));
+      totalEmissiveRadiance+=vec3(.30)*pow(max(0.,dot(lightNormal,whiteHalf)),180.);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
       float orbEdgeFoamRaw=calcEdgeFoam(gl_FragCoord.xy/max(_SceneResolution,vec2(1.)));
-      float edgeFoam=clamp(orbEdgeFoamRaw*_EdgeFoamIntensity,0.,1.);
+      // Adapted from folio-2025 WaterSurface.js ripplesNode/shoreNode (MIT):
+      // slope-driven phase, a new noise offset per band, and a shallow mask.
+      // Here opaque eye-depth supplies slope instead of its terrain texture.
+      float gap=max(0.,linearizeDepthBuffer(texture2D(_SceneDepth,gl_FragCoord.xy/_SceneResolution).x,_CameraNear,_CameraFar)-vOrbEyeDepth);
+      float shore=coastMask(),slope=gap/.10,phase=slope*2.5-orbTime*.55;
+      float bandIndex=floor(phase),shoreNoise=orbNoise(vOrbPosition*24.+vec3(bandIndex/.345));
+      float bands=1.-smoothstep(.10,.28,abs(fract(phase+shoreNoise*.7)-.5));
+      float shoreWidth=max(.001,min(.065,length(vec2(dFdx(gap),dFdy(gap)))*7.));
+      float shallow=(1.-smoothstep(0.,shoreWidth,gap))*shore;
+      float coastalFoam=bands*shallow*.26;
+      float edgeFoam=clamp(orbEdgeFoamRaw*mix(_EdgeFoamIntensity,.76,shore)+coastalFoam,0.,1.);
       outgoingLight=mix(outgoingLight,max(outgoingLight,_EdgeFoamColor),edgeFoam);
       #include <opaque_fragment>
     `);
@@ -185,7 +221,7 @@ export function createOrbWater() {
       totalDiffuse=max(totalDiffuse,vec3(.009,.055,.10));
     `);
   };
-  material.customProgramCacheKey = () => 'orb-water-one-light-living-coast-v6';
+  material.customProgramCacheKey = () => 'orb-water-submerged-noise-coast-v7';
   let ripple=0;
   return {material,uniforms,emitRipple(point,amount=1){
     const n=point.clone().normalize(),i=ripple++%8;

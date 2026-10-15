@@ -51,19 +51,21 @@ export function addIslandRocks(island) {
     for(let i=0;i<p.count;i++){
       const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
       const bump=.76+.40*(.5+.5*Math.sin(x*19+y*31+z*43+variant*7));
-      p.setXYZ(i,x*bump*(.85+variant*.13),y*bump,z*bump*(1.1-variant*.08));
+      p.setXYZ(i,x*bump*(.85+variant*.13),(variant===2&&y>0?.46:y*bump),z*bump*(1.1-variant*.08));
     }
     geometry.computeVertexNormals();
-    const rocks=new T.InstancedMesh(geometry,material,3);rocks.name='island-rock';rocks.castShadow=true;rocks.receiveShadow=true;
+    const rocks=new T.InstancedMesh(geometry,material,3);rocks.name='island-rock';rocks.castShadow=variant!==2;rocks.receiveShadow=variant!==2;
     for(let j=0;j<3;j++){
       const i=variant*3+j,a=i*2.39996+.12*random(),coast=coastRadius(a);
-      const r=i<6?coast*(.16+random()*.46):coast*(.96+random()*.18);
-      const x=Math.cos(a)*r,z=Math.sin(a)*r,outer=i>=6,size=outer?.14+random()*.035:.024+random()*.019;
+      const r=i<6?coast*(.16+random()*.46):coast*(1.32+random()*.16);
+      const x=Math.cos(a)*r,z=Math.sin(a)*r,outer=i>=6,size=outer?.18+random()*.025:.024+random()*.019;
       dummy.position.set(x,terrainHeight(x,z)+size*.18,z);
       // Large stepping stones remain above the highest coastal water, while
       // the smaller stones inside the grass keep their existing proportions.
       if(outer)dummy.position.normalize().multiplyScalar(2.17);
-      dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
+      dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);
+      if(outer){dummy.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),dummy.position.clone().normalize());dummy.rotateY(a);dummy.scale.set(size*1.2,size,size*1.12);}
+      dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
     }
     rocks.instanceMatrix.needsUpdate=true;rocks.computeBoundingSphere();island.add(rocks);meshes.push(rocks);
   }
@@ -74,7 +76,7 @@ export async function createOrbIsland() {
   await loadFoliageTexture();
   const island=new T.Group();island.name='orb-island';
   const land=new T.Mesh(terrainGeometry(),landMaterial());
-  land.name='island-shore';land.receiveShadow=true;island.add(land);
+  land.name='island-shore';land.receiveShadow=false;island.add(land);
 
   // Use the forest's actual stand, foliage SDF, colors and wind at miniature scale.
   const treeScale=.14,treeRoot=new T.Group();treeRoot.scale.setScalar(treeScale);island.add(treeRoot);

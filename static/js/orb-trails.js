@@ -2,7 +2,7 @@ import * as T from '../vendor/three.module.min.js';
 
 export function createOrbTrails(water) {
   const group=new T.Group();group.name='orb-sato-trails';group.userData.orbFoamExclude=true;
-  const footprintCount=96,particleCount=80;
+  const footprintCount=96,particleCount=240;
   const footprintGeometry=new T.PlaneGeometry(.032,.055);
   const birth=new T.InstancedBufferAttribute(new Float32Array(footprintCount).fill(-100),1);footprintGeometry.setAttribute('printBirth',birth);
   const time={value:0},footprintMaterial=new T.ShaderMaterial({uniforms:{trailTime:time},transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,
@@ -23,14 +23,15 @@ export function createOrbTrails(water) {
     birth.setX(i,time.value);birth.needsUpdate=true;footprints.instanceMatrix.needsUpdate=true;
   }
   function splash(event) {
-    const count=event.type==='step'?3:event.double?8:event.type==='land'?24:18;
-    water.emitRipple(event.point,event.type==='step'?.5:event.type==='land'?1.15:.85);
+    const depth=T.MathUtils.clamp((event.waterDepth??.05)/.27,0,1);
+    const count=Math.round((event.type==='step'?10:event.double?18:event.type==='land'?38:30)*(1+depth*1.8));
+    water.emitRipple(event.point,(event.type==='step'?.8:event.type==='land'?1.5:1.2)*(1+depth*.6));
     for(let j=0;j<count;j++) {
       const particle=slots[particleIndex++%particleCount],a=random()*Math.PI*2;
       right.crossVectors(event.up,Math.abs(event.up.y)<.9?new T.Vector3(0,1,0):new T.Vector3(1,0,0)).normalize();forward.crossVectors(right,event.up).normalize();
-      particle.position.copy(event.point).addScaledVector(event.up,.012);
-      particle.velocity.copy(event.up).multiplyScalar((event.type==='step'?.13:.3)+random()*.38).addScaledVector(right,Math.cos(a)*(.08+random()*.32)).addScaledVector(forward,Math.sin(a)*(.08+random()*.32));
-      particle.age=0;particle.life=.32+random()*.38;particle.size=.004+random()*.007;
+      particle.position.copy(event.point).normalize().multiplyScalar(event.waterRadius??event.point.length()).addScaledVector(event.up,.008).addScaledVector(right,Math.cos(a)*(.025+depth*.05)).addScaledVector(forward,Math.sin(a)*(.025+depth*.05));
+      particle.velocity.copy(event.up).multiplyScalar((event.type==='step'?.18:.4)+depth*.20+random()*.38).addScaledVector(right,Math.cos(a)*(.08+random()*.32)).addScaledVector(forward,Math.sin(a)*(.08+random()*.32));
+      particle.age=0;particle.life=.45+random()*.4;particle.size=.004+random()*.008;
     }
   }
   function emit(event) {if(event.surface==='sand'&&event.type==='step')footprint(event);if(event.surface==='water')splash(event);}

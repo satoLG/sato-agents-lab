@@ -1,6 +1,7 @@
+import {createCoreGeometry} from './orb-core-surface.js';
 import * as T from '../vendor/three.module.min.js';
 import {OrbitControls} from '../vendor/OrbitControls.js';
-import {createOrbWater,createOrbCore,CORE_RADIUS,WATER_RADIUS} from './orb-water.js';
+import {createOrbWater,createOrbCore,WATER_RADIUS} from './orb-water.js';
 import {createOrbIsland} from './orb-island.js';
 import {createOrbDepth} from './orb-depth.js';
 import {sphereDistanceForDiameter} from './orb-camera.js';
@@ -101,12 +102,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-3,right:3,top:4,bottom:-3,near:.1,far:18});sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-.001;sun.shadow.normalBias=.025;scene.add(sun);
   const blueLight=new T.DirectionalLight('#72c2e6',1.8);blueLight.position.set(5,1,-4);scene.add(blueLight);
   const world=new T.Group();world.name='orb-world';scene.add(world);
-  const core=createOrbCore(),coreGeometry=new T.SphereGeometry(CORE_RADIUS,64,48),p=coreGeometry.attributes.position;
-  for(let i=0;i<p.count;i++) {
-    const x=p.getX(i),y=p.getY(i),z=p.getZ(i),bump=1+Math.sin(x*5+z*2)*Math.cos(y*6-z*3)*.006;
-    p.setXYZ(i,x*bump,y*bump,z*bump);
-  }
-  coreGeometry.computeVertexNormals();
+  const core=createOrbCore(),coreGeometry=createCoreGeometry();
   const nucleus=new T.Mesh(coreGeometry,core.material);nucleus.name='submerged-nucleus';
   // The permanently submerged globe is separated from the water by a gap.
   // Only external contact geometry should contribute intersection foam.
@@ -133,8 +129,9 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   });
   const refraction=createOrbRefractionFilter(renderer);
   refraction.add(moon.mesh);refraction.add(island.trees);refraction.add(island.grass);
-  refraction.add(island.land,{cutoff:2.08});for(const rock of island.rocks)refraction.add(rock,{cutoff:2.14});
-  refraction.add(game.avatar.root,{cutoff:2.08});
+  // Straight-through transmission keeps submerged terrain and Sato at their
+  // actual screen positions. Radial cutoffs created the hard turquoise band.
+  // Trees and the moon remain excluded from this background pass.
 
   let paused=true,intro=true,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
   const emitCamera=()=>{dirty=true;onCameraChange(worldPosition.distanceTo(WORLD_TARGET)/camera.position.distanceTo(controls.target));};

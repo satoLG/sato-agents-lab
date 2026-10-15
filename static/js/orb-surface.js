@@ -3,6 +3,9 @@ import {orbWaterNoise as noise} from './orb-noise.js';
 import {CORE_RADIUS,WATER_RADIUS} from './orb-water.js';
 import {coastRadius} from './orb-island.js';
 
+import {coreSurfaceRadius} from './orb-core-surface.js';
+export {coreSurfaceRadius};
+
 const smooth=(a,b,x)=>T.MathUtils.smoothstep(x,a,b);
 export function coastContactRatio(angle,time) {
   return .92+.014*Math.sin(time*.9+angle*3)+.008*Math.sin(time*1.37-angle*5);
@@ -34,7 +37,7 @@ export function createOrbSurface({land,rocks=[],trunks=[],water}) {
   for(const object of colliders)object.updateWorldMatrix(true,false);
   function sample(direction,time=water.uniforms.orbTime.value) {
     const n=direction.clone().normalize(),sea=seaSurfaceRadius(n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value);
-    let result={radius:sea-.012,waterRadius:sea,normal:n.clone(),surface:'water',object:null};
+    let result={radius:coreSurfaceRadius(n),waterRadius:sea,normal:n.clone(),surface:'rock',object:null};
     if(n.y>.48) {
       origin.copy(n).multiplyScalar(4);down.copy(n).negate();ray.set(origin,down);ray.far=3;
       const hits=ray.intersectObjects(colliders,false);
@@ -49,6 +52,8 @@ export function createOrbSurface({land,rocks=[],trunks=[],water}) {
         result={radius,waterRadius:sea,normal,surface:hit.object===land?(ratio<.69?'grass':'sand'):'rock',object:hit.object};
       }
     }
+    result.groundSurface=result.surface;result.waterDepth=Math.max(0,sea-result.radius);
+    if(result.waterDepth>.008)result.surface='water';
     result.point=n.multiplyScalar(result.radius);return result;
   }
   function blockedByTrunk(point,radius=.045,height=.24) {
