@@ -19,16 +19,17 @@ function error(message) {
 async function start() {
   if(loading)return;loading=true;entered=false;delete document.body.dataset.started;container.inert=true;$('orb-error').hidden=true;
   ambience=createOrbAmbience({onChange:updateAudio});$('orb-sound').hidden=true;
+  const audioReady=ambience.prepare().catch(error=>console.warn('orb foley:',error.message));
   loader=createOrbLoading({reducedMotion:motionPreference.matches});loader.setProgress(.03);
   try {
     const {createOrbScene}=await import('./orb-scene.js');
     scene=await createOrbScene(container,{
-      reducedMotion:motionPreference.matches,onProgress:value=>loader.setProgress(value),
+      reducedMotion:motionPreference.matches,onProgress:value=>loader.setProgress(value*.97),
       getLoadingDiameter:()=>parseFloat(getComputedStyle($('orb-start')).width)||140,
       onCameraChange:zoom=>{container.dataset.zoom=zoom.toFixed(2);},onError:error,
       onContact:event=>ambience?.playContact(event),
     });
-    scene.setPaused(true);
+    scene.setPaused(true);await audioReady;loader.setProgress(1);
     if(await loader.ready)$('orb-status').textContent='Seu mundo está pronto. Ative Entrar na orb para explorar.';
   } catch(e) {
     console.error('orb:',e);error(e.message==='WEBGL_UNAVAILABLE'?null:'Não foi possível preparar a visualização 3D. Tente recarregar a página ou usar outro navegador com aceleração gráfica ativada.');

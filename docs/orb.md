@@ -9,8 +9,9 @@ acessível da cena. A água começa com ondulação de 90% e transmissão físic
 A lua tem 43% do raio do núcleo sob a água (0,7912 contra 1,84), com textura
 de rocha Rock Boulder Dry da Poly Haven (CC0). Cor e normal map em 512 × 512 e
 altura em 64 × 64 somam 78.313 bytes. A malha recebe desníveis uma única vez,
-com relevo contínuo e amostragem triplanar da altura; o normal map acrescenta
-detalhes de iluminação. As normais geométricas coincidem na emenda e nos polos.
+com relevo contínuo e amostragem triplanar da altura. Cor e normal map também
+usam projeção triplanar, sem UVs esféricas ou textura esticada nos polos.
+Bases tangentes derivadas por projeção mantêm o relevo iluminado em todos os lados. As normais geométricas coincidem na emenda e nos polos.
 Fontes e reprodução estão em `static/textures/orb-moon/README.md`.
 Sua órbita circular fica no plano perpendicular à direção da câmera inicial,
 com raio de 4,75 e uma volta a cada cinco minutos. A lua também gira em torno
@@ -52,11 +53,13 @@ A grama reutiliza `home-grass.js`, com blades 42% mais baixos, uma grade mais
 densa e a mesma cor e orientação de iluminação do chão. A costa passa por uma
 curva suave junto ao nível da água e se enterra no núcleo; os dois materiais
 compartilham a textura 3D do planeta no trecho submerso. Nove pedras
-irregulares e foscas usam três malhas instanciadas com 20 faces cada. As seis
+irregulares e foscas usam três malhas instanciadas com 180 faces cada,
+normais suavizadas e os mesmos mapas de cor e normal da lua. As seis
 internas continuam pequenas; as três externas são maiores e elevadas para
 permanecer acima da água e servir como plataformas de salto. Elas ficam entre
 1,32 e 1,48 vezes o raio da costa, com topos planos orientados pela gravidade
-local e laterais irregulares. A colisão continua usando seus triângulos reais.
+local e laterais irregulares. As bases se enterram no fundo real do planeta,
+sem suspender as pedras acima dele. A colisão usa seus triângulos reais.
 A atribuição da base de vegetação permanece em `scenic-environments.md`.
 
 ## Espuma e carregamento
@@ -78,12 +81,13 @@ texturas são redimensionados com o canvas e liberados ao sair.
 A costa adapta `ripplesNode` e `shoreNode` de
 [WaterSurface.js, folio-2025](https://github.com/brunosimon/folio-2025/blob/41046b57eeed8d156d9c3fd7fa259900baef7816/sources/Game/World/WaterSurface.js)
 (MIT, licença em `static/textures/folio-2025/LICENSE.txt`): fase baseada na
-profundidade, ruído com deslocamento por faixa e máscara rasa. A borda costeira
-chega a 4,5 pixels e seus contornos dinâmicos a 7; outras intersecções mantêm
-2,5 pixels. A máscara limita esse detalhe à praia, sem cobrir o oceano inteiro.
+distância à costa, ruído com deslocamento por faixa e máscara rasa. A borda
+costeira chega a 4,5 pixels; atrás dela, contornos brancos descontínuos avançam
+e desaparecem numa faixa de 0,14 unidade, com antialias pelas derivadas da GPU.
+Outras intersecções mantêm 2,5 pixels. A máscara limita esse detalhe à praia.
 
 O loading acompanha preparação, textura de folhagem, compilação dos shaders e
-o primeiro render com profundidade. Chega a 100% somente quando a cena está
+o primeiro render com profundidade e a preparação dos arquivos de passos. Chega a 100% somente quando a cena está
 pronta; a entrada fica bloqueada até então. Movimento reduzido elimina espera
 e animações decorativas. Falhas interrompem o loading e mostram recuperação.
 
@@ -108,11 +112,14 @@ Um destaque branco explícito substitui os reflexos do ambiente. A refração
 existente do Three r180 é filtrada: lua, árvores e grama ficam fora dessa
 textura. Terreno, pedras e Sato passam sem cortes radiais; espessura zero e
 IOR 1 mantêm sua imagem na posição real, evitando duplicatas refratadas. A
-coloração azul evita a faixa verde produzida pela areia e não há sombras
+coloração azul mais clara preserva a leitura do personagem submerso, evita a faixa verde produzida pela areia e não há sombras
 projetadas nas superfícies submersas. Isso não exige outro passe da cena. Um mínimo de azul evita que os raios que
 enxergam o espaço preto criem uma faixa aparentemente refletida na borda.
 Alterações em modelos, buffers,
 visibilidade ou câmera continuam atualizando profundidade e sombras.
+
+O fundo usa azul-marinho `#14243f`, com 3.400 estrelas mais claras e um brilho
+azul suave. A mudança não acrescenta passes de renderização.
 
 ## Sato e caminhada esférica
 
@@ -148,12 +155,15 @@ pulo é bloqueado até a aterrissagem. Arraste para olhar e use a roda ou pinça
 ajustar a câmera entre 1,25 e 4,2 unidades. `Escape` ou Voltar à órbita devolvem OrbitControls.
 No celular, o direcional e Pular aceitam dois dedos simultâneos; o pulo usa
 pointerdown para não depender de cliques de compatibilidade do segundo dedo.
-A câmera parte de 2,15 unidades a 0,64 radiano de elevação e acompanha a direção
-de caminhada por trás com amortecimento. O referencial do comando fica estável
-durante um movimento sustentado. Um arrasto mantém o olhar manual por 2,2 s.
-Folhas, troncos e pedras entre a câmera e Sato ficam até 84% transparentes por
+A câmera parte de 2,15 unidades a 0,64 radiano de elevação e acompanha a posição
+com amortecimento, sem perseguir a direção em que Sato olha. Virar ou andar de
+costas não gira a câmera: sua orientação só muda por arrasto ou pelo transporte
+radial necessário para percorrer a esfera. O olhar manual permanece no ângulo escolhido.
+Folhas, troncos, pedras e a lua entre a câmera e Sato ficam até 84% transparentes por
 um dither espacial suave, preservando instâncias e testes de alpha, sem novos
-passes. Obstáculos não fazem a câmera girar nem reduzir sua distância.
+passes. A posição de oclusão é calculada depois do vento e das instâncias,
+para acompanhar as folhas em movimento. Obstáculos não fazem a câmera girar
+nem reduzir sua distância.
 
 O motor integra a gravidade radial a 120 Hz, com passos limitados, preservando
 uma base tangente por transporte ao redor da esfera. Corpo e câmera acompanham
@@ -170,10 +180,11 @@ usa hash inteiro reproduzível em JS e GLSL, com equivalência verificada na GPU
 Pegadas na areia usam um pool de 96 decalques, com desaparecimento em 18 s.
 Na água, pernas e corpo ficam submersos conforme a altura do fundo.
 Passos e pulos alimentam até oito perturbações locais: ruído desloca a frente,
-altera altura/normal e colore discretamente a esteira. Elas desaparecem em 2,2 s.
-Um pool de 240 partículas balísticas emite espuma na superfície do mar; a
-quantidade cresce com a profundidade de imersão, com rajadas maiores nos pulos
-e impactos. Rastros e partículas ficam fora do pre-pass de contato. Sato também fica
+altera altura/normal e desenha três anéis finos que se afastam do contato.
+Antialias por derivadas mantém as bordas suaves, sem uma mancha de espuma
+branca sobre Sato. As perturbações desaparecem em 2,2 s.
+Um pool de 240 partículas balísticas emite gotas claras nos pulos e impactos;
+a quantidade cresce com a profundidade de imersão. Os passos produzem apenas anéis. Rastros e partículas ficam fora do pre-pass de contato. Sato também fica
 fora dele enquanto está em terra, preservando o cache durante o idle.
 
 ## Som do mar e dos movimentos
@@ -184,14 +195,16 @@ suave de água, sem downloads nem gravações externas. O volume entra aos pouco
 O botão de som e a tecla `M` permitem silenciar; ocultar a aba suspende o áudio
 e sair da página libera os nós e fecha o contexto. Ausência de Web Audio não
 impede a exploração visual. A pausa de movimento não interrompe a ambiência.
-O mesmo contexto produz passos distintos de grama, areia, rocha e água, além
-de impulsos e aterrissagens com envelopes próprios. Ruído filtrado, pequenas
-ressonâncias e tons curtos variam por superfície; a cadência segue a distância
-percorrida, sem passos no ar. As vozes são limitadas a dez e desconectadas ao
-terminar. Contato molhado tem prioridade sobre o material do fundo. Usa uma
-camada própria de splash com ruído amplo, borbulhas de frequência descendente
-e envelopes de 0,28/0,38/0,52 s para passo/pulo/impacto. Volume e densidade
-crescem com a imersão. O botão de som silencia a ambiência e todos os movimentos.
+Os contatos usam dez gravações mono MP3 do pacote JDSherbert fornecido pelo
+proprietário (165.196 bytes), alternando duas variantes de grama, areia, pedra,
+poça e água. Os arquivos são locais, preparados durante o loading e decodificados
+após o gesto de Play. A atribuição e os hashes originais estão em
+`static/audio/orb-foley/`. Impulsos têm um envelope mais curto; aterrissagens
+reproduzem mais da gravação, com volume proporcional ao impacto. Contato molhado
+tem prioridade sobre o chão: poça em água rasa e água acima de 0,10 unidade
+de imersão, com volume crescente. A cadência segue a distância percorrida, sem
+passos no ar. As dez vozes máximas são desconectadas ao terminar. O botão de som
+silencia a ambiência e todos os movimentos.
 
 ## Verificação
 
@@ -223,4 +236,6 @@ A validação também compara o piso do núcleo com a malha renderizada, garante
 apoio estável enquanto a maré muda, verifica espuma proporcional à imersão e
 compara a saída de áudio molhado com areia. Readbacks da GPU confirmam a
 expansão e o desaparecimento da esteira e a transparência de obstáculos sem
-mover a câmera. Gestos reais de dois dedos verificam zoom nos dois sentidos.
+mover a câmera, incluindo as folhas com vento e a lua. O material lunar é
+renderizado no polo com UVs colapsadas para confirmar que a projeção independe
+delas; remover o normal map deve alterar o relevo iluminado. Gestos reais de dois dedos verificam zoom nos dois sentidos.

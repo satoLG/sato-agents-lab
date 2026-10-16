@@ -95,7 +95,7 @@ export function createOrbWater() {
     _EdgeFoamColor:{value:new T.Color(1,.97,1)},
   };
   const material = new T.MeshPhysicalMaterial({
-    color:'#368ce5', metalness:0, roughness:.23,
+    color:'#6ba8ef', metalness:0, roughness:.23,
     transmission:1, thickness:0, ior:1,
     attenuationColor:'#327dae', attenuationDistance:2.8,
     clearcoat:0, specularIntensity:0, envMapIntensity:0,
@@ -168,27 +168,31 @@ export function createOrbWater() {
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
       float orbDepth = orbNoise(vOrbPosition*1.5+vec3(0.,orbTime*.035,0.));
-      diffuseColor.rgb *= mix(vec3(.52,.78,.89), vec3(.90,1.06,1.08), orbDepth);
+      diffuseColor.rgb *= mix(vec3(.80,.89,.96), vec3(.98,1.02,1.03), orbDepth);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `
       #include <emissivemap_fragment>
       float causticPhase = orbNoise(vOrbPosition*5.5+vec3(orbTime*.09,0.,-orbTime*.13));
       float caustic = pow(1. - abs(sin(causticPhase * 20.)), 22.);
       totalEmissiveRadiance += vec3(.03,.20,.23) * caustic * .12;
-      // Expanding, noise-distorted wakes remain visible even away from the
-      // single specular light. Each contact retains its own world-space origin.
+      // Fine concentric wave fronts, not a broad emissive foam/noise patch.
+      // The vertex deformation above is unchanged; these lines describe its
+      // outward motion at fragment resolution with derivative antialiasing.
       float wake=0.;vec3 wakeN=normalize(vOrbPosition);
       for(int i=0;i<8;i++){
         float age=orbInteractionTime-orbRippleCenters[i].w;
         if(age<0.||age>2.2||orbRippleStrengths[i]<.001)continue;
         float d=length(wakeN-orbRippleCenters[i].xyz)*2.1;
         if(d>.85)continue;
-        float flow=orbNoise(vOrbPosition*22.+vec3(age*1.3,-age*.7,age*.5));
-        float front=(d-age*.28+(flow-.5)*.09)/.075;
-        float pattern=smoothstep(.35,.8,flow)*exp(-front*front-age*.8)*smoothstep(0.,.05,age)*(1.-smoothstep(1.7,2.2,age));
-        wake+=pattern*orbRippleStrengths[i];
+        float flow=(orbNoise(vOrbPosition*13.+vec3(age*.4))-.5)*.005;
+        float width=max(.0045+age*.0015,fwidth(d)*1.1);
+        for(int ring=0;ring<3;ring++){
+          float radius=age*.28-float(ring)*.065;
+          float line=1.-smoothstep(width*.3,width,abs(d+flow-radius));
+          wake+=line*smoothstep(0.,.035,radius)*exp(-age*1.15-float(ring)*.45)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i];
+        }
       }
-      totalEmissiveRadiance+=vec3(.12,.32,.39)*min(wake,1.4);
+      totalEmissiveRadiance+=vec3(.055,.11,.14)*min(wake,1.);
       // One white light only. Object silhouettes and environment streaks do
       // not become highlights; the water also receives no projected shadows.
       vec3 whiteLight=normalize((viewMatrix*vec4(-.32,.78,.48,0.)).xyz);
@@ -201,15 +205,19 @@ export function createOrbWater() {
     shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
       float orbEdgeFoamRaw=calcEdgeFoam(gl_FragCoord.xy/max(_SceneResolution,vec2(1.)));
       // Adapted from folio-2025 WaterSurface.js ripplesNode/shoreNode (MIT):
-      // slope-driven phase, a new noise offset per band, and a shallow mask.
-      // Here opaque eye-depth supplies slope instead of its terrain texture.
+      // coast-distance phase, a new noise offset per band, and a shallow mask.
+      // Positive opaque eye-depth keeps the trailing contours on the water.
       float gap=max(0.,linearizeDepthBuffer(texture2D(_SceneDepth,gl_FragCoord.xy/_SceneResolution).x,_CameraNear,_CameraFar)-vOrbEyeDepth);
-      float shore=coastMask(),slope=gap/.10,phase=slope*2.5-orbTime*.55;
-      float bandIndex=floor(phase),shoreNoise=orbNoise(vOrbPosition*24.+vec3(bandIndex/.345));
-      float bands=1.-smoothstep(.10,.28,abs(fract(phase+shoreNoise*.7)-.5));
-      float shoreWidth=max(.001,min(.065,length(vec2(dFdx(gap),dFdy(gap)))*7.));
-      float shallow=(1.-smoothstep(0.,shoreWidth,gap))*shore;
-      float coastalFoam=bands*shallow*.26;
+      float shore=coastMask(),angle=atan(vOrbPosition.z,vOrbPosition.x);
+      float coast=.92*(1.+.09*sin(3.*angle+.7)+.055*cos(5.*angle-1.2));
+      float contact=.92+.014*sin(orbTime*.9+angle*3.)+.008*sin(orbTime*1.37-angle*5.);
+      float shoreDistance=length(vOrbPosition.xz)-coast*contact;
+      float phase=shoreDistance*22.-orbTime*.55,bandIndex=floor(phase);
+      float shoreNoise=orbNoise(vOrbPosition*32.+vec3(bandIndex/.345));
+      float contour=abs(fract(phase+shoreNoise*.24)-.5),aa=max(.025,fwidth(phase)*.7);
+      float bands=1.-smoothstep(.065-aa,.065+aa,contour);
+      float shallow=smoothstep(.003,.014,shoreDistance)*(1.-smoothstep(.025,.14,shoreDistance))*shore*step(.0001,gap);
+      float coastalFoam=bands*shallow*smoothstep(.25,.62,shoreNoise)*.32;
       float edgeFoam=clamp(orbEdgeFoamRaw*mix(_EdgeFoamIntensity,.76,shore)+coastalFoam,0.,1.);
       outgoingLight=mix(outgoingLight,max(outgoingLight,_EdgeFoamColor),edgeFoam);
       #include <opaque_fragment>
@@ -218,10 +226,10 @@ export function createOrbWater() {
       #include <transmission_fragment>
       // Rays that miss the submerged core see black space. Keep that rim blue
       // instead of drawing an apparent black reflection around the ocean.
-      totalDiffuse=max(totalDiffuse,vec3(.009,.055,.10));
+      totalDiffuse=max(totalDiffuse,vec3(.015,.075,.13));
     `);
   };
-  material.customProgramCacheKey = () => 'orb-water-submerged-noise-coast-v7';
+  material.customProgramCacheKey = () => 'orb-water-circular-waves-coast-v8';
   let ripple=0;
   return {material,uniforms,emitRipple(point,amount=1){
     const n=point.clone().normalize(),i=ripple++%8;

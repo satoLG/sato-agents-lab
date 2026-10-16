@@ -1,3 +1,6 @@
+import {smoothSphereNormals} from './orb-geometry.js';
+import {createOrbRockMaterial} from './orb-rock-material.js';
+import {coreSurfaceRadius} from './orb-core-surface.js';
 import * as T from '../vendor/three.module.min.js';
 import {createTreeGrove,createGroveResources,createContactShadows} from './scene-grove.js';
 import {createHomeGrass} from './home-grass.js';
@@ -41,30 +44,36 @@ function landMaterial() {
   material.customProgramCacheKey=()=> 'orb-land-continuous-ground-v1';return material;
 }
 
-export function addIslandRocks(island) {
-  const material=new T.MeshStandardMaterial({color:'#66756f',roughness:1,metalness:0,flatShading:true});
+export function addIslandRocks(island,textures={}) {
+  const material=createOrbRockMaterial(textures,1.2);
   let seed=9871;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   const dummy=new T.Object3D(),meshes=[];
   for(let variant=0;variant<3;variant++){
-    const geometry=new T.IcosahedronGeometry(1,0),p=geometry.attributes.position;
+    const geometry=new T.IcosahedronGeometry(1,2),p=geometry.attributes.position;
     for(let i=0;i<p.count;i++){
       const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-      const bump=.76+.40*(.5+.5*Math.sin(x*19+y*31+z*43+variant*7));
-      p.setXYZ(i,x*bump*(.85+variant*.13),(variant===2&&y>0?.46:y*bump),z*bump*(1.1-variant*.08));
+      const bump=.94+.12*Math.sin(x*3.7+y*2.3+variant*2)*Math.cos(z*4.1-y*1.8)+.06*Math.sin(x*7-z*5+y*3);
+      p.setXYZ(i,x*bump*(.85+variant*.13),(variant===2&&y>.32?.52:y*bump),z*bump*(1.1-variant*.08));
     }
-    geometry.computeVertexNormals();
+    smoothSphereNormals(geometry);geometry.computeBoundingBox();
     const rocks=new T.InstancedMesh(geometry,material,3);rocks.name='island-rock';rocks.castShadow=variant!==2;rocks.receiveShadow=variant!==2;
     for(let j=0;j<3;j++){
       const i=variant*3+j,a=i*2.39996+.12*random(),coast=coastRadius(a);
       const r=i<6?coast*(.16+random()*.46):coast*(1.32+random()*.16);
       const x=Math.cos(a)*r,z=Math.sin(a)*r,outer=i>=6,size=outer?.18+random()*.025:.024+random()*.019;
-      dummy.position.set(x,terrainHeight(x,z)+size*.18,z);
-      // Large stepping stones remain above the highest coastal water, while
-      // the smaller stones inside the grass keep their existing proportions.
-      if(outer)dummy.position.normalize().multiplyScalar(2.17);
-      dummy.rotation.set(random()*2,random()*6,random()*2);dummy.scale.set(size*(.9+random()*.4),size*(.6+random()*.35),size);
-      if(outer){dummy.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),dummy.position.clone().normalize());dummy.rotateY(a);dummy.scale.set(size*1.2,size,size*1.12);}
+      const groundPoint=new T.Vector3(x,terrainHeight(x,z),z),up=groundPoint.clone().normalize();
+      const ground=Math.max(groundPoint.length(),coreSurfaceRadius(up));
+      dummy.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),up);dummy.rotateY(a+random());
+      if(outer){
+        // Anchor a broad irregular base below the actual seabed. Keep a flat
+        // top above the tide, rather than lifting a small pebble into midair.
+        const bottom=ground-.055,top=2.27,sy=(top-bottom)/(.52-geometry.boundingBox.min.y);
+        dummy.scale.set(size*1.2,sy,size*1.12);dummy.position.copy(up).multiplyScalar(bottom-geometry.boundingBox.min.y*sy);
+      }else{
+        dummy.scale.set(size*(1.1+random()*.4),size*.8,size*(.9+random()*.3));
+        dummy.position.copy(up).multiplyScalar(ground-geometry.boundingBox.min.y*dummy.scale.y-.008);
+      }
       dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
     }
     rocks.instanceMatrix.needsUpdate=true;rocks.computeBoundingSphere();island.add(rocks);meshes.push(rocks);
@@ -72,7 +81,7 @@ export function addIslandRocks(island) {
   return meshes;
 }
 
-export async function createOrbIsland() {
+export async function createOrbIsland(textures={}) {
   await loadFoliageTexture();
   const island=new T.Group();island.name='orb-island';
   const land=new T.Mesh(terrainGeometry(),landMaterial());
@@ -100,7 +109,7 @@ export async function createOrbIsland() {
   });
   grassRoot.traverse(object=>{if(object.isMesh){object.userData.orbFoamExclude=true;object.geometry.boundingSphere=new T.Sphere(new T.Vector3(0,2.16/grassScale,0),2.25/grassScale);}});
 
-  const rocks=addIslandRocks(island);
+  const rocks=addIslandRocks(island,textures);
   const trunks=locations.map(([x,z,height])=>({x,z,y:terrainHeight(x,z),height,radius:.018}));
   return {group:island,land,rocks,trunks,trees:treeRoot,grass:grassRoot,update(time){updateNature(time);grass.tick(time);}};
 }

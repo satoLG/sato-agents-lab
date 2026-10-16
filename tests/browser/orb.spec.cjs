@@ -48,7 +48,8 @@ test.describe('orb desktop',()=>{
     test.setTimeout(90000);
     const errors=[],remote=[],api=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
     page.on('request',r=>{const url=new URL(r.url());if(url.origin!==new URL(info.project.use.baseURL).origin)remote.push(url.href);if(url.pathname.startsWith('/api/'))api.push(url.pathname);});
-    let release;const textureReady=new Promise(resolve=>{release=resolve;});
+    let release,releaseAudio;const textureReady=new Promise(resolve=>{release=resolve;}),audioReady=new Promise(resolve=>{releaseAudio=resolve;});
+    await page.route('**/audio/orb-foley/water-1.mp3',async route=>{await audioReady;await route.continue();});
     await page.route('**/foliageSDF.png',async route=>{await textureReady;await route.continue();});
     await exposeScene(page);await page.goto('/orb',{waitUntil:'domcontentloaded'});
     await expect(page.locator('#orb-start')).toBeDisabled();
@@ -56,6 +57,8 @@ test.describe('orb desktop',()=>{
     expect(Number(await page.locator('#orb-progress').getAttribute('aria-valuenow'))).toBeLessThan(100);
     await expect(page.locator('.wave-wrapper')).toHaveCount(3);
     await page.screenshot({path:info.outputPath('orb-loading.png')});release();
+    await expect(page.locator('#orb-scene')).toHaveAttribute('data-ready','true',{timeout:45000});
+    await expect(page.locator('#orb-start')).toBeDisabled();releaseAudio();
     await expect(page.locator('#orb-start')).toBeEnabled({timeout:45000});
     expectLoadingFit(await loadingFit(page));
     await expect(page.locator('#orb-progress')).toHaveAttribute('aria-valuenow','100');await page.locator('#orb-start').click();await expect(page.locator('#orb-loading')).toBeHidden();

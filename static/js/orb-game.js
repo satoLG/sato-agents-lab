@@ -5,10 +5,10 @@ import {createOrbSurface} from './orb-surface.js';
 import {createOrbTrails} from './orb-trails.js';
 import {createOrbCameraOcclusion} from './orb-camera-occlusion.js';
 
-export function createOrbGame({world,island,water,camera,canvas,container,controls,reducedMotion=false,onActivate=()=>{},onExit=()=>{},onContact=()=>{}}) {
+export function createOrbGame({world,island,water,camera,occluders=[],canvas,container,controls,reducedMotion=false,onActivate=()=>{},onExit=()=>{},onContact=()=>{}}) {
   const avatar=createOrbSato(),trails=createOrbTrails(water);
   const antennaTip=avatar.antenna.getObjectByName('antenna-tip');
-  const occlusion=createOrbCameraOcclusion([island.trees,...island.rocks]);
+  const occlusion=createOrbCameraOcclusion([island.trees,...island.rocks,...occluders]);
   const surface=createOrbSurface({land:island.land,rocks:island.rocks,trunks:island.trunks,water});
   const motor=createOrbMotor(surface,{onEvent:event=>{
     trails.emit(event);onContact(event);
@@ -18,7 +18,7 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
   world.add(avatar.root,trails.group);
   const invite=document.getElementById('orb-sato-invite'),hud=document.getElementById('orb-play-controls'),exit=document.getElementById('orb-walk-exit'),jumpButton=document.getElementById('orb-jump'),stick=document.getElementById('orb-stick'),knob=document.getElementById('orb-stick-knob');
   const keys=new Set(),touch=new T.Vector2(),back=new T.Vector3(4.4,0,9.8).normalize(),viewBack=new T.Vector3(),lastUp=motor.up.clone(),cameraTarget=new T.Vector3(),target=new T.Vector3(),desiredCamera=new T.Vector3(),right=new T.Vector3(),direction=new T.Vector3(),frame=new T.Matrix4(),transport=new T.Quaternion();
-  motor.heading.copy(back);let playing=false,enabled=false,seconds=0,cameraDistance=2.15,pitch=.64,pointer=null,stickPointer=null,lastMode='',manualLookUntil=0;
+  motor.heading.copy(back);let playing=false,enabled=false,seconds=0,cameraDistance=2.15,pitch=.64,pointer=null,stickPointer=null,lastMode='';
   const pointers=new Map();let pinchDistance=0;
   const removers=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);removers.push(()=>node.removeEventListener(type,fn,options));}
@@ -65,7 +65,7 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
     pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
     if(pointers.size>1){const span=pinchSpan();if(pinchDistance>0&&span>0)zoomBy(pinchDistance/span);pinchDistance=span;return;}
     back.copy(viewBack).applyAxisAngle(motor.up,-dx*.006);viewBack.copy(back);
-    pitch=T.MathUtils.clamp(pitch+dy*.004,.35,1.12);manualLookUntil=seconds+2.2;
+    pitch=T.MathUtils.clamp(pitch+dy*.004,.35,1.12);
   });
   function pointerEnd(event) {
     pointers.delete(event.pointerId);pinchDistance=pinchSpan();
@@ -103,13 +103,9 @@ export function createOrbGame({world,island,water,camera,canvas,container,contro
     trails.update(playing||animate||settling?dt:0,seconds);
     if(playing) {
       target.copy(motor.position).addScaledVector(motor.up,.15);cameraTarget.lerp(target,reducedMotion?1:1-Math.exp(-dt*12));
-      // Keep held input in its transported frame while the view catches up
-      // behind the heading. Otherwise holding sideways would turn forever.
-      if(amount>.05&&motor.velocity.length()>.04&&seconds>manualLookUntil){
-        const wanted=motor.heading.clone().negate();
-        const angle=Math.atan2(new T.Vector3().crossVectors(viewBack,wanted).dot(motor.up),viewBack.dot(wanted));
-        viewBack.applyAxisAngle(motor.up,angle*(1-Math.exp(-dt*2.4)));
-      } else if(amount===0)back.copy(viewBack);
+      // Transport the view around the planet without chasing Sato's facing.
+      // Turning/reversing changes only the character, never the camera azimuth.
+      viewBack.copy(back);
       desiredCamera.copy(cameraTarget).addScaledVector(viewBack,Math.cos(pitch)*cameraDistance).addScaledVector(motor.up,Math.sin(pitch)*cameraDistance);
       const cameraUp=desiredCamera.clone().normalize(),ground=surface.sample(cameraUp,time),safeRadius=Math.max(ground.radius,ground.waterRadius)+.12;
       if(desiredCamera.length()<safeRadius)desiredCamera.setLength(safeRadius);
