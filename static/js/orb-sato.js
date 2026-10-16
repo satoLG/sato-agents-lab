@@ -1,76 +1,69 @@
 import * as T from '../vendor/three.module.min.js';
 import {ORB_STEP_DISTANCE} from './orb-motor.js';
+import {helmetGeometry,crownGeometry,armorLoft,roundedPlate,sweptHorn} from './orb-armor.js';
+import {createOrbCape} from './orb-cape.js';
 
 export const ORB_SATO_SCALE=.165;
 export const ORB_SATO_HEIGHT=.29;
-
-// Bevelled armor plates keep the compact silhouette readable at game scale.
-function plate(points,depth) {
-  const shape=new T.Shape();points.forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y));shape.closePath();
-  const geometry=new T.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelThickness:.018,bevelSize:.018,bevelSegments:1,steps:1});
-  geometry.translate(0,0,-depth/2);return geometry;
-}
 export function createOrbSato() {
-  const root=new T.Group();root.name='orb-sato';root.userData.sourceModel='compact-armored-sato';
+  const root=new T.Group();root.name='orb-sato';root.userData.sourceModel='sculpted-armored-sato';
   const model=new T.Group();model.scale.setScalar(ORB_SATO_SCALE);root.add(model);
-  const white=new T.MeshStandardMaterial({color:'#f3f6fc',roughness:.34,metalness:.18});
-  const blue=new T.MeshStandardMaterial({color:'#1769c4',roughness:.32,metalness:.35});
+  const white=new T.MeshStandardMaterial({color:'#f3f6fc',roughness:.32,metalness:.16});
+  const blue=new T.MeshStandardMaterial({color:'#1769c4',roughness:.30,metalness:.30});
   const navy=new T.MeshStandardMaterial({color:'#10385f',roughness:.45,metalness:.25});
-  const faceUniforms={blink:{value:0},joy:{value:0},sleep:{value:1},look:{value:new T.Vector2()},
-    rimColor:{value:new T.Color('#65d8ff')},irisColor:{value:new T.Color('#149de1')},tickColor:{value:new T.Color('#b0edff')}};
+  const faceUniforms={blink:{value:0},joy:{value:0},sleep:{value:1},look:{value:new T.Vector2()},rimColor:{value:new T.Color('#65d8ff')},irisColor:{value:new T.Color('#149de1')},tickColor:{value:new T.Color('#b0edff')}};
   function mesh(parent,name,geometry,material,position=[0,0,0]){const m=new T.Mesh(geometry,material);m.name=name;m.position.set(...position);parent.add(m);return m;}
-  const body=new T.Group();body.name='sato-bouncy-body';body.position.y=.70;model.add(body);
-  mesh(body,'sato-tapered-chest',plate([[-.20,.17],[-.28,.08],[-.15,-.14],[.15,-.14],[.28,.08],[.20,.17]],.26),white);
-  mesh(body,'sato-chest-inlay',plate([[-.15,.12],[0,.02],[.15,.12],[.10,-.02],[0,-.08],[-.10,-.02]],.018),blue,[0,0,.15]);
-  mesh(body,'sato-narrow-waist',new T.CylinderGeometry(.105,.115,.16,8),navy,[0,-.17,0]);
-  mesh(body,'sato-hip-armor',plate([[-.17,.06],[-.21,-.02],[-.13,-.12],[0,-.06],[.13,-.12],[.21,-.02],[.17,.06]],.24),white,[0,-.25,0]);
-  mesh(body,'sato-belt-core',new T.SphereGeometry(.06,12,8),blue,[0,-.22,.14]);
-  mesh(body,'sato-neck',new T.CylinderGeometry(.08,.09,.12,8),navy,[0,.22,0]);
-  // Helmet wraps the recessed optic with a pointed brow, cheek guards and chin mask.
-  mesh(body,'sato-helmet',new T.SphereGeometry(1,16,12),white,[0,.50,-.025]).scale.set(.335,.30,.26);
-  mesh(body,'sato-blue-crown',plate([[-.11,.26],[0,.30],[.11,.26],[.12,.10],[0,.035],[-.12,.10]],.045),blue,[0,.48,.215]);
-  for(const side of [-1,1]){
-    const mirror=points=>points.map(([x,y])=>[x*side,y]);
-    mesh(body,'sato-brow',plate(mirror([[.0,.07],[.13,.10],[.31,.13],[.33,.06],[.17,.015],[.0,.035]]),.10),white,[0,.645,.245]);
-    mesh(body,'sato-cheek-guard',plate(mirror([[.24,.13],[.34,.20],[.32,-.18],[.21,-.26],[.14,-.15],[.22,-.08]]),.13),white,[0,.49,.14]);
-  }
-  mesh(body,'sato-mask',plate([[-.21,.03],[-.12,.075],[-.065,.01],[.065,.01],[.12,.075],[.21,.03],[.15,-.095],[0,-.15],[-.15,-.095]],.095),white,[0,.34,.245]);
-  mesh(body,'sato-mask-inset',plate([[-.065,.02],[.065,.02],[.045,-.045],[-.045,-.045]],.012),blue,[0,.29,.303]);
-  const antenna=new T.Group();antenna.name='sato-helmet-fins';antenna.position.set(0,.70,0);body.add(antenna);
-  for(const side of [-1,1]){
-    mesh(antenna,'sato-swept-horn',plate([[.20,.0],[.28,.10],[.245,.28],[.36,.18],[.37,.07],[.29,-.055]].map(([x,y])=>[x*side,y]),.075),blue,[0,0,-.015]);
-    mesh(antenna,'sato-fin-highlight',plate([[.27,.08],[.263,.20],[.29,.14],[.31,.08]].map(([x,y])=>[x*side,y]),.008),white,[0,0,.04]);
-  }
-  const tip=new T.Object3D();tip.name='antenna-tip';tip.position.set(0,.29,0);antenna.add(tip);
+  function joint(parent,name,position){const g=new T.Group();g.name=name;g.position.set(...position);parent.add(g);return g;}
+  const body=joint(model,'sato-bouncy-body',[0,.70,0]);
+  mesh(body,'sato-tapered-chest',armorLoft([[-.15,.12,.095],[-.10,.17,.13],[.03,.235,.155],[.14,.22,.13],[.18,.08,.06]]),white);
+  mesh(body,'sato-chest-inlay',roundedPlate([[-.13,.075],[0,.005],[.13,.075],[.08,-.025],[0,-.08],[-.08,-.025]],.018,.012),blue,[0,0,.15]);
+  mesh(body,'sato-narrow-waist',new T.CylinderGeometry(.10,.12,.15,24),navy,[0,-.19,0]);
+  mesh(body,'sato-hip-armor',armorLoft([[-.1,.11,.09],[-.04,.195,.13],[.03,.18,.12],[.08,.105,.075]]),white,[0,-.27,0]);
+  mesh(body,'sato-belt-core',new T.SphereGeometry(.052,20,12),blue,[0,-.25,.13]);
+  mesh(body,'sato-neck',new T.CylinderGeometry(.075,.09,.12,20),navy,[0,.22,0]);
+  mesh(body,'sato-helmet',helmetGeometry(),white,[0,.50,0]);
+  mesh(body,'sato-blue-crown',crownGeometry(),blue,[0,.50,0]);
+  mesh(body,'sato-mask',armorLoft([[-.105,.02,.025,.025],[-.07,.115,.048,.02],[.0,.195,.06,0],[.065,.13,.035,-.02]],{rings:20}),white,[0,.35,.245]);
+  mesh(body,'sato-mask-inset',roundedPlate([[-.04,.018],[.04,.018],[.025,-.025],[-.025,-.025]],.008,.009),blue,[0,.315,.297]);
+  const antenna=joint(body,'sato-helmet-fins',[0,.70,0]);
+  for(const side of [-1,1])mesh(antenna,'sato-swept-horn',sweptHorn(side),blue);
+  const tip=new T.Object3D();tip.name='antenna-tip';tip.position.set(0,.27,-.25);antenna.add(tip);
   const arms=[],legs=[];
-  for(const side of [-1,1]) {
-    const joint=new T.Group();joint.position.set(side*.265,.09,0);body.add(joint);
-    mesh(joint,'sato-shoulder-fin',plate([[0,.10],[side*.22,.19],[side*.12,-.05],[0,-.07]],.17),white);
-    mesh(joint,'sato-arm-joint',new T.SphereGeometry(.07,12,8),navy,[side*.025,-.08,0]);
-    mesh(joint,'sato-forearm',plate([[-.075,.07],[-.09,-.09],[-.055,-.14],[.065,-.14],[.09,.02],[.055,.09]],.15),white,[side*.05,-.20,0]);
-    mesh(joint,'sato-wrist',new T.CylinderGeometry(.055,.055,.07,8),blue,[side*.05,-.34,0]);
-    mesh(joint,'sato-hand',plate([[-.075,.055],[-.08,-.04],[-.04,-.075],[.06,-.055],[.08,.03]],.14),white,[side*.05,-.40,.018]);
-    for(let k=0;k<3;k++)mesh(joint,'sato-knuckle',new T.BoxGeometry(.025,.04,.018),blue,[side*.05+(k-1)*.04,-.405,.10]);
-    arms.push({joint,side});
-    const leg=new T.Group();leg.position.set(side*.135,.46,0);model.add(leg);
-    mesh(leg,'sato-thigh-joint',new T.SphereGeometry(.075,12,8),navy);
-    mesh(leg,'sato-thigh',new T.CylinderGeometry(.07,.08,.17,8),white,[0,-.11,0]);
-    mesh(leg,'sato-knee',plate([[-.075,.05],[0,.09],[.075,.05],[.055,-.065],[0,-.09],[-.055,-.065]],.11),blue,[0,-.21,.055]);
-    mesh(leg,'sato-sculpted-shin',plate([[-.065,.10],[-.085,.01],[-.065,-.12],[-.11,-.16],[.11,-.16],[.065,-.12],[.085,.01],[.065,.10]],.14),white,[0,-.30,0]);
-    mesh(leg,'sato-shin-stripe',plate([[-.022,.06],[-.027,-.10],[.027,-.10],[.022,.06]],.012),blue,[0,-.30,.085]);
-    const foot=mesh(leg,side<0?'sato-foot-left':'sato-foot-right',plate([[-.10,.05],[-.12,-.035],[.12,-.035],[.10,.05],[0,.08]],.28),white,[0,-.41,.075]);
-    mesh(leg,'sato-blue-toe',plate([[-.055,.045],[-.04,-.025],[.04,-.025],[.055,.045]],.012),blue,[0,-.41,.23]);
-    legs.push({joint:leg,foot,side});
+  for(const side of [-1,1]){
+    const upper=joint(body,side<0?'sato-arm-left':'sato-arm-right',[side*.265,.10,0]);
+    mesh(upper,'sato-shoulder-fin',roundedPlate([[side*-.02,.08],[side*.19,.16],[side*.12,-.015],[0,-.05]],.12,.033),white);
+    mesh(upper,'sato-shoulder-joint',new T.SphereGeometry(.065,16,12),navy,[0,-.045,0]);
+    mesh(upper,'sato-upper-arm',armorLoft([[-.17,.05,.055],[-.13,.073,.065],[-.06,.063,.06],[-.03,.035,.04]]),white);
+    const elbow=joint(upper,'sato-elbow',[0,-.18,0]);mesh(elbow,'sato-elbow-bearing',new T.SphereGeometry(.056,16,12),blue);
+    mesh(elbow,'sato-forearm',armorLoft([[-.16,.048,.055],[-.12,.082,.083],[-.025,.071,.063],[.015,.04,.04]]),white);
+    const wrist=joint(elbow,'sato-wrist',[0,-.18,0]);mesh(wrist,'sato-wrist-bearing',new T.CylinderGeometry(.043,.045,.06,16),blue);
+    const hand=mesh(wrist,'sato-hand',armorLoft([[-.10,.035,.04],[-.07,.068,.065],[-.015,.073,.058],[.02,.045,.04]]),white);
+    mesh(wrist,'sato-palm-emitter',new T.CylinderGeometry(.026,.026,.012,16).rotateX(Math.PI/2),blue,[0,-.05,.064]);
+    for(let k=0;k<3;k++)mesh(wrist,'sato-knuckle',new T.SphereGeometry(.017,10,8),blue,[(k-1)*.035,-.065,.06]);
+    arms.push({joint:upper,elbow,wrist,hand,side});
+    const hip=joint(model,'sato-hip-joint',[side*.135,.46,0]);mesh(hip,'sato-thigh-joint',new T.SphereGeometry(.065,16,12),navy);
+    mesh(hip,'sato-thigh',armorLoft([[-.19,.045,.045],[-.13,.075,.065],[-.03,.068,.057],[0,.035,.03]]),white);
+    const knee=joint(hip,'sato-knee-joint',[0,-.205,0]);mesh(knee,'sato-knee',new T.SphereGeometry(.064,20,12),blue,[0,0,.018]);
+    mesh(knee,'sato-sculpted-shin',armorLoft([[-.20,.075,.068,.01],[-.15,.064,.067,0],[-.06,.083,.077,.015],[.015,.045,.04,0]]),white);
+    mesh(knee,'sato-shin-stripe',roundedPlate([[-.018,.055],[.018,.055],[.025,-.07],[-.025,-.07]],.008,.011),blue,[0,-.105,.081]);
+    const ankle=joint(knee,'sato-ankle',[0,-.205,0]);
+    const foot=mesh(ankle,side<0?'sato-foot-left':'sato-foot-right',armorLoft([[-.045,.075,.12,.05],[-.02,.11,.155,.06],[.04,.092,.125,.045],[.065,.045,.05,0]]),white);
+    mesh(ankle,'sato-blue-toe',new T.SphereGeometry(1,16,12),blue,[0,.005,.19]).scale.set(.04,.032,.02);
+    legs.push({joint:hip,knee,ankle,foot,side});
   }
-  const visorShape=new T.Shape();
-  [[-.25,.12],[-.17,.16],[.17,.16],[.25,.12],[.21,-.12],[.10,-.16],[-.10,-.16],[-.21,-.12]].forEach(([x,y],i)=>i?visorShape.lineTo(x,y):visorShape.moveTo(x,y));visorShape.closePath();
+  const cape=createOrbCape();body.add(cape.mesh);
+  const clothColliders=arms.flatMap(()=>[0,1].map(()=>({a:new T.Vector3(),b:new T.Vector3(),radius:.095}))),forearmRotation=new T.Quaternion();
+  // A draped collar wraps the shoulders above the simulated cloth's pinned seam.
+  const scarfCurve=new T.CatmullRomCurve3([[-.23,.22,.07],[-.19,.17,.17],[0,.13,.21],[.20,.20,.15],[.22,.24,-.02],[0,.23,-.17],[-.23,.22,.07]].map(p=>new T.Vector3(...p)));
+  mesh(body,'sato-cape-collar',new T.TubeGeometry(scarfCurve,40,.044,10,false),cape.mesh.material);
+  const visorShape=new T.Shape();[[-.25,.12],[-.17,.16],[.17,.16],[.25,.12],[.21,-.12],[.10,-.16],[-.10,-.16],[-.21,-.12]].forEach(([x,y],i)=>i?visorShape.lineTo(x,y):visorShape.moveTo(x,y));visorShape.closePath();
   const displayGeometry=new T.ShapeGeometry(visorShape);
   const displayMaterial=new T.ShaderMaterial({uniforms:faceUniforms,toneMapped:false,
     vertexShader:'varying vec3 vDisplayPosition;void main(){vDisplayPosition=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`varying vec3 vDisplayPosition;uniform float blink,joy,sleep;uniform vec2 look;uniform vec3 rimColor,irisColor,tickColor;
       float band(float r,float lo,float hi){return smoothstep(lo-.0015,lo+.0015,r)*(1.-smoothstep(hi-.0015,hi+.0015,r));}
       void main(){
-        vec2 p=(vDisplayPosition.xy-vec2(0.,.025))*1.6;p.y/=mix(1.,.055,blink);
+        vec2 p=(vDisplayPosition.xy-vec2(0.,.01))*1.85;p.y/=mix(1.,.055,blink);
         vec2 irisP=p-look*vec2(.012,.008);float r=length(irisP),outer=length(p);
         vec3 ink=vec3(.001,.002,.004);
         // Preserve the original .18 rim, .047/.151 iris, dark central aperture
@@ -94,30 +87,61 @@ export function createOrbSato() {
         #include <colorspace_fragment>
       }`,
   });
-  const display=new T.Mesh(displayGeometry,displayMaterial);display.name='sato-single-eye';display.position.set(0,.51,.275);body.add(display);
-  let gait=0,moving=0,seated=1,joy=0,spring=0,springVelocity=0,jumpPulse=0,sleeping=true,wake=0;
-  function wakeUp(){sleeping=false;wake=.9;joy=.9;}
+  const display=new T.Mesh(displayGeometry,displayMaterial);display.name='sato-single-eye';display.scale.set(.91,.91,1);display.position.set(0,.505,.218);body.add(display);
+  const downAxis=new T.Vector3(0,-1,0),aimUpper=new T.Quaternion(),aimLower=new T.Quaternion(),restWrist=new T.Quaternion();
+  function braceArm(arm,blend){
+    const right=arm.side>0;
+    arm.joint.position.x=T.MathUtils.lerp(arm.side*.265,arm.side*.23,blend);
+    const elbowPoint=new T.Vector3(...(right?[.14,.03,.14]:[-.13,0,.11]));
+    const wristPoint=new T.Vector3(...(right?[.09,.035,.313]:[.04,0,.17]));
+    aimUpper.setFromUnitVectors(downAxis,elbowPoint.clone().sub(arm.joint.position).normalize());
+    aimLower.setFromUnitVectors(downAxis,wristPoint.sub(elbowPoint).normalize());
+    aimLower.premultiply(aimUpper.clone().invert());
+    arm.joint.quaternion.slerp(aimUpper,blend);arm.elbow.quaternion.slerp(aimLower,blend);arm.wrist.quaternion.slerp(restWrist,blend);
+  }
+  let gait=0,moving=0,seated=1,joy=0,spring=0,springVelocity=0,jumpPulse=0,sleeping=true,wake=0,attackBlend=0;
+  function wakeUp(){sleeping=false;wake=.75;joy=.7;}
   function rest(){sleeping=true;wake=0;joy=0;}
   function celebrate(){joy=1.2;}
   function bounce(amount){springVelocity+=amount*.35;}
   function doubleJump(){jumpPulse=.42;joy=.65;}
-  function update(dt,{time=0,speed=0,grounded=true,verticalSpeed=0,playing=false,reduced=false}={}) {
-    dt=Math.min(.05,Math.max(0,dt));moving=T.MathUtils.damp(moving,speed>.015?1:0,20,dt);
+  function update(dt,{time=0,speed=0,grounded=true,verticalSpeed=0,playing=false,reduced=false,running=false,turn=0,charge=0,firing=0}={}) {
+    dt=Math.min(.05,Math.max(0,dt));moving=T.MathUtils.damp(moving,speed>.015?1:0,16,dt);
     wake=reduced?0:Math.max(0,wake-dt);seated=T.MathUtils.damp(seated,!playing&&grounded?1:0,14,dt);joy=Math.max(0,joy-dt);
     faceUniforms.sleep.value=reduced?(sleeping?1:0):T.MathUtils.damp(faceUniforms.sleep.value,sleeping?1:0,10,dt);
-    jumpPulse=reduced?0:Math.max(0,jumpPulse-dt);gait+=speed*dt/ORB_STEP_DISTANCE*Math.PI;
+    jumpPulse=reduced?0:Math.max(0,jumpPulse-dt);gait+=speed*dt/(ORB_STEP_DISTANCE*(running?1.22:1))*Math.PI;
     const stride=Math.sin(gait),air=grounded?0:1,motion=reduced?.55:1,sleep=faceUniforms.sleep.value;
+    attackBlend=T.MathUtils.damp(attackBlend,charge>0||firing>0?1:0,14,dt);
     springVelocity+=(-115*spring-12*springVelocity)*dt;spring+=springVelocity*dt;
-    const pulse=jumpPulse>0?Math.sin(jumpPulse/.42*Math.PI)*.025:0;
-    const squash=T.MathUtils.clamp(spring+pulse,-.035,.07),bob=motion*Math.abs(Math.cos(gait))*.018*moving;
-    body.scale.set(1,1-squash,1);body.position.y=.70-.15*seated+bob;
-    body.rotation.x=-.055*moving+sleep*.07+air*T.MathUtils.clamp(verticalSpeed*.015,-.025,.025);body.rotation.z=motion*stride*.035*moving;
+    const pulse=jumpPulse>0?Math.sin(jumpPulse/.42*Math.PI)*.03:0,squash=T.MathUtils.clamp(spring+pulse,-.025,.08);
+    const bob=motion*(Math.abs(Math.sin(gait))-.5)*.035*moving;
+    body.scale.set(1,1-squash,1);body.position.y=.70-.15*seated+bob-.025*attackBlend;
+    body.rotation.set(-.06*moving-(running?.10:0)+sleep*.07+air*T.MathUtils.clamp(verticalSpeed*.035,-.09,.08)+firing*.05,motion*stride*.055*moving,-turn*.07+motion*stride*.04*moving);
     if(!reduced)body.position.y+=Math.sin(time*1.45)*sleep*.006;
-    for(const {joint,side} of arms){joint.rotation.x=-stride*side*.55*moving*(1-air)-.35*seated-.55*air;joint.rotation.z=side*(.04+.25*air+(joy>0&&wake===0&&side>0?.25+.10*Math.sin(time*12):0));}
-    for(const {joint,side} of legs){joint.position.y=.46-.12*seated+bob;joint.rotation.x=stride*side*.48*moving*(1-air)-.85*seated-.25*air;joint.rotation.z=side*.025;}
+    for(const arm of arms){
+      const {joint,elbow,wrist,side}=arm,cycle=stride*side;
+      const baseX=-cycle*(running?.85:.56)*moving*(1-air)-.25*seated-.55*air;
+      joint.rotation.set(baseX,0,side*(.07+.28*air));
+      elbow.rotation.set(-.22-Math.max(0,cycle)*.45*moving-.5*air,0,0);
+      wrist.rotation.set(-.10+air*.22,0,side*.05);
+    }
+    for(const arm of arms)braceArm(arm,attackBlend);
+    for(const {joint,knee,ankle,side} of legs){
+      const cycle=stride*side,lift=Math.max(0,-cycle)*moving;
+      joint.rotation.set(cycle*(running?.72:.48)*moving*(1-air)-.80*seated-.35*air,0,side*(.025+.10*attackBlend));
+      knee.rotation.x=.10+lift*(running?.95:.70)+air*(.65+side*.13)-.18*seated+.22*attackBlend;
+      ankle.rotation.x=-joint.rotation.x*.45-knee.rotation.x*.65;
+      joint.position.y=.46-.12*seated+bob+lift*.035;
+    }
+    arms.forEach((arm,i)=>{
+      const upper=clothColliders[i*2],lower=clothColliders[i*2+1];upper.a.copy(arm.joint.position);upper.b.copy(arm.elbow.position).applyQuaternion(arm.joint.quaternion).add(upper.a);
+      lower.a.copy(upper.b);forearmRotation.copy(arm.joint.quaternion).multiply(arm.elbow.quaternion);lower.b.set(0,-.27,0).applyQuaternion(forearmRotation).add(lower.a);
+    });
+    cape.update(dt,{speed,verticalSpeed,turn,power:charge+firing,reduced,colliders:clothColliders,floor:grounded?(.045-body.position.y)/body.scale.y:-1.2});
     const blinkPhase=time%4.3;faceUniforms.blink.value=reduced&&!playing?0:blinkPhase<.15?Math.sin(blinkPhase/.15*Math.PI):0;
-    faceUniforms.joy.value=T.MathUtils.damp(faceUniforms.joy.value,joy>0?1:0,16,dt);faceUniforms.look.value.set(Math.sin(time*.63)*.8,Math.sin(time*.31)*.4);
-    root.userData.animation=sleep>.7?'sleep':wake>0?'wake':seated>.5?'sit':air?'jump':moving>.1?'walk':joy>0?'joy':'idle';
+    faceUniforms.joy.value=T.MathUtils.damp(faceUniforms.joy.value,joy>0&&!attackBlend?1:0,16,dt);faceUniforms.look.value.set(Math.sin(time*.63)*.8*(1-attackBlend),Math.sin(time*.31)*.4);
+    root.userData.animation=sleep>.7?'sleep':wake>0?'wake':firing>0?'fire':charge>0?'charge':seated>.5?'sit':air?'jump':moving>.1?(running?'run':'walk'):joy>0?'joy':'idle';
   }
-  update(0);return {root,model,body,legs,arms,antenna,display,faceUniforms,update,wakeUp,rest,celebrate,bounce,doubleJump,get waking(){return wake>0;},get settling(){return wake>0||Math.abs(faceUniforms.sleep.value-(sleeping?1:0))>.001||Math.abs(seated-(sleeping?1:0))>.001;}};
+  const muzzle=new T.Object3D();muzzle.name='sato-laser-muzzle';muzzle.position.set(0,-.08,.075);arms.find(a=>a.side>0).wrist.add(muzzle);
+  update(0);return {root,model,body,legs,arms,antenna,display,faceUniforms,cape,muzzle,update,wakeUp,rest,celebrate,bounce,doubleJump,get waking(){return wake>0;},get settling(){return wake>0||Math.abs(faceUniforms.sleep.value-(sleeping?1:0))>.001||Math.abs(seated-(sleeping?1:0))>.001;}};
 }

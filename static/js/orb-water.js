@@ -1,3 +1,4 @@
+import {createPowerUniforms,powerFieldGLSL} from './orb-power-field.js';
 import * as T from '../vendor/three.module.min.js';
 import {orbNoiseGLSL as noiseGLSL,orbNoiseGradientGLSL} from './orb-noise.js';
 import {orbGroundGLSL} from './orb-ground.js';
@@ -16,6 +17,7 @@ export const orbWaterSurfaceGLSL=`
   uniform vec4 orbRippleCenters[8];
   uniform float orbRippleStrengths[8];
   ${orbNoiseGradientGLSL}
+  ${powerFieldGLSL}
   vec2 orbSmooth(float lo,float hi,float x) {
     float t=clamp((x-lo)/(hi-lo),0.,1.);
     return vec2(t*t*(3.-2.*t),6.*t*(1.-t)/(hi-lo));
@@ -85,13 +87,16 @@ export const orbWaterSurfaceGLSL=`
       radius+=.012*envelope*sin(phase);
       gradient+=.012*envelope*(cos(phase)*(45.*dg+turbulence.yzw*78.4)-sin(phase)*2.*front/spread*dg);
     }
-    if(radius<${(CORE_RADIUS+.06).toFixed(2)})return vec4(${(CORE_RADIUS+.06).toFixed(2)},0.,0.,0.);
+    if(radius<${(CORE_RADIUS+.06).toFixed(2)}){radius=${(CORE_RADIUS+.06).toFixed(2)};gradient=vec3(0.);}
+    vec4 power=orbPowerField(n);radius+=power.x;gradient+=power.yzw;
+    if(radius<${(CORE_RADIUS-.08).toFixed(2)})return vec4(${(CORE_RADIUS-.08).toFixed(2)},0.,0.,0.);
     return vec4(radius,gradient);
   }
 `;
 
 export function createOrbWater() {
   const uniforms = {
+    ...createPowerUniforms(),
     orbWaveFrequency:{value:1},orbWaveHeight:{value:1},orbWaveSpeed:{value:1},orbReflectivity:{value:1},orbFoamWidth:{value:1},orbRippleIntensity:{value:1},orbRippleWidth:{value:1},orbRippleCount:{value:3},
     orbTime:{value:0},orbStrength:{value:.9},orbMoonDirection:{value:new T.Vector3(1,0,0)},
     orbInteractionTime:{value:0},orbRippleCenters:{value:Array.from({length:8},()=>new T.Vector4(0,1,0,-10))},orbRippleStrengths:{value:new Float32Array(8)},
@@ -170,7 +175,8 @@ export function createOrbWater() {
         foam=max(foam,.55*foamSample(uv-vec2(0.,offset.y),vOrbEyeDepth-waterGradient.y*pixels.y,width));
         return foam;
       }
-      ${noiseGLSL}` + shader.fragmentShader;
+      ${noiseGLSL}
+      ${powerFieldGLSL}` + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
       float orbDepth = orbNoise(vOrbPosition*1.5+vec3(0.,orbTime*.035,0.));
@@ -226,6 +232,8 @@ export function createOrbWater() {
       float shallow=smoothstep(.003,.014,shoreDistance)*(1.-smoothstep(.025,.14,shoreDistance))*shore*step(.0001,gap);
       float coastalFoam=bands*shallow*smoothstep(.25,.62,shoreNoise)*.32;
       float edgeFoam=clamp(orbEdgeFoamRaw*mix(_EdgeFoamIntensity,.76,shore)+coastalFoam,0.,1.);
+      vec4 powerBank=orbPowerField(normalize(vOrbPosition));
+      edgeFoam=max(edgeFoam,clamp(powerBank.x*3.,0.,.6));
       outgoingLight=mix(outgoingLight,max(outgoingLight,_EdgeFoamColor),edgeFoam);
       #include <opaque_fragment>
     `);
@@ -236,7 +244,7 @@ export function createOrbWater() {
       totalDiffuse=max(totalDiffuse,vec3(.015,.075,.13));
     `);
   };
-  material.customProgramCacheKey = () => 'orb-water-live-settings-v9';
+  material.customProgramCacheKey = () => 'orb-water-power-displacement-v10';
   const settings=createWaterSettings(uniforms,material);
   let ripple=0;
   return {material,uniforms,settings,emitRipple(point,amount=1){

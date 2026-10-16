@@ -1,3 +1,4 @@
+import {powerDisplacement} from './orb-power-field.js';
 import * as T from '../vendor/three.module.min.js';
 import {orbWaterNoise as noise} from './orb-noise.js';
 import {CORE_RADIUS,WATER_RADIUS} from './orb-water.js';
@@ -13,7 +14,7 @@ export function coastContactRatio(angle,time) {
 
 // CPU counterpart of orbSurface, validated against the production GPU shader.
 // Sample only at contact points; the ocean geometry stays entirely on the GPU.
-export function seaSurfaceRadius(n,time,moon,strength=.9,{frequency=1,height=1,speed=1}={}) {
+export function seaSurfaceRadius(n,time,moon,strength=.9,{frequency=1,height=1,speed=1}={},powerUniforms=null) {
   const {x,y,z}=n,a=n.dot(moon),protection=smooth(.58,.82,y);
   const wt=time*speed,wx=x*frequency,wy=y*frequency,wz=z*frequency;
   const waves=(noise(wx*2.25+wt*.16,wy*2.25,wz*2.25+wt*.09)-.5)*.21*height
@@ -29,7 +30,7 @@ export function seaSurfaceRadius(n,time,moon,strength=.9,{frequency=1,height=1,s
     const level=Math.hypot(d,height),ratio=2.18*h/coast;
     radius+=(level-WATER_RADIUS)*smooth(.25,.65,ratio)*(1-smooth(1.04,1.70,ratio))*smooth(.58,.72,y);
   }
-  return Math.max(CORE_RADIUS+.06,radius);
+  return Math.max(CORE_RADIUS-.08,Math.max(CORE_RADIUS+.06,radius)+(powerUniforms?powerDisplacement(n,powerUniforms):0));
 }
 
 export function createOrbSurface({land,rocks=[],trunks=[],water}) {
@@ -37,7 +38,7 @@ export function createOrbSurface({land,rocks=[],trunks=[],water}) {
   const colliders=[land,...rocks].filter(Boolean);
   for(const object of colliders)object.updateWorldMatrix(true,false);
   function sample(direction,time=water.uniforms.orbTime.value) {
-    const n=direction.clone().normalize(),sea=seaSurfaceRadius(n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value,water.settings.values);
+    const n=direction.clone().normalize(),sea=seaSurfaceRadius(n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value,water.settings.values,water.uniforms);
     let result={radius:coreSurfaceRadius(n),waterRadius:sea,normal:n.clone(),surface:'rock',object:null};
     if(n.y>.48) {
       origin.copy(n).multiplyScalar(4);down.copy(n).negate();ray.set(origin,down);ray.far=3;
