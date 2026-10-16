@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 import {CORE_RADIUS} from './orb-water.js';
+import {createOrbRockMaterial} from './orb-rock-material.js';
 import {smoothSphereNormals} from './orb-geometry.js';
 
 export const MOON_RADIUS=CORE_RADIUS*.43;
@@ -16,7 +17,7 @@ export async function loadOrbMoonTextures() {
     loader.loadAsync(new URL('../textures/orb-moon/rock-height.png',import.meta.url).href),
   ]);
   color.colorSpace=T.SRGBColorSpace;
-  for(const texture of [color,normal]){texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(2,1);texture.anisotropy=2;}
+  for(const texture of [color,normal]){texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(1,1);texture.anisotropy=2;}
   const canvas=document.createElement('canvas');canvas.width=canvas.height=64;
   const context=canvas.getContext('2d');context.drawImage(height.image,0,0,64,64);
   const pixels=context.getImageData(0,0,64,64).data;
@@ -48,15 +49,7 @@ export function createOrbMoon({orbitNormal,moonDirection,textures={}}={}) {
   const normal=orbitNormal.clone().normalize();
   const up=new T.Vector3(0,1,0).addScaledVector(normal,-normal.y).normalize();
   const right=new T.Vector3().crossVectors(up,normal).normalize();
-  const material=new T.MeshStandardMaterial({map:textures.color??null,normalMap:textures.normal??null,normalScale:new T.Vector2(.45,.45),color:'#c3c7bc',roughness:.96,metalness:0,envMapIntensity:.18});
-  // Preserve sculpted relief but fade fine tangent-map detail at the UV poles.
-  material.onBeforeCompile=shader=>{
-    shader.vertexShader='varying float vMoonPole;\n'+shader.vertexShader;
-    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvMoonPole=abs(normalize(position).y);');
-    shader.fragmentShader='varying float vMoonPole;\n'+shader.fragmentShader;
-    shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>','vec3 moonGeometricNormal=normal;\n#include <normal_fragment_maps>\nnormal=normalize(mix(normal,moonGeometricNormal,smoothstep(.93,.995,vMoonPole)));');
-  };
-  material.customProgramCacheKey=()=> 'orb-rock-moon-poles-v1';
+  const material=createOrbRockMaterial(textures,1.2/MOON_RADIUS);
   const mesh=new T.Mesh(moonGeometry(textures.heightData),material);mesh.name='orb-moon';
   // The circle is fixed in world space. OrbitControls can explore it in 3D
   // without moving the moon's orbit or changing which water faces it.

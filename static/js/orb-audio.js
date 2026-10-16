@@ -1,8 +1,28 @@
-// A quiet, locally synthesized sea bed. No audio download or decoding competes
-// with WebGL. The AudioContext is created only inside the user's Play gesture.
+// A quiet synthesized sea bed and the owner's JDSherbert footstep recordings.
+// Fetch the small clips during loading; create/resume audio only on Play.
 export function createOrbAmbience({onChange=()=>{}}={}) {
   let context=null,master=null,started=false,muted=false,hidden=false,disposed=false;
-  const sources=[],voices=new Set();let noiseBuffer=null,waterBuffer=null,lastContact=-1;
+  const sources=[],voices=new Set(),clips=new Map(),indices=new Map(),abort=new AbortController();
+  let lastContact=-1,encoded=null,decoded=null;
+  const categories=['grass','sand','stone','water','puddle'];
+  function prepare(){
+    if(!encoded)encoded=Promise.all(categories.flatMap(kind=>[1,2].map(async index=>{
+      const name=`${kind}-${index}`,response=await fetch(new URL(`../audio/orb-foley/${name}.mp3`,import.meta.url),{signal:abort.signal});
+      if(!response.ok)throw new Error(`Unable to load orb foley: ${name}`);
+      return [name,await response.arrayBuffer()];
+    }))).catch(error=>{encoded=null;throw error;});
+    return encoded;
+  }
+  function decode(){
+    if(!decoded)decoded=prepare().then(files=>Promise.all(files.map(async([name,bytes])=>{
+      const buffer=await context.decodeAudioData(bytes.slice(0));if(disposed)return;
+      // Trim encoder padding/leading silence, keeping the actual recording.
+      const samples=buffer.getChannelData(0);let peak=0;for(const v of samples)peak=Math.max(peak,Math.abs(v));
+      let first=0,last=samples.length-1;while(first<last&&Math.abs(samples[first])<peak*.012)first++;while(last>first&&Math.abs(samples[last])<peak*.006)last--;
+      clips.set(name,{buffer,offset:Math.max(0,first/buffer.sampleRate-.006),length:Math.min(buffer.duration,(last-first)/buffer.sampleRate+.025),gain:Math.min(2,.65/Math.max(peak,.01))});
+    })));
+    return decoded;
+  }
   function notify(){onChange({muted,available:Boolean(context)&&!disposed});}
   function fade() {
     if(!context||disposed)return;
@@ -15,18 +35,11 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
     if(!Audio)return false;
     context=new Audio({latencyHint:'playback'});
     const buffer=context.createBuffer(1,22050*24,22050),data=buffer.getChannelData(0);
-    noiseBuffer=buffer;
     let seed=9241,b0=0,b1=0,b2=0;
     for(let i=0;i<data.length;i++) {
       seed=(Math.imul(seed,1664525)+1013904223)>>>0;const white=seed/2147483648-1;
       b0=.99765*b0+white*.099046;b1=.963*b1+white*.2965164;b2=.57*b2+white*1.0526913;
       data[i]=(b0+b1+b2+white*.1848)*.08;
-    }
-    waterBuffer=context.createBuffer(1,22050*2,22050);
-    const splashData=waterBuffer.getChannelData(0);let lowWater=0;
-    for(let i=0;i<splashData.length;i++){
-      seed=(Math.imul(seed,1664525)+1013904223)>>>0;const white=seed/2147483648-1;
-      lowWater+=.14*(white-lowWater);splashData[i]=white*.34+lowWater*.8;
     }
     // Blend the loop join rather than repeating a click every 24 seconds.
     const seam=1024,first=data[0];for(let i=0;i<seam;i++){const t=i/(seam-1),end=data.length-seam+i;data[end]=data[end]*(1-t)+first*t;}
@@ -45,6 +58,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
     source.start();sources.push(source);return true;
   }
   return {
+    prepare,
     start() {
       if(disposed)return Promise.resolve(false);
       try {
@@ -52,7 +66,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
         started=true;hidden=Boolean(globalThis.document?.hidden);
         // Call resume synchronously from Play for mobile autoplay rules.
         const ready=context.resume();fade();notify();
-        return ready.then(()=>true).catch(()=>{muted=true;fade();notify();return false;});
+        return Promise.all([ready,decode()]).then(()=>!disposed).catch(()=>{muted=true;fade();notify();return false;});
       } catch {this.dispose();return Promise.resolve(false);}
     },
     toggleMuted() {
@@ -61,41 +75,26 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       if(!muted&&!hidden)context.resume().catch(()=>{});
       fade();notify();
     },
-    playContact({type,surface,impact=1,double=false,waterDepth=0}) {
+    playContact({type,surface,impact=1,waterDepth=0}) {
       if(!context||!started||disposed||muted||hidden)return;
       const now=context.currentTime;if(type==='step'&&now-lastContact<.075)return;lastContact=now;
-      // Wet contact wins over the ground material. Splash wash and falling
-      // bubble chirps have their own envelopes, not the dry footstep patch.
-      if(surface==='water'||waterDepth>.008){
-        const immersion=Math.min(1,waterDepth/.27),landing=type==='land',jumping=type==='jump';
-        const duration=landing?.52:jumping?.38:.28,volume=(.48+immersion*.24)*(landing?Math.min(1.7,.9+impact*.25):jumping?1.15:1);
-        const gain=context.createGain(),filter=context.createBiquadFilter(),noise=context.createBufferSource(),nodes=[];
-        gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(volume,now+.018);gain.gain.exponentialRampToValueAtTime(volume*.28,now+duration*.48);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
-        filter.type='lowpass';filter.Q.value=.8;filter.frequency.setValueAtTime(landing?5800:4200,now);filter.frequency.exponentialRampToValueAtTime(650,now+duration);
-        noise.buffer=waterBuffer;noise.connect(filter).connect(gain).connect(master);
-        for(let i=0;i<(landing?4:3);i++){
-          const bubble=context.createOscillator(),envelope=context.createGain(),start=now+.025+i*.047,end=start+.09;
-          bubble.type='sine';bubble.frequency.setValueAtTime(620+i*170+(jumping?180:0),start);bubble.frequency.exponentialRampToValueAtTime(150+i*35,end);
-          envelope.gain.setValueAtTime(.0001,start);envelope.gain.exponentialRampToValueAtTime(.045+immersion*.025,start+.009);envelope.gain.exponentialRampToValueAtTime(.0001,end);
-          bubble.connect(envelope).connect(master);bubble.start(start);bubble.stop(end+.01);nodes.push(bubble,envelope);
-        }
-        const voice={stop(){try{noise.stop();}catch{}for(const node of nodes){try{node.stop?.();}catch{}node.disconnect();}noise.disconnect();filter.disconnect();gain.disconnect();voices.delete(voice);}};
-        if(voices.size>=10)voices.values().next().value.stop();voices.add(voice);noise.onended=()=>voice.stop();noise.start(now,(now*.37)%1,duration);return;
-      }
-      const settings={grass:[.075,1700,.17],sand:[.11,2400,.22],rock:[.055,3600,.14],water:[.19,1900,.34]}[surface]??[.08,1500,.15];
-      const duration=type==='step'?settings[0]:type==='jump'?.14:settings[0]*1.8;
-      const gain=context.createGain(),filter=context.createBiquadFilter(),noise=context.createBufferSource(),tone=context.createOscillator();
-      const volume=settings[2]*(type==='land'?Math.min(1.8,.8+impact*.3):type==='jump'?.8:1);
-      gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(volume,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
-      filter.type='lowpass';filter.frequency.setValueAtTime(settings[1],now);filter.frequency.exponentialRampToValueAtTime(surface==='water'?450:800,now+duration);filter.Q.value=surface==='rock'?1.2:.5;
-      noise.buffer=noiseBuffer;noise.playbackRate.value=surface==='sand'?.85:surface==='water'?.7:1.1;
-      noise.connect(filter).connect(gain).connect(master);
-      const toneGain=context.createGain();toneGain.gain.setValueAtTime(type==='step'?.025:.045,now);toneGain.gain.exponentialRampToValueAtTime(.0001,now+duration);
-      tone.type='sine';tone.frequency.setValueAtTime(type==='jump'?(double?330:220):surface==='rock'?330:surface==='water'?130:95,now);
-      tone.frequency.exponentialRampToValueAtTime(type==='jump'?440:50,now+duration);tone.connect(toneGain).connect(master);
-      const voice={stop(){try{noise.stop();tone.stop();}catch {}gain.disconnect();filter.disconnect();toneGain.disconnect();noise.disconnect();tone.disconnect();voices.delete(voice);}};
-      if(voices.size>=10)voices.values().next().value.stop();voices.add(voice);noise.onended=()=>voice.stop();
-      noise.start(now,(now*1.73)%20,duration);tone.start(now);tone.stop(now+duration+.01);
+      const wet=surface==='water'||waterDepth>.008;
+      const kind=wet?(waterDepth>.10?'water':'puddle'):surface==='rock'?'stone':surface;
+      const index=indices.get(kind)??0;indices.set(kind,index+1);
+      const clip=clips.get(`${kind}-${1+index%2}`);if(!clip)return;
+      const landing=type==='land',jumping=type==='jump';
+      const rate=(landing?.88:jumping?1.12:1)*(1+(index%5-2)*.018);
+      const release=jumping?.58:landing?1:wet?.92:.82;
+      const duration=Math.min(clip.length/rate*release,wet?.85:.65);
+      const base=wet?.68:kind==='grass'?.42:kind==='sand'?.48:.38;
+      const volume=base*clip.gain*(landing?Math.min(1.45,.9+impact*.22):jumping?.78:1)*(wet?1+Math.min(.25,waterDepth)*.8:1);
+      const gain=context.createGain(),source=context.createBufferSource();source.buffer=clip.buffer;source.playbackRate.value=rate;
+      gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.004);
+      gain.gain.setValueAtTime(volume,now+Math.max(.005,duration-.07));gain.gain.linearRampToValueAtTime(0,now+duration);
+      source.connect(gain).connect(master);
+      const voice={stop(){try{source.stop();}catch{}source.disconnect();gain.disconnect();voices.delete(voice);}};
+      if(voices.size>=10)voices.values().next().value.stop();voices.add(voice);source.onended=()=>voice.stop();
+      source.start(now,clip.offset);source.stop(now+duration);
     },
     setHidden(value) {
       hidden=value;if(!context||disposed)return;
@@ -103,7 +102,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       else if(started)context.resume().then(fade).catch(()=>{});
     },
     dispose() {
-      if(disposed)return;disposed=true;
+      if(disposed)return;disposed=true;abort.abort();clips.clear();
       for(const source of sources){try{source.stop();source.disconnect();}catch {}}
       for(const voice of [...voices])voice.stop();
       master?.disconnect();context?.close().catch(()=>{});notify();

@@ -9,7 +9,7 @@ export function createOrbTrails(water) {
     vertexShader:'uniform float trailTime;attribute float printBirth;varying vec2 vUv;varying float vFade;void main(){vUv=uv;vFade=clamp(1.-(trailTime-printBirth)/18.,0.,1.);gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}',
     fragmentShader:`varying vec2 vUv;varying float vFade;void main(){vec2 p=(vUv-.5)*2.;float d=length(p/vec2(.88,.95));float mask=1.-smoothstep(.77,1.,d);float rim=exp(-pow((d-.78)*12.,2.));gl_FragColor=vec4(mix(vec3(.34,.27,.15),vec3(.73,.64,.43),rim*.7),mask*vFade*.42);}`});
   const footprints=new T.InstancedMesh(footprintGeometry,footprintMaterial,footprintCount);footprints.name='sato-sand-footprints';footprints.frustumCulled=false;group.add(footprints);
-  const particleMaterial=new T.MeshBasicMaterial({color:'#e9ffff',transparent:true,opacity:.8,depthWrite:false,toneMapped:false});
+  const particleMaterial=new T.MeshBasicMaterial({color:'#c5e9ff',transparent:true,opacity:.65,depthWrite:false,toneMapped:false});
   const particles=new T.InstancedMesh(new T.IcosahedronGeometry(1,0),particleMaterial,particleCount);particles.name='sato-foam-particles';particles.frustumCulled=false;group.add(particles);
   const dummy=new T.Object3D(),matrix=new T.Matrix4(),right=new T.Vector3(),forward=new T.Vector3(),normal=new T.Vector3();
   const slots=Array.from({length:particleCount},()=>({position:new T.Vector3(),velocity:new T.Vector3(),age:10,life:0,size:0}));
@@ -24,7 +24,7 @@ export function createOrbTrails(water) {
   }
   function splash(event) {
     const depth=T.MathUtils.clamp((event.waterDepth??.05)/.27,0,1);
-    const count=Math.round((event.type==='step'?10:event.double?18:event.type==='land'?38:30)*(1+depth*1.8));
+    const count=Math.round((event.type==='step'?0:event.double?8:event.type==='land'?20:16)*(1+depth*1.8));
     water.emitRipple(event.point,(event.type==='step'?.8:event.type==='land'?1.5:1.2)*(1+depth*.6));
     for(let j=0;j<count;j++) {
       const particle=slots[particleIndex++%particleCount],a=random()*Math.PI*2;

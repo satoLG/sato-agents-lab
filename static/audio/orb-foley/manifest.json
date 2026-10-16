@@ -1,0 +1,62 @@
+[
+  {
+    "file": "grass-1.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Grass - 1).mp3",
+    "sha256": "fc6e9c5f6abc4887fea1e1ec8c299a3a65f0e51090cec5618d075dd8a72383de",
+    "bytes": 15310
+  },
+  {
+    "file": "grass-2.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Grass - 2).mp3",
+    "sha256": "d4862bae3d78a2bdc2e68d2abd046fbeeca9f598d444050d221ee45083a853fd",
+    "bytes": 14158
+  },
+  {
+    "file": "puddle-1.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Puddle - 1).mp3",
+    "sha256": "9b545ac5cb96d456cd29cbaa8659f10e6bc61b4e027772a5e63f31bb263c703d",
+    "bytes": 15311
+  },
+  {
+    "file": "puddle-2.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Puddle - 2).mp3",
+    "sha256": "e2085a644cd7617c889a6df1c758e0200bd859e2c49c6038f6f830713ade9479",
+    "bytes": 17039
+  },
+  {
+    "file": "sand-1.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Sand - 1).mp3",
+    "sha256": "848519b8f69f8e6b990b61a5b2dcf9ad5d8e0766544f3185de526f3ab3b00dbf",
+    "bytes": 17613
+  },
+  {
+    "file": "sand-2.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Sand - 2).mp3",
+    "sha256": "9538339735a12a187e592252b83280e1a1c23bed2c4a3af0ce08ceef11e16bba",
+    "bytes": 18765
+  },
+  {
+    "file": "stone-1.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Stone - 1).mp3",
+    "sha256": "08b9ef351d91ba3bf40bd2ca25abf5ec966d642e40e092f2b96b54b0f229c101",
+    "bytes": 15310
+  },
+  {
+    "file": "stone-2.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Stone - 2).mp3",
+    "sha256": "edaa8daeb1be53c67d97c26b6a278d8aaef37b84c6a7188fcf0bd195ed202a70",
+    "bytes": 14734
+  },
+  {
+    "file": "water-1.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Water - 1).mp3",
+    "sha256": "01f9cd11dd3d94da06e13b6868c01fad5e43a3d90ac43a0d539f92ff9ca3528c",
+    "bytes": 18766
+  },
+  {
+    "file": "water-2.mp3",
+    "source": "JDSherbert - Footstep Foley SFX Pack (FREE)/Mono/mp3/JDSherbert - Footstep Foley SFX Pack - Footstep (Water - 2).mp3",
+    "sha256": "c417566a37e4532bd18752243f024d04c9796cc38500020dd6cdaa778ac51c82",
+    "bytes": 18190
+  }
+]

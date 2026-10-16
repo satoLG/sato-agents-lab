@@ -47,21 +47,21 @@ function createEnvironment(renderer) {
 }
 
 function createStars() {
-  const count=2800,positions=[],colors=[],sizes=[],seeds=[];
+  const count=3400,positions=[],colors=[],sizes=[],seeds=[];
   let seed=8731;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   for(let i=0;i<count;i++) {
     const y=random()*2-1,angle=random()*Math.PI*2,r=35+random()*50,s=Math.sqrt(1-y*y);
     positions.push(Math.cos(angle)*s*r,y*r,Math.sin(angle)*s*r);
-    const color=new T.Color(i%9===0?'#c5b49b':i%4===0?'#83b4ce':'#a7bacb');
-    colors.push(color.r,color.g,color.b);sizes.push(.9+random()**5*2.4);seeds.push(random()*Math.PI*2);
+    const color=new T.Color(i%9===0?'#fff0ce':i%4===0?'#a3d5ff':'#e3efff');
+    colors.push(color.r,color.g,color.b);sizes.push(1.25+random()**5*3.1);seeds.push(random()*Math.PI*2);
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setAttribute('starSize',new T.Float32BufferAttribute(sizes,1));geometry.setAttribute('starSeed',new T.Float32BufferAttribute(seeds,1));
   const time={value:0},dpr={value:1};
   const material=new T.ShaderMaterial({
     uniforms:{time,dpr},vertexColors:true,transparent:true,depthWrite:false,blending:T.AdditiveBlending,
     vertexShader:`uniform float time; uniform float dpr; attribute float starSize; attribute float starSeed; varying vec3 vColor; varying float vShine;
-      void main(){vColor=color;vShine=.64+.16*sin(time*.4+starSeed);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=starSize*dpr;}`,
+      void main(){vColor=color;vShine=.85+.12*sin(time*.4+starSeed);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=starSize*dpr;}`,
     fragmentShader:`varying vec3 vColor; varying float vShine; void main(){float d=length(gl_PointCoord-.5);float alpha=(1.-smoothstep(.06,.5,d))*vShine;gl_FragColor=vec4(vColor,alpha);}`,
   });
   const group=new T.Points(geometry,material);group.frustumCulled=false;group.name='orb-starfield';return {group,time,dpr};
@@ -80,7 +80,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
   if(!context)throw new Error('WEBGL_UNAVAILABLE');
   const renderer=new T.WebGLRenderer({canvas,context,antialias:true,alpha:false});
-  renderer.setClearColor('#030a10');renderer.outputColorSpace=T.SRGBColorSpace;
+  renderer.setClearColor('#14243f');renderer.outputColorSpace=T.SRGBColorSpace;
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
   renderer.transmissionResolutionScale=.75;
@@ -112,7 +112,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   // Vertex displacement includes the raised coastal water and the lunar swell.
   ocean.geometry.boundingSphere.radius=WATER_RADIUS+.35;
   ocean.name='wobbly-ocean';ocean.receiveShadow=false;world.add(ocean);
-  const [moonTextures,island]=await Promise.all([loadOrbMoonTextures(),createOrbIsland()]);
+  const moonTextures=await loadOrbMoonTextures(),island=await createOrbIsland(moonTextures);
   const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value,textures:moonTextures});
   moon.mesh.userData.orbFoamExclude=true;world.add(moon.mesh,island.group,createHalo());
   onProgress(.58);
@@ -123,7 +123,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   gradient.addColorStop(0,'rgba(18,72,102,.16)');gradient.addColorStop(.4,'rgba(16,52,81,.08)');gradient.addColorStop(1,'rgba(2,8,13,0)');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
   const glowTexture=new T.CanvasTexture(glowCanvas),glow=new T.Sprite(new T.SpriteMaterial({map:glowTexture,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));glow.scale.set(24,24,1);glow.position.set(0,0,-18);scene.add(glow);
   const depth=createOrbDepth(renderer,scene,water.uniforms);
-  const game=createOrbGame({world,island,water,camera,canvas,container,controls,reducedMotion,onContact,
+  const game=createOrbGame({world,island,water,camera,occluders:[moon.mesh],canvas,container,controls,reducedMotion,onContact,
     onActivate(){transition=null;automatic=false;controls.autoRotate=false;container.dataset.view='walk';},
     onExit(){setView('world');},
   });

@@ -26,7 +26,10 @@ test.describe('orb Sato controls',()=>{
   // A software renderer can finish landing between CDP calls. Check the
   // input events, then the completed landing, rather than sampling a late gap.
   expect(await page.evaluate(()=>orbEvents.filter(e=>e.type==='jump').length)).toBe(2);
-  await expect.poll(()=>page.evaluate(()=>orbQA.game.motor.grounded),{timeout:20000}).toBe(true);
+  // SwiftShader can spend seconds rendering one frame; advance bounded physics
+  // ticks after the real input sequence rather than measuring GPU wall time.
+  await page.evaluate(()=>{for(let i=0;i<240&&!orbQA.game.motor.grounded;i++)orbQA.game.update(1/120,{time:orbQA.water.uniforms.orbTime.value});});
+  expect(await page.evaluate(()=>orbQA.game.motor.grounded)).toBe(true);
   expect(await page.evaluate(()=>orbQA.game.motor.jumps)).toBe(0);
   const pose=await page.evaluate(()=>{const {T,game,camera}=orbQA;return {up:new T.Vector3(0,1,0).applyQuaternion(game.avatar.root.quaternion).dot(game.motor.up),cameraRadius:camera.position.length(),actorRadius:game.motor.position.length(),orbitEnabled:orbQA.controls.enabled};});
   expect(pose.up).toBeGreaterThan(.9999);expect(pose.orbitEnabled).toBe(false);expect(pose.cameraRadius).toBeGreaterThan(pose.actorRadius);
@@ -97,7 +100,10 @@ test.describe('orb Sato touch controls',()=>{
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect(page.locator('#orb-stick-knob')).toHaveCSS('transform','matrix(1, 0, 0, 1, 0, 0)');
   // Air control intentionally retains a little momentum after release.
   await expect.poll(()=>page.evaluate(()=>orbQA.game.motor.velocity.length()),{timeout:20000}).toBeLessThan(.05);
-  await expect.poll(()=>page.evaluate(()=>orbQA.game.motor.grounded),{timeout:20000}).toBe(true);
+  // SwiftShader can spend seconds rendering one frame; advance bounded physics
+  // ticks after the real input sequence rather than measuring GPU wall time.
+  await page.evaluate(()=>{for(let i=0;i<240&&!orbQA.game.motor.grounded;i++)orbQA.game.update(1/120,{time:orbQA.water.uniforms.orbTime.value});});
+  expect(await page.evaluate(()=>orbQA.game.motor.grounded)).toBe(true);
   const zoomBefore=await page.evaluate(()=>orbQA.game.cameraDistance);
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:145,y:380,id:3},{x:245,y:380,id:4}]});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:95,y:380,id:3},{x:295,y:380,id:4}]});
@@ -111,8 +117,8 @@ test.describe('orb Sato touch controls',()=>{
  });
 });
 
-test('surface foley renders distinct footsteps, takeoff and landing without loading audio files',async({page})=>{
- test.setTimeout(90000);const failures=errors(page);await enter(page);
+test('JDSherbert recordings render distinct surfaces, takeoff and landing',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page),recordings=new Set();page.on('request',request=>{if(request.url().includes('/audio/orb-foley/')&&request.url().endsWith('.mp3'))recordings.add(request.url().split('/').at(-1));});await enter(page);
  const clips=await page.evaluate(async()=>{
   const {createOrbAmbience}=await import('/static/js/orb-audio.js'),Native=globalThis.AudioContext;
   const outputs=[];let offline;
@@ -122,7 +128,7 @@ test('surface foley renders distinct footsteps, takeoff and landing without load
    createGain(){const gain=super.createGain(),connect=gain.connect.bind(gain);gain.connect=(target,...args)=>{if(target===this.destination)this.master=gain;return connect(target,...args);};return gain;}
   };
   try {
-   for(const event of [null,{type:'step',surface:'grass'},{type:'step',surface:'sand'},{type:'step',surface:'rock'},{type:'step',surface:'water'},{type:'jump',surface:'water'},{type:'land',surface:'water',impact:1.7}]){
+   for(const event of [null,{type:'step',surface:'grass'},{type:'step',surface:'sand'},{type:'step',surface:'rock'},{type:'step',surface:'water',waterDepth:.2},{type:'jump',surface:'water',waterDepth:.2},{type:'land',surface:'water',waterDepth:.2,impact:1.7},{type:'step',surface:'water',waterDepth:.03}]){
     const audio=createOrbAmbience();await audio.start();offline.master.gain.cancelScheduledValues(0);offline.master.gain.setValueAtTime(1,0);
     if(event)audio.playContact(event);
     const buffer=await offline.startRendering();outputs.push(new Float32Array(buffer.getChannelData(0)));audio.dispose();
@@ -133,10 +139,11 @@ test('surface foley renders distinct footsteps, takeoff and landing without load
    return {index,rms:Math.sqrt(energy/samples.length),tail,duration:last/44100,crossings};
   });
  });
- for(const clip of clips){expect(clip.rms).toBeGreaterThan(.0001);expect(clip.rms).toBeLessThan(.1);expect(clip.duration).toBeLessThan(.6);}
- expect(clips[3].rms).toBeGreaterThan(clips[1].rms*2);
- expect(clips[3].tail).toBeGreaterThan(clips[0].tail*5);expect(clips[5].duration).toBeGreaterThan(clips[3].duration);expect(clips[4].crossings).not.toBe(clips[3].crossings);
- expect(new Set(clips.map(c=>c.rms.toFixed(6))).size).toBe(6);expect(failures).toEqual([]);
+ expect(recordings.size).toBe(10);
+ for(const clip of clips){expect(clip.rms).toBeGreaterThan(.0001);expect(clip.rms).toBeLessThan(.25);expect(clip.duration).toBeLessThan(.9);}
+ expect(clips[3].rms).toBeGreaterThan(clips[1].rms);
+ expect(clips[3].tail).toBeGreaterThan(clips[0].tail*2);expect(clips[5].duration).toBeGreaterThan(clips[3].duration);expect(clips[4].crossings).not.toBe(clips[3].crossings);
+ expect(new Set(clips.map(c=>c.rms.toFixed(6))).size).toBe(7);expect(failures).toEqual([]);
 });
 
 test('follow camera keeps its distance while occluding geometry fades on the GPU',async({page})=>{
@@ -155,12 +162,12 @@ test('follow camera keeps its distance while occluding geometry fades on the GPU
   function count(){renderer.setRenderTarget(rt);renderer.render(scene,view);renderer.readRenderTargetPixels(rt,0,0,128,128,data);let center=0,edge=0;for(let y=0;y<128;y++)for(let x=0;x<128;x++){const red=data[(y*128+x)*4]>100;if(x>54&&x<74&&y>54&&y<74)center+=red;if(x<15&&y>40&&y<80)edge+=red;}return {center,edge};}
   fade.update(view.position,new T.Vector3(0,0,-.3),false,1);const solid=count();fade.update(view.position,new T.Vector3(0,0,-.3),true,1);const faded=count();
   renderer.setRenderTarget(null);rt.dispose();probe.geometry.dispose();probe.material.dispose();
-  game.motor.place(new T.Vector3(0,0,1));window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyD'}));
+  game.motor.place(new T.Vector3(0,0,1));game.update(.05,{time:0});const initialUp=game.motor.up.clone(),initialBack=camera.position.clone().sub(game.motor.position);initialBack.addScaledVector(initialUp,-initialBack.dot(initialUp)).normalize();window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyD'}));
   for(let i=0;i<100;i++)game.update(1/60,{time:0});window.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyD'}));
   const cameraBack=camera.position.clone().sub(game.motor.position);cameraBack.addScaledVector(game.motor.up,-cameraBack.dot(game.motor.up)).normalize();
-  return {cameraShift,distance,elevation,solid,faded,behind:cameraBack.dot(game.motor.heading.clone().negate())};
+  return {cameraShift,distance,elevation,solid,faded,stable:cameraBack.dot(initialBack.applyQuaternion(new T.Quaternion().setFromUnitVectors(initialUp,game.motor.up)))};
  });
- expect(result.behind).toBeGreaterThan(.98);expect(result.cameraShift).toBeLessThan(.001);expect(result.distance).toBeGreaterThan(2);expect(result.elevation).toBeGreaterThan(.5);
+ expect(result.stable).toBeGreaterThan(.999);expect(result.cameraShift).toBeLessThan(.001);expect(result.distance).toBeGreaterThan(2);expect(result.elevation).toBeGreaterThan(.5);
  expect(result.faded.center).toBeLessThan(result.solid.center*.3);expect(result.faded.edge).toBe(result.solid.edge);
  await page.mouse.move(320,350);const before=await page.evaluate(()=>orbQA.game.cameraDistance);await page.mouse.wheel(0,350);await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeGreaterThan(before*1.2);expect(failures).toEqual([]);
 });
@@ -195,4 +202,39 @@ test('submerged Sato remains visible without a displaced duplicate in the water'
   rt.dispose();return {inside,outside,depth:game.motor.waterDepth};
  });
  expect(result.depth).toBeGreaterThan(.18);expect(result.inside).toBeGreaterThan(30);expect(result.outside).toBeLessThan(5);expect(failures).toEqual([]);
+});
+
+test('wind-displaced leaves and the moon become translucent in front of Sato',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page);await enter(page);
+ const result=await page.evaluate(async()=>{
+  const {T,renderer,moon}=orbQA;
+  const {createFoliageCloud,createFolioFoliageMaterial,loadFoliageTexture}=await import('/static/js/folio-foliage.js');await loadFoliageTexture();
+  const {createOrbMoon}=await import('/static/js/orb-moon.js');
+  const {createOrbCameraOcclusion}=await import('/static/js/orb-camera-occlusion.js');
+  const leaf=new T.InstancedMesh(createFoliageCloud(),createFolioFoliageMaterial(),1);leaf.setMatrixAt(0,new T.Matrix4().makeScale(.5,.5,.5));leaf.material.color.set('#ff0000');
+  const rock=createOrbMoon({orbitNormal:new T.Vector3(0,0,1),textures:{color:moon.mesh.material.map,normal:moon.mesh.material.normalMap}}).mesh;rock.position.set(0,0,0);rock.material.color.set('#ff0000');
+  const camera=new T.PerspectiveCamera(40,1,.05,10);camera.position.set(0,0,2);camera.lookAt(0,0,0);
+  const target=new T.WebGLRenderTarget(128,128),data=new Uint8Array(128*128*4),results=[];
+  for(const mesh of [leaf,rock]){
+   const scene=new T.Scene();scene.add(new T.AmbientLight('#ffffff',3),mesh);const fade=createOrbCameraOcclusion([mesh]);
+   const count=()=>{renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,128,128,data);let count=0;for(let y=54;y<74;y++)for(let x=54;x<74;x++)if(data[(y*128+x)*4]>80)count++;return count;};
+   fade.update(camera.position,new T.Vector3(0,0,-1),false,1);const solid=count();fade.update(camera.position,new T.Vector3(0,0,-1),true,1);const faded=count();results.push({solid,faded});
+   mesh.geometry.dispose();mesh.material.dispose();
+  }
+  renderer.setRenderTarget(null);target.dispose();return results;
+ });
+ for(const item of result){expect(item.solid).toBeGreaterThan(20);expect(item.faded).toBeLessThan(item.solid*.3);}expect(failures).toEqual([]);
+});
+
+test('lunar rock color and normals remain independent of sphere UVs, including at the pole',async({page})=>{
+ test.setTimeout(90000);const failures=errors(page);await enter(page);
+ const result=await page.evaluate(()=>{
+  const {T,moon,renderer,island}=orbQA,scene=new T.Scene();scene.add(moon.mesh,new T.DirectionalLight('#ffffff',3),new T.AmbientLight('#ffffff',.4));scene.children[1].position.set(2,3,1);moon.mesh.position.set(0,0,0);
+  const camera=new T.PerspectiveCamera(35,1,.05,10);camera.position.set(.12,2.8,.12);camera.up.set(0,0,1);camera.lookAt(0,0,0);
+  const target=new T.WebGLRenderTarget(160,160);function pixels(){const data=new Uint8Array(160*160*4);renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,160,160,data);return data;}
+  const original=pixels();moon.mesh.geometry.attributes.uv.array.fill(0);moon.mesh.geometry.attributes.uv.needsUpdate=true;const collapsedUV=pixels();moon.mesh.material.normalScale.set(0,0);const flat=pixels();
+  let uvChanges=0,normalChanges=0;for(let i=0;i<original.length;i+=4){const diff=(a,b)=>Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2]);if(diff(original,collapsedUV)>3)uvChanges++;if(diff(collapsedUV,flat)>12)normalChanges++;}
+  renderer.setRenderTarget(null);target.dispose();return {uvChanges,normalChanges,shared:island.rocks.every(rock=>rock.material.map===moon.mesh.material.map&&rock.material.normalMap===moon.mesh.material.normalMap)};
+ });
+ expect(result.uvChanges).toBe(0);expect(result.normalChanges).toBeGreaterThan(300);expect(result.shared).toBe(true);expect(failures).toEqual([]);
 });

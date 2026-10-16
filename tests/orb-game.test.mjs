@@ -60,7 +60,7 @@ test('radial gravity carries Sato over the underside and around an entire planet
   if(motor.grounded)maxError=Math.max(maxError,Math.abs(motor.position.length()-surface.sample(motor.up,i/60).radius));
  }
  assert.ok(lowest<-.999);assert.ok(travel>Math.PI*2);assert.ok(maxError<1e-7);
- assert.deepEqual(new Set(events.filter(e=>e.type==='step').map(e=>e.surface)),new Set(['grass','sand','water']));
+ const surfaces=new Set(events.filter(e=>e.type==='step').map(e=>e.surface));for(const surface of ['grass','sand','water'])assert.ok(surfaces.has(surface));
 });
 
 test('jump and double jump are ballistic, reject a third jump and reset only on landing',()=>{
@@ -134,7 +134,7 @@ test('water never supports the body: feet stay on the solid floor as tides chang
 });
 
 test('deeper immersion produces more foam, emitted at sea level rather than on the seabed',()=>{
- const base={type:'step',surface:'water',point:new T.Vector3(0,1.84,0),waterRadius:2.05,normal:new T.Vector3(0,1,0),up:new T.Vector3(0,1,0),heading:new T.Vector3(0,0,1)};
+ const base={type:'jump',surface:'water',point:new T.Vector3(0,1.84,0),waterRadius:2.05,normal:new T.Vector3(0,1,0),up:new T.Vector3(0,1,0),heading:new T.Vector3(0,0,1)};
  const shallow=createOrbTrails(createOrbWater()),deep=createOrbTrails(createOrbWater());
  shallow.emit({...base,waterDepth:.02});deep.emit({...base,waterDepth:.25});
  assert.ok(deep.activeParticles>shallow.activeParticles*2);deep.update(.001,.001);
@@ -159,4 +159,18 @@ test('constant-time seafloor collision matches the actual rendered core triangle
   const hit=ray.intersectObject(mesh)[0];assert.ok(hit);assert.ok(Math.abs(coreSurfaceRadius(n)-hit.point.length())<1e-6);
  }
  mesh.geometry.dispose();mesh.material.dispose();
+});
+
+test('offshore boulders have bases buried in the seabed, not suspended above it',()=>{
+ const {rocks}=fixture(),matrix=new T.Matrix4(),point=new T.Vector3();
+ for(let i=0;i<3;i++){
+  rocks[2].getMatrixAt(i,matrix);let penetration=Infinity;
+  const p=rocks[2].geometry.attributes.position;
+  for(let j=0;j<p.count;j++){
+   point.fromBufferAttribute(p,j).applyMatrix4(matrix);const n=point.clone().normalize();
+   const floor=Math.max(coreSurfaceRadius(n),Math.hypot(point.x,terrainHeight(point.x,point.z),point.z));
+   penetration=Math.min(penetration,point.length()-floor);
+  }
+  assert.ok(penetration<-.015,'a solid base must reach below the rendered ground');
+ }
 });

@@ -15,6 +15,9 @@ contrast are softened to fit the island. Normal vectors are renormalized after
 resizing. A 64 × 64 grayscale height map is sampled once on the CPU, using
 triplanar projection, to sculpt small variations into the moon geometry.
 Larger, continuous sphere-space relief complements the fine normal map.
+Color and normal maps use object-space triplanar projection in the fragment
+shader, eliminating the stretched UV poles. Derivative tangent frames preserve
+normal detail across projections. Island rocks share these same texture objects.
 All three assets are served locally; no external request is made at runtime.
 
 Rebuild using Pillow and numpy:
