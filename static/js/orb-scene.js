@@ -1,3 +1,4 @@
+import {createWaterDebug} from './orb-water-debug.js';
 import {createCoreGeometry} from './orb-core-surface.js';
 import * as T from '../vendor/three.module.min.js';
 import {OrbitControls} from '../vendor/OrbitControls.js';
@@ -67,14 +68,6 @@ function createStars() {
   const group=new T.Points(geometry,material);group.frustumCulled=false;group.name='orb-starfield';return {group,time,dpr};
 }
 
-function createHalo() {
-  return new T.Mesh(new T.SphereGeometry(WATER_RADIUS+.12,64,48),new T.ShaderMaterial({
-    side:T.BackSide,transparent:true,depthWrite:false,blending:T.AdditiveBlending,
-    vertexShader:`varying vec3 vNormal;varying vec3 vView;void main(){vec4 p=modelViewMatrix*vec4(position,1.);vNormal=normalize(normalMatrix*normal);vView=normalize(-p.xyz);gl_Position=projectionMatrix*p;}`,
-    fragmentShader:`varying vec3 vNormal;varying vec3 vView;void main(){float rim=pow(1.-abs(dot(normalize(vNormal),normalize(vView))),3.5);gl_FragColor=vec4(.13,.47,.63,rim*.13);}`,
-  }));
-}
-
 export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},onContact=()=>{},getLoadingDiameter=()=>140}={}) {
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
@@ -114,7 +107,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   ocean.name='wobbly-ocean';ocean.receiveShadow=false;world.add(ocean);
   const moonTextures=await loadOrbMoonTextures(),island=await createOrbIsland(moonTextures);
   const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value,textures:moonTextures});
-  moon.mesh.userData.orbFoamExclude=true;world.add(moon.mesh,island.group,createHalo());
+  moon.mesh.userData.orbFoamExclude=true;world.add(moon.mesh,island.group);
   onProgress(.58);
   const stars=createStars();scene.add(stars.group);
   // A restrained glow behind the orb adds depth without flattening the stars.
@@ -134,6 +127,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   // Trees and the moon remain excluded from this background pass.
 
   let paused=true,intro=true,automatic=false,speed=1,elapsed=0,previous=0,transition=null,view='world',disposed=false,raf=0,contextLost=false,dirty=true,lastRendered=0;
+  const waterDebug=createWaterDebug(water.settings,()=>{dirty=true;});
   const emitCamera=()=>{dirty=true;onCameraChange(worldPosition.distanceTo(WORLD_TARGET)/camera.position.distanceTo(controls.target));};
   const orbitLimit=()=>view==='island'?8:Math.max(17,worldPosition.distanceTo(WORLD_TARGET)*1.45);
   controls.addEventListener('change',emitCamera);
@@ -230,7 +224,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   container.dataset.view='intro';emitCamera();container.dataset.ready='true';raf=requestAnimationFrame(render);
   onProgress(1);
   function dispose() {
-    if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();game.dispose();refraction.dispose();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
+    if(disposed)return;disposed=true;cancelAnimationFrame(raf);observer.disconnect();waterDebug.dispose();game.dispose();refraction.dispose();controls.dispose();container.removeEventListener('keydown',keydown);canvas.removeEventListener('webglcontextlost',lost);
     const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)for(const m of Array.isArray(object.material)?object.material:[object.material])materials.add(m);});
     for(const g of geometries)g.dispose();for(const m of materials){for(const key of ['map','alphaMap','normalMap','gradientMap'])m[key]?.dispose();m.dispose();}depth.dispose();glowTexture.dispose();environment.dispose();sun.shadow.map?.dispose();renderer.dispose();canvas.remove();delete container.dataset.ready;
   }

@@ -11,17 +11,19 @@ export function createGroveResources(detail=true){
 
 // Continuous tapered wood, merged once per stand. Seven sides retain the
 // simple silhouette; smooth normals remove the joints between cylinder pieces.
-function appendWoodTube(positions,normals,colors,indices,curve,radius,tint,steps,base=false){
- const sides=7,offset=positions.length/3,point=new T.Vector3(),normal=new T.Vector3();
+function appendWoodTube(positions,normals,colors,indices,curve,radius,tint,steps,base=false,sculpted=false,grain=[]){
+ const sides=sculpted?12:7,offset=positions.length/3,point=new T.Vector3(),normal=new T.Vector3();
  const reference=new T.Vector3(1,0,0),side=new T.Vector3(),across=new T.Vector3();
  for(let j=0;j<=steps;j++){
   const t=j/steps,tangent=curve.getTangent(t).normalize();curve.getPoint(t,point);
   side.crossVectors(tangent,reference).normalize();across.crossVectors(side,tangent).normalize();
-  const width=radius*(1-.88*t)*(base?1+.5*Math.exp(-t*28):1);
+  const width=radius*(sculpted?.09+.91*Math.pow(1-t,.85):1-.88*t)*(base?1+(sculpted?.85:.5)*Math.exp(-t*(sculpted?16:28)):1);
   for(let k=0;k<sides;k++){
    const angle=k/sides*Math.PI*2;
    normal.copy(side).multiplyScalar(Math.cos(angle)).addScaledVector(across,Math.sin(angle));
-   positions.push(point.x+normal.x*width,point.y+normal.y*width,point.z+normal.z*width);
+   const contour=sculpted?1+.065*Math.cos(angle*5+t*3)+.035*Math.sin(angle*3-t*5):1;
+   positions.push(point.x+normal.x*width*contour,point.y+normal.y*width,point.z+normal.z*width*contour);
+   grain.push(k/sides,t);
    normal.addScaledVector(tangent,radius*.88/curve.getLength()).normalize();normals.push(normal.x,normal.y,normal.z);
    const shade=.97+.025*Math.sin(j*1.8+k*.9);colors.push(tint.r*shade,tint.g*shade,tint.b*shade);
    if(j<steps){const a=offset+j*sides+k,b=offset+j*sides+(k+1)%sides,c=a+sides,d=b+sides;indices.push(a,c,b,c,d,b);}
@@ -32,12 +34,22 @@ function appendWoodTube(positions,normals,colors,indices,curve,radius,tint,steps
 
 // Each spatial stand is two draws, independent of its number of trees. The
 // split into stands retains frustum culling and keeps far foliage out of shadows.
-export function createTreeGrove(parent,trees,{seed=77,detail=true,shadows=true,resources=null}={}){
+export function createTreeGrove(parent,trees,{seed=77,detail=true,shadows=true,resources=null,sculptedWood=false}={}){
  const group=new T.Group();group.name='sculpted-tree-grove';parent.add(group);
  if(!trees.length)return group;
  const random=seededRandom(seed),dummy=new T.Object3D(),color=new T.Color();
  const {wood,crownMaterial,crownGeometry}=resources||createGroveResources(detail);
- const positions=[],normals=[],colors=[],indices=[];
+ if(sculptedWood){
+  wood.color.set("#97806a");
+  wood.onBeforeCompile=shader=>{
+   shader.vertexShader="attribute vec2 woodGrain; varying vec2 vWoodGrain;\n"+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace("#include <begin_vertex>","#include <begin_vertex>\nvWoodGrain=woodGrain;");
+   shader.fragmentShader="varying vec2 vWoodGrain;\n"+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace("#include <color_fragment>","#include <color_fragment>\nfloat grain=sin(vWoodGrain.x*100.53+sin(vWoodGrain.y*24.)*.6); float fine=sin(vWoodGrain.x*251.3+vWoodGrain.y*9.); diffuseColor.rgb*=.94+.055*grain+.025*fine;");
+  };
+  wood.customProgramCacheKey=()=>"orb-subtle-bark-v1";
+ }
+ const positions=[],normals=[],colors=[],indices=[],grain=[];
  const crowns=new T.InstancedMesh(crownGeometry,crownMaterial,trees.length*5);
  let ci=0;
  function woodTint(){return color.setHSL(.09+random()*.03,.08,.72+random()*.13);}
@@ -45,9 +57,10 @@ export function createTreeGrove(parent,trees,{seed=77,detail=true,shadows=true,r
   const {x,y=0,z}=tree,h=tree.height??tree.h??5,r=tree.radius??tree.r??1.5;
   const angle=random()*Math.PI*2,lean=.035+random()*.19,bendX=Math.cos(angle)*lean,bendZ=Math.sin(angle)*lean;
   const a=new T.Vector3(x,y-.04,z),b=new T.Vector3(x+bendX*h*.35,y+h*.35,z+bendZ*h*.35),c=new T.Vector3(x+bendX*h*.23,y+h*.68,z+bendZ*h*.8),d=new T.Vector3(x+bendX*h*.8,y+h*.9,z+bendZ*h*.45);
-  const trunkRadius=h*(.012+random()*.009);
+  const thickness=random();
+  const trunkRadius=h*(sculptedWood?.039+thickness*.009:.012+thickness*.009);
   const stem=new T.CubicBezierCurve3(a,b,c,d);
-  appendWoodTube(positions,normals,colors,indices,stem,trunkRadius,woodTint(),8,true);
+  appendWoodTube(positions,normals,colors,indices,stem,trunkRadius,woodTint(),sculptedWood?16:8,true,sculptedWood,grain);
   // Preserve the established seeded crown composition while replacing wood.
   woodTint();woodTint();
   // Offset branch junctions and asymmetrical crowns avoid the pole + ball shape.
@@ -55,16 +68,16 @@ export function createTreeGrove(parent,trees,{seed=77,detail=true,shadows=true,r
   for(let k=0;k<5;k++){
    const direction=angle+k*2.399,spread=k===4?.12:r*(.38+random()*.32),cx=c.x+Math.cos(direction)*spread,cz=c.z+Math.sin(direction)*spread,cy=y+h*.76+r*(k===4?.65:random()*.35);
    if(k<3){
-    const branchRadius=trunkRadius*(.27+random()*.13),start=stem.getPoint(k%2?1/3:2/3),end=new T.Vector3(cx,cy,cz);
+    const branchRadius=trunkRadius*((sculptedWood?.43:.27)+random()*.13),start=stem.getPoint(k%2?1/3:2/3),end=new T.Vector3(cx,cy,cz);
     const shoulder=start.clone().lerp(end,.45);shoulder.y-=h*.035;
-    appendWoodTube(positions,normals,colors,indices,new T.CatmullRomCurve3([start,shoulder,end]),branchRadius,woodTint(),3);
+    appendWoodTube(positions,normals,colors,indices,new T.CatmullRomCurve3([start,shoulder,end]),branchRadius,woodTint(),sculptedWood?8:3,false,sculptedWood,grain);
    }
    dummy.position.set(cx,cy,cz);dummy.rotation.set(random()*.3,direction,random()*.3);dummy.scale.set(r*(.57+random()*.23),r*(.5+random()*.28),r*(.54+random()*.24));dummy.updateMatrix();crowns.setMatrixAt(ci,dummy.matrix);crowns.setColorAt(ci++,color.copy(tint).multiplyScalar(.8+random()*.35));
   }
   // A restrained flare grounds the trunk without protruding root spokes.
   for(let k=0;k<3;k++)woodTint();
  }
- const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeBoundingSphere();
+ const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.setAttribute('woodGrain',new T.Float32BufferAttribute(grain,2));geometry.setIndex(indices);if(sculptedWood)geometry.computeVertexNormals();geometry.computeBoundingSphere();
  const trunks=new T.Mesh(geometry,wood);
  trunks.name='branching-trunks';crowns.name='wind-canopies';
  crowns.count=ci;

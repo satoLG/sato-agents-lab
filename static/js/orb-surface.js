@@ -13,11 +13,12 @@ export function coastContactRatio(angle,time) {
 
 // CPU counterpart of orbSurface, validated against the production GPU shader.
 // Sample only at contact points; the ocean geometry stays entirely on the GPU.
-export function seaSurfaceRadius(n,time,moon,strength=.9) {
+export function seaSurfaceRadius(n,time,moon,strength=.9,{frequency=1,height=1,speed=1}={}) {
   const {x,y,z}=n,a=n.dot(moon),protection=smooth(.58,.82,y);
-  const waves=(noise(x*2.25+time*.16,y*2.25,z*2.25+time*.09)-.5)*.21
-    +(.68*noise(x*6.51,y*6.51-time*.2,z*6.51-time*.13)+.32*noise(x*13.02+5,y*13.02-time*.26,z*13.02)-.5)*.09
-    +Math.sin(x*4.34+z*2.48+time*.55)*Math.sin(y*4.96-z*2.17+time*.38)*.027;
+  const wt=time*speed,wx=x*frequency,wy=y*frequency,wz=z*frequency;
+  const waves=(noise(wx*2.25+wt*.16,wy*2.25,wz*2.25+wt*.09)-.5)*.21*height
+    +(.68*noise(wx*6.51,wy*6.51-wt*.2,wz*6.51-wt*.13)+.32*noise(wx*13.02+5,wy*13.02-wt*.26,wz*13.02)-.5)*.09
+    +Math.sin(wx*4.34+wz*2.48+wt*.55)*Math.sin(wy*4.96-wz*2.17+wt*.38)*.027;
   let radius=WATER_RADIUS+(.016+.046*a*a+.016*a)*(1-.92*protection)
     +waves*strength*1.65*(1+.24*a)*(1-.985*protection);
   const h=Math.hypot(x,z);
@@ -36,7 +37,7 @@ export function createOrbSurface({land,rocks=[],trunks=[],water}) {
   const colliders=[land,...rocks].filter(Boolean);
   for(const object of colliders)object.updateWorldMatrix(true,false);
   function sample(direction,time=water.uniforms.orbTime.value) {
-    const n=direction.clone().normalize(),sea=seaSurfaceRadius(n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value);
+    const n=direction.clone().normalize(),sea=seaSurfaceRadius(n,time,water.uniforms.orbMoonDirection.value,water.uniforms.orbStrength.value,water.settings.values);
     let result={radius:coreSurfaceRadius(n),waterRadius:sea,normal:n.clone(),surface:'rock',object:null};
     if(n.y>.48) {
       origin.copy(n).multiplyScalar(4);down.copy(n).negate();ray.set(origin,down);ray.far=3;

@@ -23,23 +23,26 @@ export function createOrbTrails(water) {
     birth.setX(i,time.value);birth.needsUpdate=true;footprints.instanceMatrix.needsUpdate=true;
   }
   function splash(event) {
+    const settings=water.settings.values;
     const depth=T.MathUtils.clamp((event.waterDepth??.05)/.27,0,1);
-    const count=Math.round((event.type==='step'?0:event.double?8:event.type==='land'?20:16)*(1+depth*1.8));
+    const count=Math.round((event.type==='step'?3:event.double?8:event.type==='land'?20:16)*(1+depth*1.8)*settings.foamAmount);
     water.emitRipple(event.point,(event.type==='step'?.8:event.type==='land'?1.5:1.2)*(1+depth*.6));
     for(let j=0;j<count;j++) {
       const particle=slots[particleIndex++%particleCount],a=random()*Math.PI*2;
       right.crossVectors(event.up,Math.abs(event.up.y)<.9?new T.Vector3(0,1,0):new T.Vector3(1,0,0)).normalize();forward.crossVectors(right,event.up).normalize();
       particle.position.copy(event.point).normalize().multiplyScalar(event.waterRadius??event.point.length()).addScaledVector(event.up,.008).addScaledVector(right,Math.cos(a)*(.025+depth*.05)).addScaledVector(forward,Math.sin(a)*(.025+depth*.05));
       particle.velocity.copy(event.up).multiplyScalar((event.type==='step'?.18:.4)+depth*.20+random()*.38).addScaledVector(right,Math.cos(a)*(.08+random()*.32)).addScaledVector(forward,Math.sin(a)*(.08+random()*.32));
+      particle.velocity.multiplyScalar(settings.foamIntensity);
       particle.age=0;particle.life=.45+random()*.4;particle.size=.004+random()*.008;
     }
   }
   function emit(event) {if(event.surface==='sand'&&event.type==='step')footprint(event);if(event.surface==='water')splash(event);}
   function update(dt,seconds) {
+    particleMaterial.opacity=.65*water.settings.values.foamIntensity;
     time.value=seconds;water.uniforms.orbInteractionTime.value=seconds;let visible=false;
     for(let i=0;i<slots.length;i++) {
       const particle=slots[i];particle.age+=dt;
-      if(particle.age<particle.life){particle.velocity.addScaledVector(particle.position.clone().normalize(),-3.2*dt);particle.position.addScaledVector(particle.velocity,dt);dummy.position.copy(particle.position);dummy.scale.setScalar(particle.size*(1-particle.age/particle.life));visible=true;}
+      if(particle.age<particle.life){particle.velocity.addScaledVector(particle.position.clone().normalize(),-3.2*dt);particle.position.addScaledVector(particle.velocity,dt);dummy.position.copy(particle.position);dummy.scale.setScalar(particle.size*water.settings.values.foamSize*(1-particle.age/particle.life));visible=true;}
       else dummy.scale.setScalar(0);
       dummy.quaternion.identity();dummy.updateMatrix();particles.setMatrixAt(i,dummy.matrix);
     }

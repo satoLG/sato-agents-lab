@@ -89,9 +89,9 @@ export async function createOrbIsland(textures={}) {
 
   // Use the forest's actual stand, foliage SDF, colors and wind at miniature scale.
   const treeScale=.14,treeRoot=new T.Group();treeRoot.scale.setScalar(treeScale);island.add(treeRoot);
-  const locations=[[-.40,-.12,.92,.28],[.21,-.35,.78,.25],[.43,.14,.67,.23],[-.15,.37,.73,.25]];
+  const locations=[[-.40,-.12,.92,.28],[.21,-.35,.78,.25],[.43,.14,.67,.23]];
   const trees=locations.map(([x,z,height,radius])=>({x:x/treeScale,z:z/treeScale,y:terrainHeight(x,z)/treeScale,height:height/treeScale,radius:radius/treeScale}));
-  const grove=createTreeGrove(treeRoot,trees,{seed:627,detail:true,shadows:true,resources:createGroveResources(true)});
+  const grove=createTreeGrove(treeRoot,trees,{seed:627,detail:true,shadows:true,resources:createGroveResources(true),sculptedWood:true});
   // Only the leaf shader moves in this stand. Its opaque wood stays fixed;
   // actual transforms/buffer edits still invalidate the depth automatically.
   grove.getObjectByName('branching-trunks').userData.dynamic=false;
@@ -110,6 +110,6 @@ export async function createOrbIsland(textures={}) {
   grassRoot.traverse(object=>{if(object.isMesh){object.userData.orbFoamExclude=true;object.geometry.boundingSphere=new T.Sphere(new T.Vector3(0,2.16/grassScale,0),2.25/grassScale);}});
 
   const rocks=addIslandRocks(island,textures);
-  const trunks=locations.map(([x,z,height])=>({x,z,y:terrainHeight(x,z),height,radius:.018}));
+  const trunks=locations.map(([x,z,height])=>({x,z,y:terrainHeight(x,z),height,radius:height*.085}));
   return {group:island,land,rocks,trunks,trees:treeRoot,grass:grassRoot,update(time){updateNature(time);grass.tick(time);}};
 }

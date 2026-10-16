@@ -21,28 +21,23 @@ function fixture(trunks=[]) {
  return {world,land,rocks,water,surface,motor,events};
 }
 
-test('orb adapts the original Sato hull, eye and flippers with short legs and a spherical display',()=>{
- const s=createOrbSato();assert.equal(s.legs.length,2);assert.equal(s.arms.length,2);assert.equal(s.antenna.position.x,0);
- let eye=0;const forbidden=[];s.root.traverse(o=>{if(o.name==='sato-single-eye')eye++;if(/battery|emitter|seam|shutter|magnetic/.test(o.name))forbidden.push(o.name);});
- assert.equal(eye,1);assert.deepEqual(forbidden,[]);
- const arm=s.arms[0].joint.children[0].geometry,leg=s.legs[0].joint.children[0].geometry;arm.computeBoundingBox();leg.computeBoundingBox();
- assert.equal(leg,arm,'legs must share the adapted flipper geometry');
- assert.ok((leg.boundingBox.max.y-leg.boundingBox.min.y)*s.legs[0].joint.scale.y<arm.boundingBox.max.y-arm.boundingBox.min.y);
- assert.ok(s.root.getObjectByName('spherical-hull'),'must preserve the original companion hull');
- const display=s.display.geometry;
- for(let i=0;i<display.attributes.position.count;i++){const p=new T.Vector3().fromBufferAttribute(display.attributes.position,i);assert.ok(Math.abs(p.length()-.542)<1e-6,'display must follow the spherical shell');}
- assert.equal(s.root.userData.animation,'sleep');assert.equal(s.faceUniforms.sleep.value,1);
- const restingScale=s.body.scale.y;s.update(.05,{time:1});assert.notEqual(s.body.scale.y,restingScale,'sleep must breathe');
- s.wakeUp();assert.equal(s.waking,true);s.bounce(2.5);const scales=[],armScales=[],legScales=[];
- for(let i=0;i<120;i++){s.update(1/60,{time:i/60,speed:.58,playing:true,grounded:i<30||i>70,verticalSpeed:1});scales.push(s.body.scale.y);armScales.push(s.arms[0].joint.scale.y);legScales.push(s.legs[0].joint.scale.y);s.root.updateMatrixWorld(true);s.root.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));}
- assert.ok(Math.max(...scales)-Math.min(...scales)>.05);assert.ok(s.root.position.length()===0,'visual animation cannot move the physics root');
- assert.ok(Math.max(...armScales)-Math.min(...armScales)>.08);assert.ok(Math.max(...legScales)-Math.min(...legScales)>.08);
- assert.ok(s.antenna.position.z>.15);assert.ok(s.antenna.getObjectByName('sato-curled-antenna'));
- assert.equal(s.waking,false);assert.ok(s.faceUniforms.sleep.value<.001,'wake must reopen the original iris');
- s.update(.05,{time:4.37,playing:true});assert.ok(s.faceUniforms.blink.value>.8,'blink stays inside the screen shader');
+test('compact armored Sato keeps a single eye, full articulation and the antenna height limit',()=>{
+ const s=createOrbSato();assert.equal(s.legs.length,2);assert.equal(s.arms.length,2);
+ let eyes=0;s.root.traverse(o=>{if(o.name==='sato-single-eye')eyes++;});assert.equal(eyes,1);
+ for(const name of ['sato-helmet','sato-mask','sato-narrow-waist','sato-sculpted-shin','sato-hand','antenna-tip'])assert.ok(s.root.getObjectByName(name));
+ assert.equal(s.root.userData.animation,'sleep');s.wakeUp();const armAngles=[];
+ for(let i=0;i<180;i++){
+  s.update(1/60,{time:i/60,speed:.58,playing:true,grounded:i<40||i>70,verticalSpeed:1});
+  s.root.updateMatrixWorld(true);s.root.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));
+  armAngles.push(s.arms[0].joint.rotation.x);
+ }
+ assert.ok(Math.max(...armAngles)-Math.min(...armAngles)>.5);assert.equal(s.waking,false);assert.ok(s.faceUniforms.sleep.value<.001);
+ for(let i=0;i<120;i++)s.update(1/60,{playing:true,reduced:true});
+ const bounds=new T.Box3().setFromObject(s.root);assert.ok(bounds.max.y<=.29,`height ${bounds.max.y}`);
+ assert.ok(bounds.min.y>-.01);assert.ok(s.root.position.length()===0);
+ s.update(.05,{time:4.37,playing:true});assert.ok(s.faceUniforms.blink.value>.8);
  s.rest();for(let i=0;i<40;i++)s.update(.05,{time:5+i*.05});assert.equal(s.root.userData.animation,'sleep');
- s.wakeUp();s.doubleJump();s.update(.016,{playing:true,reduced:true});
- assert.equal(s.waking,false);assert.equal(s.faceUniforms.sleep.value,0);assert.equal(s.model.rotation.y,0);
+ s.wakeUp();s.doubleJump();s.update(.016,{playing:true,reduced:true});assert.equal(s.waking,false);assert.equal(s.faceUniforms.sleep.value,0);
 });
 
 test('coastal swash stays small but moves the waterline back and forth',()=>{
@@ -173,4 +168,20 @@ test('offshore boulders have bases buried in the seabed, not suspended above it'
   }
   assert.ok(penetration<-.015,'a solid base must reach below the rendered ground');
  }
+});
+
+test('water settings validate presets, update contacts and bound adjustable particle emission',()=>{
+ const {water,surface}=fixture();const n=new T.Vector3(.7,.1,.3).normalize();
+ const original=surface.sample(n,4).waterRadius;
+ water.settings.apply({frequency:2,height:1.8,speed:.4,amplitude:1.3,opacity:.4,rippleCount:7,foamAmount:0});
+ assert.equal(water.material.opacity,.4);assert.equal(water.uniforms.orbRippleCount.value,7);
+ assert.notEqual(surface.sample(n,4).waterRadius,original);
+ assert.ok(Math.abs(surface.sample(n,4).waterRadius-seaSurfaceRadius(n,4,water.uniforms.orbMoonDirection.value,1.3,water.settings.values))<1e-12);
+ water.settings.set('frequency',Infinity);assert.equal(water.settings.values.frequency,2);
+ water.settings.set('foamAmount',999);assert.equal(water.settings.values.foamAmount,3);
+ const trails=createOrbTrails(water),event={type:'step',surface:'water',point:n.clone().multiplyScalar(2),up:n,waterRadius:2.1};
+ water.settings.set('foamAmount',0);trails.emit(event);assert.equal(trails.activeParticles,0);
+ water.settings.set('foamAmount',3);for(let i=0;i<100;i++)trails.emit(event);assert.equal(trails.activeParticles,240);
+ water.settings.reset();assert.equal(water.settings.values.frequency,1);assert.equal(water.material.opacity,1);
+ assert.equal(JSON.parse(water.settings.export()).version,1);
 });

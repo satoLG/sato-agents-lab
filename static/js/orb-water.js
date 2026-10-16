@@ -2,6 +2,7 @@ import * as T from '../vendor/three.module.min.js';
 import {orbNoiseGLSL as noiseGLSL,orbNoiseGradientGLSL} from './orb-noise.js';
 import {orbGroundGLSL} from './orb-ground.js';
 
+import {createWaterSettings} from './orb-water-settings.js';
 import {CORE_RADIUS} from './orb-core-surface.js';
 export {CORE_RADIUS};
 export const WATER_RADIUS = 2.05;
@@ -9,9 +10,9 @@ export const WATER_RADIUS = 2.05;
 // Radius and its exact gradient in sphere space. The shoreline envelope raises
 // only the water over the existing beach; no terrain vertices are moved.
 export const orbWaterSurfaceGLSL=`
-  uniform float orbTime,orbStrength;
+  uniform float orbTime,orbStrength,orbWaveFrequency,orbWaveHeight,orbWaveSpeed;
   uniform vec3 orbMoonDirection;
-  uniform float orbInteractionTime;
+  uniform float orbInteractionTime,orbRippleIntensity,orbRippleWidth;
   uniform vec4 orbRippleCenters[8];
   uniform float orbRippleStrengths[8];
   ${orbNoiseGradientGLSL}
@@ -20,14 +21,17 @@ export const orbWaterSurfaceGLSL=`
     return vec2(t*t*(3.-2.*t),6.*t*(1.-t)/(hi-lo));
   }
   vec4 orbSurface(vec3 n) {
-    vec4 large=orbNoiseGradient(n*2.25+vec3(orbTime*.16,0.,orbTime*.09));
-    vec4 small=orbNoiseGradient(n*6.51-vec3(0.,orbTime*.2,orbTime*.13));
-    vec4 fine=orbNoiseGradient(n*13.02+vec3(5.,-orbTime*.26,0.));
-    float u=dot(n,vec3(4.34,0.,2.48))+orbTime*.55;
-    float v=dot(n,vec3(0.,4.96,-2.17))+orbTime*.38;
-    float waves=(large.x-.5)*.21+(.68*small.x+.32*fine.x-.5)*.09+sin(u)*sin(v)*.027;
-    vec3 waveGradient=large.yzw*(2.25*.21)+small.yzw*(6.51*.68*.09)+fine.yzw*(13.02*.32*.09)
+    float wt=orbTime*orbWaveSpeed;
+    vec3 wn=n*orbWaveFrequency;
+    vec4 large=orbNoiseGradient(wn*2.25+vec3(wt*.16,0.,wt*.09));
+    vec4 small=orbNoiseGradient(wn*6.51-vec3(0.,wt*.2,wt*.13));
+    vec4 fine=orbNoiseGradient(wn*13.02+vec3(5.,-wt*.26,0.));
+    float u=dot(wn,vec3(4.34,0.,2.48))+wt*.55;
+    float v=dot(wn,vec3(0.,4.96,-2.17))+wt*.38;
+    float waves=(large.x-.5)*.21*orbWaveHeight+(.68*small.x+.32*fine.x-.5)*.09+sin(u)*sin(v)*.027;
+    vec3 waveGradient=large.yzw*(2.25*.21*orbWaveHeight)+small.yzw*(6.51*.68*.09)+fine.yzw*(13.02*.32*.09)
       +.027*(cos(u)*sin(v)*vec3(4.34,0.,2.48)+sin(u)*cos(v)*vec3(0.,4.96,-2.17));
+    waveGradient*=orbWaveFrequency;
     vec3 moon=normalize(orbMoonDirection);
     float a=dot(n,moon),tide=.016+.046*a*a+.016*a,gain=1.+.24*a;
     vec3 tideGradient=(.092*a+.016)*moon;
@@ -73,12 +77,13 @@ export const orbWaterSurfaceGLSL=`
       float chord=length(delta),distance=chord*2.1;
       if(distance>.85)continue;
       vec3 dg=2.1*delta/max(.001,chord);
-      float front=(distance-age*.28)/.10;
-      float envelope=exp(-front*front-age*1.1)*smoothstep(0.,.08,age)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i];
+      float spread=.10*orbRippleWidth;
+      float front=(distance-age*.28)/spread;
+      float envelope=exp(-front*front-age*1.1)*smoothstep(0.,.08,age)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i]*orbRippleIntensity;
       vec4 turbulence=orbNoiseGradient(n*28.+vec3(age*.8));
       float phase=distance*45.-age*12.+turbulence.x*2.8;
       radius+=.012*envelope*sin(phase);
-      gradient+=.012*envelope*(cos(phase)*(45.*dg+turbulence.yzw*78.4)-sin(phase)*2.*front/.10*dg);
+      gradient+=.012*envelope*(cos(phase)*(45.*dg+turbulence.yzw*78.4)-sin(phase)*2.*front/spread*dg);
     }
     if(radius<${(CORE_RADIUS+.06).toFixed(2)})return vec4(${(CORE_RADIUS+.06).toFixed(2)},0.,0.,0.);
     return vec4(radius,gradient);
@@ -87,6 +92,7 @@ export const orbWaterSurfaceGLSL=`
 
 export function createOrbWater() {
   const uniforms = {
+    orbWaveFrequency:{value:1},orbWaveHeight:{value:1},orbWaveSpeed:{value:1},orbReflectivity:{value:1},orbFoamWidth:{value:1},orbRippleIntensity:{value:1},orbRippleWidth:{value:1},orbRippleCount:{value:3},
     orbTime:{value:0},orbStrength:{value:.9},orbMoonDirection:{value:new T.Vector3(1,0,0)},
     orbInteractionTime:{value:0},orbRippleCenters:{value:Array.from({length:8},()=>new T.Vector4(0,1,0,-10))},orbRippleStrengths:{value:new Float32Array(8)},
     _SceneDepth:{value:null},_SceneResolution:{value:new T.Vector2(1,1)},
@@ -121,7 +127,7 @@ export function createOrbWater() {
       #endif
     `);
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = orbP; vOrbPosition = transformed; vOrbEyeDepth = -(modelViewMatrix * vec4(transformed,1.)).z;');
-    shader.fragmentShader = `uniform float orbTime,orbInteractionTime; varying vec3 vOrbPosition;
+    shader.fragmentShader = `uniform float orbTime,orbInteractionTime,orbReflectivity,orbFoamWidth,orbRippleIntensity,orbRippleWidth,orbRippleCount; varying vec3 vOrbPosition;
       uniform vec4 orbRippleCenters[8];uniform float orbRippleStrengths[8];
       varying highp float vOrbEyeDepth;
       uniform highp sampler2D _SceneDepth;
@@ -151,10 +157,10 @@ export function createOrbWater() {
         // nearly parallel surfaces where a constant eye-depth width balloons.
         vec2 gapGradient=vec2(dFdx(gap),dFdy(gap));
         float shore=coastMask();
-        float width=max(.0005,min(_EdgeFoamWidth*mix(1.,3.3,shore),length(gapGradient)*mix(2.5,4.5,shore)));
+        float width=max(.0005,min(_EdgeFoamWidth*mix(1.,3.3,shore)*orbFoamWidth,length(gapGradient)*mix(2.5,4.5,shore)*orbFoamWidth));
         float foam=foamSample(uv,vOrbEyeDepth,width);
         vec2 waterGradient=vec2(dFdx(vOrbEyeDepth),dFdy(vOrbEyeDepth));
-        vec2 offset=_SceneTexelSize*mix(1.5,2.,shore);
+        vec2 offset=_SceneTexelSize*mix(1.5,2.,shore)*orbFoamWidth;
         vec2 pixels=offset*_SceneResolution;
         // Neighbouring contact samples let foam softly extend past an opaque
         // silhouette instead of being cut off at the island/model boundary.
@@ -185,11 +191,12 @@ export function createOrbWater() {
         float d=length(wakeN-orbRippleCenters[i].xyz)*2.1;
         if(d>.85)continue;
         float flow=(orbNoise(vOrbPosition*13.+vec3(age*.4))-.5)*.005;
-        float width=max(.0045+age*.0015,fwidth(d)*1.1);
-        for(int ring=0;ring<3;ring++){
+        float width=max((.0045+age*.0015)*orbRippleWidth,fwidth(d)*1.1);
+        for(int ring=0;ring<8;ring++){
+          if(float(ring)>=orbRippleCount)break;
           float radius=age*.28-float(ring)*.065;
           float line=1.-smoothstep(width*.3,width,abs(d+flow-radius));
-          wake+=line*smoothstep(0.,.035,radius)*exp(-age*1.15-float(ring)*.45)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i];
+          wake+=line*smoothstep(0.,.035,radius)*exp(-age*1.15-float(ring)*.45)*(1.-smoothstep(1.7,2.2,age))*orbRippleStrengths[i]*orbRippleIntensity;
         }
       }
       totalEmissiveRadiance+=vec3(.055,.11,.14)*min(wake,1.);
@@ -200,7 +207,7 @@ export function createOrbWater() {
       // A mostly spherical light normal keeps this single highlight smooth
       // instead of magnifying the water tessellation into white polygon blobs.
       vec3 lightNormal=normalize(mix(normalize((viewMatrix*vec4(normalize(vOrbPosition),0.)).xyz),normal,.12));
-      totalEmissiveRadiance+=vec3(.30)*pow(max(0.,dot(lightNormal,whiteHalf)),180.);
+      totalEmissiveRadiance+=vec3(.30)*orbReflectivity*pow(max(0.,dot(lightNormal,whiteHalf)),180.);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
       float orbEdgeFoamRaw=calcEdgeFoam(gl_FragCoord.xy/max(_SceneResolution,vec2(1.)));
@@ -215,7 +222,7 @@ export function createOrbWater() {
       float phase=shoreDistance*22.-orbTime*.55,bandIndex=floor(phase);
       float shoreNoise=orbNoise(vOrbPosition*32.+vec3(bandIndex/.345));
       float contour=abs(fract(phase+shoreNoise*.24)-.5),aa=max(.025,fwidth(phase)*.7);
-      float bands=1.-smoothstep(.065-aa,.065+aa,contour);
+      float bands=1.-smoothstep(.065*orbFoamWidth-aa,.065*orbFoamWidth+aa,contour);
       float shallow=smoothstep(.003,.014,shoreDistance)*(1.-smoothstep(.025,.14,shoreDistance))*shore*step(.0001,gap);
       float coastalFoam=bands*shallow*smoothstep(.25,.62,shoreNoise)*.32;
       float edgeFoam=clamp(orbEdgeFoamRaw*mix(_EdgeFoamIntensity,.76,shore)+coastalFoam,0.,1.);
@@ -229,9 +236,10 @@ export function createOrbWater() {
       totalDiffuse=max(totalDiffuse,vec3(.015,.075,.13));
     `);
   };
-  material.customProgramCacheKey = () => 'orb-water-circular-waves-coast-v8';
+  material.customProgramCacheKey = () => 'orb-water-live-settings-v9';
+  const settings=createWaterSettings(uniforms,material);
   let ripple=0;
-  return {material,uniforms,emitRipple(point,amount=1){
+  return {material,uniforms,settings,emitRipple(point,amount=1){
     const n=point.clone().normalize(),i=ripple++%8;
     uniforms.orbRippleCenters.value[i].set(n.x,n.y,n.z,uniforms.orbInteractionTime.value);
     uniforms.orbRippleStrengths.value[i]=amount;
