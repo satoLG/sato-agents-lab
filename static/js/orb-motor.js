@@ -1,7 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
 
 export const ORB_STEP_DISTANCE=.108;
-export const ORB_MOTOR={speed:.58,gravity:4.8,jump:1.48,doubleJump:1.30,radius:.085,height:.30,step:.055};
+export const ORB_MOTOR={speed:.58,runSpeed:.94,gravity:4.8,jump:1.48,doubleJump:1.30,radius:.085,height:.30,step:.055};
 const FIXED=1/120;
 
 export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
@@ -22,10 +22,10 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     else{jumps++;verticalSpeed=ORB_MOTOR.doubleJump;}
     grounded=false;coyote=0;airTime=0;event('jump',{double:jumps===2});return true;
   }
-  function step(dt,time,direction,amount) {
+  function step(dt,time,direction,amount,running) {
     support=surface.sample(up,time);
     const desired=direction.clone().addScaledVector(up,-direction.dot(up));
-    if(desired.lengthSq()>1e-8)desired.normalize();desired.multiplyScalar(ORB_MOTOR.speed*amount);
+    if(desired.lengthSq()>1e-8)desired.normalize();desired.multiplyScalar((running?ORB_MOTOR.runSpeed:ORB_MOTOR.speed)*amount);
     velocity.lerp(desired,1-Math.exp(-(grounded?18:7)*dt));velocity.addScaledVector(up,-velocity.dot(up));
     if(velocity.lengthSq()<1e-8)velocity.set(0,0,0);
     const speed=velocity.length();
@@ -57,16 +57,16 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     coyote=grounded?.08:Math.max(0,coyote-dt);
     if(!grounded&&jumps===0&&coyote===0)jumps=1;
     sync();
-    if(grounded&&travel>=ORB_STEP_DISTANCE&&speed>.025){travel%=ORB_STEP_DISTANCE;event('step');}
+    if(grounded&&travel>=ORB_STEP_DISTANCE*(running?1.22:1)&&speed>.025){travel%=ORB_STEP_DISTANCE*(running?1.22:1);event('step');}
     if(!grounded)travel=0;
   }
   sync();
   return {
     position,up,heading,velocity,jump,
     get waterDepth(){return Math.max(0,support.waterRadius-radius);},get grounded(){return grounded;},get verticalSpeed(){return verticalSpeed;},get jumps(){return jumps;},get support(){return support;},
-    update(dt,{direction=new T.Vector3(),amount=0,time=0}={}) {
+    update(dt,{direction=new T.Vector3(),amount=0,time=0,running=false}={}) {
       accumulator+=Math.min(.05,Math.max(0,dt));
-      while(accumulator>=FIXED){step(FIXED,time,direction,amount);accumulator-=FIXED;}
+      while(accumulator>=FIXED){step(FIXED,time,direction,amount,running);accumulator-=FIXED;}
     },
     stop(){velocity.set(0,0,0);travel=0;},
     place(direction) {up.copy(direction).normalize();heading.set(0,0,1).addScaledVector(up,-up.z);if(heading.lengthSq()<.01)heading.set(1,0,0);heading.normalize();support=surface.sample(up);radius=support.radius;verticalSpeed=0;grounded=true;jumps=0;accumulator=0;velocity.set(0,0,0);sync();},

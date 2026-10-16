@@ -101,9 +101,9 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   // Only external contact geometry should contribute intersection foam.
   nucleus.userData.orbFoamExclude=true;world.add(nucleus);
   const water=createOrbWater(),mobile=window.matchMedia('(max-width:760px)').matches;
-  const ocean=new T.Mesh(createOceanGeometry(WATER_RADIUS,mobile?24:28),water.material);
+  const ocean=new T.Mesh(createOceanGeometry(WATER_RADIUS,mobile?30:40),water.material);
   // Vertex displacement includes the raised coastal water and the lunar swell.
-  ocean.geometry.boundingSphere.radius=WATER_RADIUS+.35;
+  ocean.geometry.boundingSphere.radius=WATER_RADIUS+.85;
   ocean.name='wobbly-ocean';ocean.receiveShadow=false;world.add(ocean);
   const moonTextures=await loadOrbMoonTextures(),island=await createOrbIsland(moonTextures);
   const moon=createOrbMoon({orbitNormal:INTRO_DIRECTION,moonDirection:water.uniforms.orbMoonDirection.value,textures:moonTextures});
