@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 
+export const ORB_STEP_DISTANCE=.108;
 export const ORB_MOTOR={speed:.58,gravity:4.8,jump:1.48,doubleJump:1.30,radius:.085,height:.30,step:.055};
 const FIXED=1/120;
 
@@ -56,7 +57,7 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     coyote=grounded?.08:Math.max(0,coyote-dt);
     if(!grounded&&jumps===0&&coyote===0)jumps=1;
     sync();
-    if(grounded&&travel>=.095&&speed>.025){travel%=.095;event('step');}
+    if(grounded&&travel>=ORB_STEP_DISTANCE&&speed>.025){travel%=ORB_STEP_DISTANCE;event('step');}
     if(!grounded)travel=0;
   }
   sync();

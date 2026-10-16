@@ -169,7 +169,7 @@ test('follow camera keeps its distance while occluding geometry fades on the GPU
  });
  expect(result.stable).toBeGreaterThan(.999);expect(result.cameraShift).toBeLessThan(.001);expect(result.distance).toBeGreaterThan(2);expect(result.elevation).toBeGreaterThan(.5);
  expect(result.faded.center).toBeLessThan(result.solid.center*.3);expect(result.faded.edge).toBe(result.solid.edge);
- await page.mouse.move(320,350);const before=await page.evaluate(()=>orbQA.game.cameraDistance);await page.mouse.wheel(0,350);await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeGreaterThan(before*1.2);expect(failures).toEqual([]);
+ await page.mouse.move(600,350);const before=await page.evaluate(()=>orbQA.game.cameraDistance);await page.mouse.wheel(0,350);await expect.poll(()=>page.evaluate(()=>orbQA.game.cameraDistance)).toBeGreaterThan(before*1.2);expect(failures).toEqual([]);
 });
 
 test('water wakes expand from the contact point, break up with noise and expire on the GPU',async({page})=>{

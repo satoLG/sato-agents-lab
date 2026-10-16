@@ -62,7 +62,7 @@ test.describe('orb desktop',()=>{
     await expect(page.locator('#orb-start')).toBeEnabled({timeout:45000});
     expectLoadingFit(await loadingFit(page));
     await expect(page.locator('#orb-progress')).toHaveAttribute('aria-valuenow','100');await page.locator('#orb-start').click();await expect(page.locator('#orb-loading')).toBeHidden();
-    await expect(page.locator('#orb-settings')).toHaveCount(0);await expect(page.locator('header,nav,input,aside')).toHaveCount(0);
+    await expect(page.locator('#orb-settings')).toHaveCount(0);await expect(page.locator('#orb-water-debug')).toBeVisible();await expect(page.locator('#orb-water-debug input[type=range]')).toHaveCount(13);
     const details=await page.evaluate(()=>{
       const {water,world,renderer,moon}=orbQA,grass=world.getObjectByName('camera-facing-procedural-grass'),trees=world.getObjectByName('wind-canopies');
       return {strength:water.uniforms.orbStrength.value,transmission:water.material.transmission,roughness:water.material.roughness,moonColor:moon.mesh.material.map.image.src,moonNormal:moon.mesh.material.normalMap.image.src,grass:grass.geometry.instanceCount,cards:trees.geometry.attributes.position.count/4,texture:trees.material.alphaMap.image.src,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false)};
@@ -126,9 +126,11 @@ test.describe('orb desktop',()=>{
       const camera=new T.PerspectiveCamera(18,1,.05,150),target=new T.WebGLRenderTarget(65,65),data=new Uint8Array(4);
       // Sample the moon near the horizon, away from the protected island cap,
       // so the comparison isolates lunar tide from the raised coastal water.
-      const horizon=39;moon.update(horizon);const near=moon.mesh.position.clone().normalize(),far=near.clone().negate(),equator=new T.Vector3().crossVectors(near,new T.Vector3(0,1,0)).normalize();
+      let horizon=0;for(;horizon<300;horizon+=2){moon.update(horizon);if(Math.abs(moon.mesh.position.clone().normalize().y)<.15)break;}const near=moon.mesh.position.clone().normalize(),far=near.clone().negate(),equator=new T.Vector3().crossVectors(near,new T.Vector3(0,1,0)).normalize();
       camera.position.copy(near).multiplyScalar(8);camera.lookAt(0,0,0);await renderer.compileAsync(scene,camera);
       function height(direction){camera.position.copy(direction).multiplyScalar(8);camera.lookAt(0,0,0);renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,32,32,1,1,data);renderer.setRenderTarget(null);return data[0]/255*.4-.2;}
+      // Compilation yields to the scene RAF; restore the sampled lunar pose afterwards.
+      moon.update(horizon);water.uniforms.orbTime.value=0;
       const first={near:height(near),far:height(far),equator:height(equator)};
       moon.update(horizon+150);const opposite={near:height(near),far:height(far),equator:height(equator)};
       // With waves restored, both faces must continue changing over time.

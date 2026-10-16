@@ -44,12 +44,14 @@ export function createOrbGame({world,island,water,camera,occluders=[],canvas,con
   listen(jumpButton,'pointerdown',event=>{if(playing){event.preventDefault();jump();}});
   listen(jumpButton,'click',event=>{if(playing&&event.detail===0)jump();});
   listen(window,'keydown',event=>{
+    if(event.target.closest?.('input,textarea,select,[contenteditable],#orb-water-debug'))return;
     if(!enabled||event.ctrlKey||event.metaKey||event.altKey)return;
     if(!playing){if((event.code==='KeyE'||event.code==='Enter')&&event.target===container){event.preventDefault();setMode(true);}return;}
     if(event.code==='Escape'){event.preventDefault();setMode(false);return;}
     if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}
     if(event.code==='Space'&&(!event.target.closest?.('button')||event.target===jumpButton)){event.preventDefault();if(!event.repeat)jump();}
   });
+  listen(document,'focusin',event=>{if(event.target.closest?.('#orb-water-debug'))clearInput();});
   listen(window,'keyup',event=>keys.delete(event.code));listen(window,'blur',clearInput);
   listen(document,'visibilitychange',()=>{if(document.hidden)clearInput();});
   const zoomBy=factor=>{cameraDistance=T.MathUtils.clamp(cameraDistance*factor,1.25,4.2);};
