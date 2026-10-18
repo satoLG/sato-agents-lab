@@ -34,7 +34,7 @@ test('gravity bends projectiles around the planet and conserves orbital energy',
 test('charge releases one detached shot, preserves launch pose, caps the pool and expires every visual',()=>{
  const water=createOrbWater(),events=[],power=createOrbPower(water,{onSound:e=>events.push(e.type)});assert.equal(power.begin(),true);assert.equal(power.begin(),false);
  for(let i=0;i<80;i++)power.update(1/60,pose);assert.equal(power.charge,1);assert.ok(powerDisplacement(pose.normal,water.uniforms)<-.35);
- power.release();power.update(1/60,pose);assert.equal(power.shots.filter(p=>p.active).length,1);const shot=power.shots.find(p=>p.active),start=shot.position.clone();
+ power.release();power.update(0,pose);power.update(0,pose);power.update(1/60,pose);assert.equal(power.shots.filter(p=>p.active).length,1);const shot=power.shots.find(p=>p.active),start=shot.position.clone();
  const moved={...pose,muzzlePosition:new T.Vector3(20,20,20)};power.update(1/60,moved);assert.ok(shot.position.distanceTo(start)<.1);
  for(let i=0;i<720;i++)power.update(1/60,pose);assert.equal(power.active,false);assert.equal(power.shots.filter(p=>p.active).length,0);assert.equal(powerDisplacement(pose.normal,water.uniforms),0);
  for(let j=0;j<12;j++){power.begin();power.release();for(let i=0;i<40;i++)power.update(1/60,pose);}assert.ok(power.shots.filter(p=>p.active).length<=6);assert.equal(power.shots.length,6);
