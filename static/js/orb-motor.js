@@ -2,12 +2,15 @@ import * as T from '../vendor/three.module.min.js';
 
 export const ORB_STEP_DISTANCE=.108;
 export const ORB_MOTOR={speed:.58,runSpeed:.94,gravity:4.8,jump:1.48,doubleJump:1.30,radius:.085,height:.30,step:.055};
+export const ORB_DASH={windup:.11,burst:.24,recovery:.19,cooldown:.95,speed:3.4};
 const FIXED=1/120;
 
 export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
   const up=new T.Vector3(0,1,0),heading=new T.Vector3(0,0,1),velocity=new T.Vector3(),position=new T.Vector3();
   let support=surface.sample(up),radius=support.radius,verticalSpeed=0,grounded=true,jumps=0,accumulator=0,coyote=.08,airTime=0,travel=0,foot=0;
   const turn=new T.Quaternion(),nextUp=new T.Vector3(),travelDirection=new T.Vector3(),probe=new T.Vector3();
+  let dashAge=99,dashCooldown=0,dashBurst=false;const dashDirection=new T.Vector3();
+  function dash(direction=heading){if(dashCooldown>0||dashAge<.54||!grounded)return false;dashDirection.copy(direction).addScaledVector(up,-direction.dot(up));if(dashDirection.lengthSq()<.01)dashDirection.copy(heading);dashDirection.normalize();heading.copy(dashDirection);dashAge=0;dashCooldown=ORB_DASH.cooldown;velocity.set(0,0,0);return true;}
   function sync(){position.copy(up).multiplyScalar(radius);}
   function event(type,extra={}) {
     const right=new T.Vector3().crossVectors(up,heading).normalize(),point=position.clone();
@@ -17,16 +20,22 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     onEvent({type,surface:wet?'water':contact.groundSurface??contact.surface,groundSurface:contact.groundSurface,waterDepth,waterRadius:contact.waterRadius,point:type==='step'?contact.point.clone():point,up:up.clone(),normal:contact.normal.clone(),heading:heading.clone(),speed:velocity.length(),...extra});
   }
   function jump() {
+    if(dashAge<ORB_DASH.windup+ORB_DASH.burst)return false;
     if(!grounded&&jumps>=2)return false;
     if(grounded||coyote>0){jumps=1;verticalSpeed=ORB_MOTOR.jump;}
     else{jumps++;verticalSpeed=ORB_MOTOR.doubleJump;}
     grounded=false;coyote=0;airTime=0;event('jump',{double:jumps===2});return true;
   }
   function step(dt,time,direction,amount,running) {
+    dashCooldown=Math.max(0,dashCooldown-dt);const before=dashAge;dashAge+=dt;
+    dashBurst=dashAge>=ORB_DASH.windup&&dashAge<ORB_DASH.windup+ORB_DASH.burst;
+    if(before<ORB_DASH.windup&&dashAge>=ORB_DASH.windup)event('dash');
     support=surface.sample(up,time);
     const desired=direction.clone().addScaledVector(up,-direction.dot(up));
     if(desired.lengthSq()>1e-8)desired.normalize();desired.multiplyScalar((running?ORB_MOTOR.runSpeed:ORB_MOTOR.speed)*amount);
     velocity.lerp(desired,1-Math.exp(-(grounded?18:7)*dt));velocity.addScaledVector(up,-velocity.dot(up));
+    if(dashAge<ORB_DASH.windup)velocity.set(0,0,0);
+    else if(dashBurst)velocity.copy(dashDirection).multiplyScalar(ORB_DASH.speed*(1-.24*(dashAge-ORB_DASH.windup)/ORB_DASH.burst));
     if(velocity.lengthSq()<1e-8)velocity.set(0,0,0);
     const speed=velocity.length();
     if(speed>.0001) {
@@ -41,10 +50,10 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
       if(next.radius>radius+ORB_MOTOR.step&&next.radius>support.radius+ORB_MOTOR.step)blocked=true;
       if(surface.blockedByTrunk?.(nextUp.clone().multiplyScalar(radius),ORB_MOTOR.radius,ORB_MOTOR.height))blocked=true;
       if(!blocked) {
-        turn.setFromUnitVectors(up,nextUp);up.copy(nextUp);heading.applyQuaternion(turn);velocity.applyQuaternion(turn);
+        turn.setFromUnitVectors(up,nextUp);up.copy(nextUp);heading.applyQuaternion(turn);velocity.applyQuaternion(turn);dashDirection.applyQuaternion(turn);
         heading.lerp(travelDirection,1-Math.exp(-18*dt)).addScaledVector(up,-heading.dot(up)).normalize();
         support=next;travel+=speed*dt;
-      } else velocity.multiplyScalar(.3);
+      } else {velocity.multiplyScalar(.3);if(dashBurst){dashAge=ORB_DASH.windup+ORB_DASH.burst;dashBurst=false;event('dash-impact');}}
     }
     if(grounded&&verticalSpeed<=0&&radius-support.radius<.06)radius=support.radius;
     else {
@@ -57,18 +66,19 @@ export function createOrbMotor(surface,{onEvent=()=>{}}={}) {
     coyote=grounded?.08:Math.max(0,coyote-dt);
     if(!grounded&&jumps===0&&coyote===0)jumps=1;
     sync();
-    if(grounded&&travel>=ORB_STEP_DISTANCE*(running?1.22:1)&&speed>.025){travel%=ORB_STEP_DISTANCE*(running?1.22:1);event('step');}
+    if(grounded&&!dashBurst&&travel>=ORB_STEP_DISTANCE*(running?1.22:1)&&speed>.025){travel%=ORB_STEP_DISTANCE*(running?1.22:1);event('step');}
     if(!grounded)travel=0;
   }
   sync();
   return {
-    position,up,heading,velocity,jump,
+    position,up,heading,velocity,jump,dash,
+    get dashAge(){return dashAge;},get dashing(){return dashAge<ORB_DASH.windup+ORB_DASH.burst+ORB_DASH.recovery;},get dashBurst(){return dashBurst;},get dashCooldown(){return dashCooldown;},
     get waterDepth(){return Math.max(0,support.waterRadius-radius);},get grounded(){return grounded;},get verticalSpeed(){return verticalSpeed;},get jumps(){return jumps;},get support(){return support;},
     update(dt,{direction=new T.Vector3(),amount=0,time=0,running=false}={}) {
       accumulator+=Math.min(.05,Math.max(0,dt));
       while(accumulator>=FIXED){step(FIXED,time,direction,amount,running);accumulator-=FIXED;}
     },
-    stop(){velocity.set(0,0,0);travel=0;},
+    stop(){velocity.set(0,0,0);travel=0;dashAge=99;dashBurst=false;},
     place(direction) {up.copy(direction).normalize();heading.set(0,0,1).addScaledVector(up,-up.z);if(heading.lengthSq()<.01)heading.set(1,0,0);heading.normalize();support=surface.sample(up);radius=support.radius;verticalSpeed=0;grounded=true;jumps=0;accumulator=0;velocity.set(0,0,0);sync();},
   };
 }

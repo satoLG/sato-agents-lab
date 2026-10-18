@@ -1,5 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
-import {ORB_STEP_DISTANCE} from './orb-motor.js';
+import {ORB_STEP_DISTANCE,ORB_DASH} from './orb-motor.js';
 import {helmetGeometry,crownGeometry,armorLoft,roundedPlate,sweptHorn} from './orb-armor.js';
 import {createOrbCape} from './orb-cape.js';
 
@@ -88,51 +88,70 @@ export function createOrbSato() {
       }`,
   });
   const display=new T.Mesh(displayGeometry,displayMaterial);display.name='sato-single-eye';display.scale.set(.91,.91,1);display.position.set(0,.505,.218);body.add(display);
+  const head=joint(body,'sato-head-pivot',[0,.50,0]);
+  for(const part of [...body.children])if(['sato-helmet','sato-blue-crown','sato-mask','sato-mask-inset','sato-helmet-fins','sato-single-eye'].includes(part.name)){part.position.y-=.50;head.add(part);}
   const downAxis=new T.Vector3(0,-1,0),aimUpper=new T.Quaternion(),aimLower=new T.Quaternion(),restWrist=new T.Quaternion();
   function braceArm(arm,blend){
     const right=arm.side>0;
     arm.joint.position.x=T.MathUtils.lerp(arm.side*.265,arm.side*.23,blend);
-    const elbowPoint=new T.Vector3(...(right?[.14,.03,.14]:[-.13,0,.11]));
-    const wristPoint=new T.Vector3(...(right?[.09,.035,.313]:[.04,0,.17]));
+    const elbowPoint=new T.Vector3(...(right?[.24,.11,.17]:[-.33,-.035,-.08]));
+    const wristPoint=new T.Vector3(...(right?[.24,.11,.35]:[-.34,.025,.08]));
     aimUpper.setFromUnitVectors(downAxis,elbowPoint.clone().sub(arm.joint.position).normalize());
     aimLower.setFromUnitVectors(downAxis,wristPoint.sub(elbowPoint).normalize());
     aimLower.premultiply(aimUpper.clone().invert());
     arm.joint.quaternion.slerp(aimUpper,blend);arm.elbow.quaternion.slerp(aimLower,blend);arm.wrist.quaternion.slerp(restWrist,blend);
   }
-  let gait=0,moving=0,seated=1,joy=0,spring=0,springVelocity=0,jumpPulse=0,sleeping=true,wake=0,attackBlend=0;
+  let gait=0,moving=0,seated=1,joy=0,spring=0,springVelocity=0,jumpPulse=0,sleeping=true,wake=0,attackBlend=0,airBlend=0;
+  const animatedJoints=[body,head,...arms.flatMap(a=>[a.joint,a.elbow,a.wrist]),...legs.flatMap(l=>[l.joint,l.knee,l.ankle])],previousPoses=animatedJoints.map(()=>new T.Quaternion());
   function wakeUp(){sleeping=false;wake=.75;joy=.7;}
   function rest(){sleeping=true;wake=0;joy=0;}
   function celebrate(){joy=1.2;}
   function bounce(amount){springVelocity+=amount*.35;}
   function doubleJump(){jumpPulse=.42;joy=.65;}
-  function update(dt,{time=0,speed=0,grounded=true,verticalSpeed=0,playing=false,reduced=false,running=false,turn=0,charge=0,firing=0}={}) {
+  function update(dt,{time=0,speed=0,grounded=true,verticalSpeed=0,playing=false,reduced=false,running=false,turn=0,charge=0,firing=0,dashAge=99}={}) {
+    animatedJoints.forEach((j,i)=>previousPoses[i].copy(j.quaternion));
     dt=Math.min(.05,Math.max(0,dt));moving=T.MathUtils.damp(moving,speed>.015?1:0,16,dt);
     wake=reduced?0:Math.max(0,wake-dt);seated=T.MathUtils.damp(seated,!playing&&grounded?1:0,14,dt);joy=Math.max(0,joy-dt);
     faceUniforms.sleep.value=reduced?(sleeping?1:0):T.MathUtils.damp(faceUniforms.sleep.value,sleeping?1:0,10,dt);
     jumpPulse=reduced?0:Math.max(0,jumpPulse-dt);gait+=speed*dt/(ORB_STEP_DISTANCE*(running?1.22:1))*Math.PI;
-    const stride=Math.sin(gait),air=grounded?0:1,motion=reduced?.55:1,sleep=faceUniforms.sleep.value;
+    airBlend=T.MathUtils.damp(airBlend,grounded?0:1,18,dt);
+    const stride=Math.sin(gait),air=airBlend,motion=reduced?.55:1,sleep=faceUniforms.sleep.value;
+    const windup=dashAge<ORB_DASH.windup?T.MathUtils.smoothstep(dashAge,0,ORB_DASH.windup):0;
+    const burst=dashAge>=ORB_DASH.windup&&dashAge<ORB_DASH.windup+ORB_DASH.burst?1:0;
+    const settle=dashAge>=ORB_DASH.windup+ORB_DASH.burst?1-T.MathUtils.smoothstep(dashAge,ORB_DASH.windup+ORB_DASH.burst,ORB_DASH.windup+ORB_DASH.burst+ORB_DASH.recovery):0;
+    const dash=windup+burst+settle,idle=(1-moving)*(1-air)*(1-seated)*(1-attackBlend)*(1-dash),shift=Math.sin(time*.77)*.55+.3*Math.sin(time*1.31);
+    const rise=T.MathUtils.smoothstep(verticalSpeed,-.4,1.3),landing=(1-rise)*air;
     attackBlend=T.MathUtils.damp(attackBlend,charge>0||firing>0?1:0,14,dt);
     springVelocity+=(-115*spring-12*springVelocity)*dt;spring+=springVelocity*dt;
     const pulse=jumpPulse>0?Math.sin(jumpPulse/.42*Math.PI)*.03:0,squash=T.MathUtils.clamp(spring+pulse,-.025,.08);
-    const bob=motion*(Math.abs(Math.sin(gait))-.5)*.035*moving;
-    body.scale.set(1,1-squash,1);body.position.y=.70-.15*seated+bob-.025*attackBlend;
-    body.rotation.set(-.06*moving-(running?.10:0)+sleep*.07+air*T.MathUtils.clamp(verticalSpeed*.035,-.09,.08)+firing*.05,motion*stride*.055*moving,-turn*.07+motion*stride*.04*moving);
+    const locomotion=moving*(1-dash);
+    const bob=motion*(Math.abs(Math.sin(gait))-.5)*.035*locomotion;
+    body.scale.set(1,1-squash,1);body.position.y=.70-.15*seated+bob-.025*attackBlend-.105*windup-.07*burst-.055*settle+idle*.006*Math.sin(time*1.8);
+    body.position.x=idle*shift*.032;body.position.z=-firing*.045;
+    body.rotation.set(-.06*locomotion-(running?.10:0)+sleep*.07+air*T.MathUtils.clamp(verticalSpeed*.035,-.09,.08)+firing*.05,motion*stride*.055*locomotion,-turn*.07+motion*stride*.04*locomotion);
+    body.rotation.x+=.16*windup+.43*burst+.13*settle;body.rotation.z+=idle*shift*.045;body.rotation.y+=idle*Math.sin(time*.43)*.055-.14*attackBlend;
+    head.rotation.set(-.06*windup-.22*burst+idle*Math.sin(time*.67)*.04,idle*(Math.sin(time*.39)*.25+.06*Math.sin(time*1.07))+.10*attackBlend,idle*Math.sin(time*.53+1)*.045);
     if(!reduced)body.position.y+=Math.sin(time*1.45)*sleep*.006;
     for(const arm of arms){
       const {joint,elbow,wrist,side}=arm,cycle=stride*side;
-      const baseX=-cycle*(running?.85:.56)*moving*(1-air)-.25*seated-.55*air;
-      joint.rotation.set(baseX,0,side*(.07+.28*air));
-      elbow.rotation.set(-.22-Math.max(0,cycle)*.45*moving-.5*air,0,0);
-      wrist.rotation.set(-.10+air*.22,0,side*.05);
+      const jumpArm=side>0?-.6*rise+.28*landing:.38*rise-.15*landing;
+      const baseX=-cycle*(running?.85:.56)*locomotion*(1-air)-.25*seated+air*jumpArm;
+      joint.position.x=side*.265;
+      joint.rotation.set(baseX+idle*(.06+Math.sin(time*1.1+side)*.045)+dash*(side>0?.65:.35),idle*side*.07,side*(.09+.16*air)+idle*shift*.03+dash*side*.16);
+      elbow.rotation.set(-.22-Math.max(0,cycle)*.45*locomotion-air*(side>0?.65:.28)-dash*.75,0,0);
+      wrist.rotation.set(-.10+air*.22+idle*Math.sin(time*1.3+side)*.035,0,side*.05);
     }
     for(const arm of arms)braceArm(arm,attackBlend);
     for(const {joint,knee,ankle,side} of legs){
-      const cycle=stride*side,lift=Math.max(0,-cycle)*moving;
-      joint.rotation.set(cycle*(running?.72:.48)*moving*(1-air)-.80*seated-.35*air,0,side*(.025+.10*attackBlend));
-      knee.rotation.x=.10+lift*(running?.95:.70)+air*(.65+side*.13)-.18*seated+.22*attackBlend;
-      ankle.rotation.x=-joint.rotation.x*.45-knee.rotation.x*.65;
-      joint.position.y=.46-.12*seated+bob+lift*.035;
+      const cycle=stride*side,lift=Math.max(0,-cycle)*locomotion;
+      joint.rotation.set(cycle*(running?.72:.48)*locomotion*(1-air)-.80*seated-air*(side>0?.60*rise+.18:.12*rise+.1)+idle*(-.09+shift*side*.055)-windup*.55-burst*(side>0?.60:.22)-settle*.3,0,side*(.025+.10*attackBlend)+idle*shift*.025);
+      knee.rotation.x=.10+lift*(running?.95:.70)+air*(side>0?.85*rise+.25:.38*rise+.15)-.18*seated+.22*attackBlend+idle*(.11-shift*side*.07)+windup*1.05+burst*(side>0?1.1:.48)+settle*.55;
+      ankle.rotation.x=-joint.rotation.x-knee.rotation.x;
+      const plantedY=.05+.205*Math.cos(joint.rotation.x)+.205*Math.cos(joint.rotation.x+knee.rotation.x);
+      joint.position.y=T.MathUtils.lerp(.46-.12*seated+bob+lift*.035,plantedY,idle)-.09*windup-.06*burst-.05*settle;
+      joint.position.z=idle*(side*.016+.205*Math.sin(joint.rotation.x)+.205*Math.sin(joint.rotation.x+knee.rotation.x));
     }
+    animatedJoints.forEach((j,i)=>{const target=j.quaternion.clone();j.quaternion.copy(previousPoses[i]).slerp(target,dt===0?1:1-Math.exp(-dt*(j===head?9:24)));});
     arms.forEach((arm,i)=>{
       const upper=clothColliders[i*2],lower=clothColliders[i*2+1];upper.a.copy(arm.joint.position);upper.b.copy(arm.elbow.position).applyQuaternion(arm.joint.quaternion).add(upper.a);
       lower.a.copy(upper.b);forearmRotation.copy(arm.joint.quaternion).multiply(arm.elbow.quaternion);lower.b.set(0,-.27,0).applyQuaternion(forearmRotation).add(lower.a);
@@ -140,8 +159,8 @@ export function createOrbSato() {
     cape.update(dt,{speed,verticalSpeed,turn,power:charge+firing,reduced,colliders:clothColliders,floor:grounded?(.045-body.position.y)/body.scale.y:-1.2});
     const blinkPhase=time%4.3;faceUniforms.blink.value=reduced&&!playing?0:blinkPhase<.15?Math.sin(blinkPhase/.15*Math.PI):0;
     faceUniforms.joy.value=T.MathUtils.damp(faceUniforms.joy.value,joy>0&&!attackBlend?1:0,16,dt);faceUniforms.look.value.set(Math.sin(time*.63)*.8*(1-attackBlend),Math.sin(time*.31)*.4);
-    root.userData.animation=sleep>.7?'sleep':wake>0?'wake':firing>0?'fire':charge>0?'charge':seated>.5?'sit':air?'jump':moving>.1?(running?'run':'walk'):joy>0?'joy':'idle';
+    root.userData.animation=sleep>.7?'sleep':wake>0?'wake':dash>.01?'dash':firing>0?'fire':charge>0?'charge':seated>.5?'sit':!grounded?'jump':moving>.1?(running?'run':'walk'):joy>0?'joy':'idle';
   }
   const muzzle=new T.Object3D();muzzle.name='sato-laser-muzzle';muzzle.position.set(0,-.08,.075);arms.find(a=>a.side>0).wrist.add(muzzle);
-  update(0);return {root,model,body,legs,arms,antenna,display,faceUniforms,cape,muzzle,update,wakeUp,rest,celebrate,bounce,doubleJump,get waking(){return wake>0;},get settling(){return wake>0||Math.abs(faceUniforms.sleep.value-(sleeping?1:0))>.001||Math.abs(seated-(sleeping?1:0))>.001;}};
+  update(0);return {root,model,body,head,legs,arms,antenna,display,faceUniforms,cape,muzzle,update,wakeUp,rest,celebrate,bounce,doubleJump,get waking(){return wake>0;},get settling(){return wake>0||Math.abs(faceUniforms.sleep.value-(sleeping?1:0))>.001||Math.abs(seated-(sleeping?1:0))>.001;}};
 }

@@ -6,6 +6,7 @@ export function createWaterDebug(settings,onChange) {
   panel.innerHTML='<summary>Água · debug</summary><div class="water-debug-content"><header><strong>Ajuste ao vivo</strong><span>Valores salvos neste navegador</span></header><fieldset data-section="water"><legend>Água</legend></fieldset><fieldset data-section="robot"><legend>Interação do robô</legend></fieldset><div class="water-debug-actions"><button type="button" data-action="print" aria-pressed="false">Modo print</button><button type="button" data-action="copy">Copiar valores</button><button type="button" data-action="reset">Restaurar</button></div><p class="water-debug-status" role="status" aria-live="polite"></p><textarea aria-label="Valores para copiar" readonly hidden></textarea></div>';
   try{const saved=JSON.parse(localStorage.getItem(storageKey));if(saved?.version===1)settings.apply(saved);}catch{}
   const fields=new Map();
+  panel.addEventListener('toggle',()=>{if(panel.open){const combat=document.getElementById('orb-combat-debug');if(combat)combat.open=false;}});
   for(const [key,label,min,max,step,,,section] of WATER_CONTROLS){
     const row=document.createElement('label');row.className='water-debug-row';row.htmlFor=`water-${key}`;
     row.innerHTML=`<span>${label}</span><input type="range" id="water-${key}" min="${min}" max="${max}" step="${step}"><input type="number" aria-label="${label}: valor" min="${min}" max="${max}" step="${step}">`;

@@ -1,5 +1,8 @@
 # orb
 
+A atualização de combate, dash, poses e água reativa está documentada em
+[orb-combat.md](orb-combat.md), incluindo os controles e fontes dos novos VFX.
+
 `/orb` apresenta o canvas, um botão discreto de som e o ícone para acordar
 Sato após a entrada. A câmera permanece centralizada
 no mundo, com OrbitControls, zoom por roda/pinça e atalhos descritos no rótulo
