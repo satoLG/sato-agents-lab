@@ -28,6 +28,7 @@ async function start() {
       getLoadingDiameter:()=>parseFloat(getComputedStyle($('orb-start')).width)||140,
       onCameraChange:zoom=>{container.dataset.zoom=zoom.toFixed(2);},onError:error,
       onContact:event=>ambience?.playContact(event),
+      onSound:event=>ambience?.playEffect(event),
     });
     scene.setPaused(true);await audioReady;loader.setProgress(1);
     if(await loader.ready)$('orb-status').textContent='Seu mundo está pronto. Ative Entrar na orb para explorar.';

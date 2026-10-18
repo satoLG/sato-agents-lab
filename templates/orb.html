@@ -22,10 +22,10 @@
     <button id="orb-sato-invite" class="glass scene-icon" type="button" aria-label="Acordar Sato" aria-controls="orb-scene" hidden>{{ icon('power') }}</button>
     <div id="orb-play-controls" hidden>
       <button id="orb-walk-exit" class="glass scene-icon" type="button" aria-label="Voltar à órbita">{{ icon('arrow-left') }}</button>
-      <p class="sr-only">WASD ou setas para andar; arraste para olhar; espaço ou Pular para pulo duplo; Shift para correr; segure F para carregar e solte para disparar. Escape para sair. No celular, use o direcional e os botões de ação.</p>
+      <p class="sr-only">WASD ou setas para andar; arraste para olhar; espaço ou Pular para pulo duplo; Shift para dash; segure F para carregar e solte para disparar. Escape para sair. No celular, use o direcional e os botões de ação.</p>
       <div id="orb-stick" role="group" aria-label="Direção de caminhada"><span id="orb-stick-knob" aria-hidden="true"></span></div>
       <button id="orb-jump" class="glass scene-icon" type="button" aria-label="Pular. Pulo duplo disponível." data-jumps="0">{{ icon('arrow-up') }}<span class="jump-dots" aria-hidden="true"><i></i><i></i></span></button>
-      <button id="orb-run" class="glass scene-icon orb-action" type="button" aria-label="Alternar corrida" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 4 3 2m-8 3 4-2 3 5 4 1m-7-3-2 6-5 4m5-4 5 1 1 4"/></svg><span>Correr</span></button>
+      <button id="orb-dash" class="glass scene-icon orb-action" type="button" aria-label="Dash (Shift)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 4 3 2m-8 3 4-2 3 5 4 1m-7-3-2 6-5 4m5-4 5 1 1 4"/></svg><span>Dash</span></button>
       <button id="orb-attack" class="glass scene-icon orb-action" type="button" aria-label="Ataque. Segure para carregar e solte para disparar." data-state="idle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-8 12h6l-1 8 9-13h-7Z"/></svg><span id="orb-attack-label">Ataque</span></button>
     </div>
     <div id="orb-loading" aria-label="Carregando orb">

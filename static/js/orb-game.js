@@ -1,3 +1,5 @@
+import {createOrbDash} from './orb-dash.js';
+import {createCombatDebug} from './orb-combat-debug.js';
 import {createOrbPower} from './orb-power.js';
 import * as T from '../vendor/three.module.min.js';
 import {createOrbSato} from './orb-sato.js';
@@ -6,33 +8,34 @@ import {createOrbSurface} from './orb-surface.js';
 import {createOrbTrails} from './orb-trails.js';
 import {createOrbCameraOcclusion} from './orb-camera-occlusion.js';
 
-export function createOrbGame({world,island,water,camera,occluders=[],canvas,container,controls,reducedMotion=false,onActivate=()=>{},onExit=()=>{},onContact=()=>{}}) {
-  const avatar=createOrbSato(),trails=createOrbTrails(water),power=createOrbPower(water);
+export function createOrbGame({world,island,water,camera,occluders=[],canvas,container,controls,reducedMotion=false,onActivate=()=>{},onExit=()=>{},onContact=()=>{},onSound=()=>{}}) {
+  const avatar=createOrbSato(),trails=createOrbTrails(water),dashEffects=createOrbDash(avatar);
   const antennaTip=avatar.antenna.getObjectByName('antenna-tip');
   const occlusion=createOrbCameraOcclusion([island.trees,...island.rocks,...occluders]);
   const surface=createOrbSurface({land:island.land,rocks:island.rocks,trunks:island.trunks,water});
+  const power=createOrbPower(water,{onSound,surface}),combatDebug=createCombatDebug(power.settings,{preview:()=>playing&&!avatar.waking&&motor.grounded&&!motor.dashing&&power.begin({preview:true}),fire:()=>power.release(),stop:()=>power.cancel()});
   const motor=createOrbMotor(surface,{onEvent:event=>{
-    trails.emit(event);onContact(event);
+    trails.emit(event);dashEffects.emit(event);onContact({...event,volume:power.settings.values.effectsVolume});
     if(event.type==='jump'){avatar.bounce(event.double?-1.9:-1.5);if(event.double)avatar.doubleJump();}
     if(event.type==='land')avatar.bounce(Math.min(3.5,event.impact*1.6));
   }});
-  world.add(avatar.root,trails.group,power.group);
+  world.add(avatar.root,trails.group,power.group,dashEffects.group);
   const invite=document.getElementById('orb-sato-invite'),hud=document.getElementById('orb-play-controls'),exit=document.getElementById('orb-walk-exit'),jumpButton=document.getElementById('orb-jump'),stick=document.getElementById('orb-stick'),knob=document.getElementById('orb-stick-knob');
-  const runButton=document.getElementById('orb-run'),attackButton=document.getElementById('orb-attack'),attackLabel=document.getElementById('orb-attack-label');
-  let runToggle=false,attackPointer=null,attackInput=null,lastAttackState='';
+  const dashButton=document.getElementById('orb-dash'),attackButton=document.getElementById('orb-attack'),attackLabel=document.getElementById('orb-attack-label');
+  let attackPointer=null,attackInput=null,lastAttackState='';
   const muzzlePosition=new T.Vector3(),previousHeading=new T.Vector3();
   const keys=new Set(),touch=new T.Vector2(),back=new T.Vector3(4.4,0,9.8).normalize(),viewBack=new T.Vector3(),lastUp=motor.up.clone(),cameraTarget=new T.Vector3(),target=new T.Vector3(),desiredCamera=new T.Vector3(),right=new T.Vector3(),direction=new T.Vector3(),frame=new T.Matrix4(),transport=new T.Quaternion();
   motor.heading.copy(back);let playing=false,enabled=false,seconds=0,cameraDistance=2.15,pitch=.64,pointer=null,stickPointer=null,lastMode='';
   const pointers=new Map();let pinchDistance=0;
   const removers=[];
   function listen(node,type,fn,options){node.addEventListener(type,fn,options);removers.push(()=>node.removeEventListener(type,fn,options));}
-  function clearInput(){keys.clear();runToggle=false;runButton.setAttribute('aria-pressed','false');attackPointer=null;attackInput=null;power.cancel();touch.set(0,0);motor.stop();pointers.clear();pinchDistance=0;pointer=null;stickPointer=null;knob.style.transform='translate(0,0)';}
+  function clearInput(){keys.clear();dashEffects.clear();attackPointer=null;attackInput=null;power.cancel();touch.set(0,0);motor.stop();pointers.clear();pinchDistance=0;pointer=null;stickPointer=null;knob.style.transform='translate(0,0)';}
   function setMode(next) {
     if(next===playing||next&&!enabled)return;
     playing=next;clearInput();hud.hidden=!playing;invite.hidden=true;container.dataset.mode=playing?'walk':'orbit';
     if(playing){onActivate();controls.enabled=false;cameraTarget.copy(controls.target);back.copy(camera.position).sub(motor.position).addScaledVector(motor.up,-camera.position.clone().sub(motor.position).dot(motor.up));if(back.lengthSq()<.01)back.set(0,0,1);back.normalize();viewBack.copy(back);lastUp.copy(motor.up);avatar.wakeUp();}
     else {avatar.rest();camera.up.set(0,1,0);controls.target.copy(motor.position);controls.enabled=true;onExit();}
-    container.focus({preventScroll:true});document.getElementById('orb-status').textContent=playing?'Controlando Sato. WASD ou setas para andar. Shift ou Correr: corrida. Espaço: pulo duplo. Segure F ou Ataque para carregar e solte para disparar. Escape para voltar à órbita.':'Explorando a órbita. Clique no Sato para caminhar novamente.';
+    container.focus({preventScroll:true});document.getElementById('orb-status').textContent=playing?'Controlando Sato. WASD ou setas para andar. Shift ou Dash: impulso rápido. Espaço: pulo duplo. Segure F ou Ataque para carregar e solte para disparar. Escape para voltar à órbita.':'Explorando a órbita. Clique no Sato para caminhar novamente.';
   }
   function screenPosition() {
     camera.updateMatrixWorld();
@@ -45,9 +48,11 @@ export function createOrbGame({world,island,water,camera,occluders=[],canvas,con
   // Pointerdown works for a second finger while the first holds the stick;
   // touch-generated compatibility clicks must not consume the second jump.
   const jump=()=>{if(playing&&!avatar.waking&&!power.locked)motor.jump();};
-  const startAttack=source=>{if(playing&&!avatar.waking&&motor.grounded&&power.begin()){attackInput=source;motor.stop();}};
+  const startAttack=source=>{if(playing&&!avatar.waking&&motor.grounded&&!motor.dashing&&power.begin()){attackInput=source;motor.stop();}};
   const releaseAttack=source=>{if(attackInput===source){power.release();attackInput=null;}};
-  listen(runButton,'click',()=>{if(!playing)return;runToggle=!runToggle;runButton.setAttribute('aria-pressed',String(runToggle));});
+  const dash=()=>{if(playing&&!avatar.waking&&!power.locked)motor.dash(direction.lengthSq()>.01?direction:motor.heading);};
+  listen(dashButton,'pointerdown',event=>{event.preventDefault();dash();});
+  listen(dashButton,'click',event=>{if(event.detail===0)dash();});
   listen(attackButton,'pointerdown',event=>{if(!playing||attackPointer!==null)return;event.preventDefault();attackPointer=event.pointerId;attackButton.setPointerCapture(event.pointerId);startAttack('pointer');});
   listen(attackButton,'pointerup',event=>{if(event.pointerId!==attackPointer)return;attackPointer=null;releaseAttack('pointer');});
   listen(attackButton,'pointercancel',()=>{attackPointer=null;attackInput=null;power.cancel();});
@@ -57,16 +62,16 @@ export function createOrbGame({world,island,water,camera,occluders=[],canvas,con
   listen(jumpButton,'pointerdown',event=>{if(playing){event.preventDefault();jump();}});
   listen(jumpButton,'click',event=>{if(playing&&event.detail===0)jump();});
   listen(window,'keydown',event=>{
-    if(event.target.closest?.('input,textarea,select,[contenteditable],#orb-water-debug'))return;
+    if(event.target.closest?.('input,textarea,select,[contenteditable],#orb-water-debug,#orb-combat-debug'))return;
     if(!enabled||event.ctrlKey||event.metaKey||event.altKey)return;
     if(!playing){if((event.code==='KeyE'||event.code==='Enter')&&event.target===container){event.preventDefault();setMode(true);}return;}
     if(event.code==='Escape'){event.preventDefault();setMode(false);return;}
     if(event.code==='KeyF'){event.preventDefault();if(!event.repeat)startAttack('keyboard');}
-    if(event.code==='ShiftLeft'||event.code==='ShiftRight'){event.preventDefault();keys.add(event.code);}
+    if(event.code==='ShiftLeft'||event.code==='ShiftRight'){event.preventDefault();if(!event.repeat)dash();}
     if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}
     if(event.code==='Space'&&(!event.target.closest?.('button')||event.target===jumpButton)){event.preventDefault();if(!event.repeat)jump();}
   });
-  listen(document,'focusin',event=>{if(event.target.closest?.('#orb-water-debug'))clearInput();});
+  listen(document,'focusin',event=>{if(event.target.closest?.('#orb-water-debug,#orb-combat-debug')){if(power.previewing){keys.clear();touch.set(0,0);motor.stop();}else clearInput();}});
   listen(window,'keyup',event=>{keys.delete(event.code);if(event.code==='KeyF')releaseAttack('keyboard');});listen(window,'blur',clearInput);
   listen(document,'visibilitychange',()=>{if(document.hidden)clearInput();});
   const zoomBy=factor=>{cameraDistance=T.MathUtils.clamp(cameraDistance*factor,1.25,4.2);};
@@ -112,19 +117,22 @@ export function createOrbGame({world,island,water,camera,occluders=[],canvas,con
     right.crossVectors(motor.up,back).normalize();
     const x=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0)+touch.x;
     const y=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)+touch.y;
-    const running=playing&&!power.locked&&(runToggle||keys.has('ShiftLeft')||keys.has('ShiftRight'));
+    const running=false;
     const amount=playing&&!avatar.waking&&!power.locked?Math.min(1,Math.hypot(x,y)):0;direction.copy(right).multiplyScalar(x).addScaledVector(back,-y);if(direction.lengthSq()>0)direction.normalize();
     previousHeading.copy(motor.heading);
     if(playing||!motor.grounded)motor.update(dt,{direction,amount,time,running});
     const turn=dt>0?T.MathUtils.clamp(new T.Vector3().crossVectors(previousHeading,motor.heading).dot(motor.up)/dt,-3,3):0;
     avatar.root.position.copy(motor.position);right.crossVectors(motor.up,motor.heading).normalize();frame.makeBasis(right,motor.up,motor.heading);avatar.root.quaternion.setFromRotationMatrix(frame);
     avatar.root.userData.orbFoamExclude=motor.waterDepth<=.008;
-    avatar.update(playing||animate||settling?dt:0,{time:seconds,speed:playing?motor.velocity.length():0,grounded:motor.grounded,verticalSpeed:motor.verticalSpeed,playing,reduced:reducedMotion,running,turn,charge:power.state==='charging'?Math.max(.001,power.charge):0,firing:power.firing});
+    avatar.update(playing||animate||settling?dt:0,{time:seconds,speed:playing?motor.velocity.length():0,grounded:motor.grounded,verticalSpeed:motor.verticalSpeed,playing,reduced:reducedMotion,running,turn,dashAge:motor.dashAge,charge:power.state==='charging'?Math.max(.001,power.charge):0,firing:power.firing});
     avatar.root.updateMatrixWorld(true);avatar.muzzle.getWorldPosition(muzzlePosition);
     power.update(playing||power.active?dt:0,{position:motor.position,heading:motor.heading,normal:motor.up,muzzlePosition,reduced:reducedMotion});
     const attackState=`${power.state}-${Math.round(power.charge*100)}`;
-    if(attackState!==lastAttackState){attackButton.dataset.state=power.state;attackButton.style.setProperty('--charge',`${Math.round(power.charge*100)}%`);attackLabel.textContent=power.state==='charging'?`${Math.round(power.charge*100)}%`:power.state==='firing'?'Raio':power.state==='recovering'?'Recarrega':'Ataque';attackButton.setAttribute('aria-label',power.state==='charging'?`Carregando ${Math.round(power.charge*100)}%. Solte para disparar.`:'Ataque. Segure para carregar e solte para disparar.');lastAttackState=attackState;}
-    container.dataset.running=String(running&&amount>0);
+    if(attackState!==lastAttackState){attackButton.dataset.state=power.state;attackButton.style.setProperty('--charge',`${Math.round(power.charge*100)}%`);attackLabel.textContent=power.state==='charging'?`${Math.round(power.charge*100)}%`:power.state==='firing'?'Disparo':power.state==='recovering'?'Recarrega':'Ataque';attackButton.setAttribute('aria-label',power.state==='charging'?`Carregando ${Math.round(power.charge*100)}%. Solte para disparar.`:'Ataque. Segure para carregar e solte para disparar.');lastAttackState=attackState;}
+    container.dataset.dashing=String(motor.dashing);
+    dashButton.dataset.cooldown=String(motor.dashCooldown>0);dashButton.style.setProperty('--cooldown',String(motor.dashCooldown/.95));
+    dashButton.setAttribute('aria-label',motor.dashCooldown>0?'Dash recarregando':'Dash (Shift)');
+    dashEffects.update(dt,{burst:motor.dashBurst,reduced:reducedMotion});
     trails.update(playing||animate||settling?dt:0,seconds);
     if(playing) {
       target.copy(motor.position).addScaledVector(motor.up,.15);cameraTarget.lerp(target,reducedMotion?1:1-Math.exp(-dt*12));
@@ -144,5 +152,5 @@ export function createOrbGame({world,island,water,camera,occluders=[],canvas,con
     return playing||power.active||!motor.grounded||avatar.settling;
   }
   update(0,{animate:false});
-  return {avatar,motor,surface,trails,occlusion,power,get cameraDistance(){return cameraDistance;},update,setMode,screenPosition,get playing(){return playing;},setEnabled(value){enabled=value;},dispose(){clearInput();for(const remove of removers)remove();hud.hidden=true;invite.hidden=true;delete container.dataset.mode;}};
+  return {avatar,motor,surface,trails,occlusion,power,dashEffects,get cameraDistance(){return cameraDistance;},update,setMode,screenPosition,get playing(){return playing;},setEnabled(value){enabled=value;},dispose(){clearInput();combatDebug.dispose();for(const remove of removers)remove();hud.hidden=true;invite.hidden=true;delete container.dataset.mode;}};
 }

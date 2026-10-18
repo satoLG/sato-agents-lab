@@ -1,9 +1,10 @@
+import {createOrbSfx} from './orb-sfx.js';
 // A quiet synthesized sea bed and the owner's JDSherbert footstep recordings.
 // Fetch the small clips during loading; create/resume audio only on Play.
 export function createOrbAmbience({onChange=()=>{}}={}) {
   let context=null,master=null,started=false,muted=false,hidden=false,disposed=false;
   const sources=[],voices=new Set(),clips=new Map(),indices=new Map(),abort=new AbortController();
-  let lastContact=-1,encoded=null,decoded=null;
+  let lastContact=-1,encoded=null,decoded=null,sfx=null;
   const categories=['grass','sand','stone','water','puddle'];
   function prepare(){
     if(!encoded)encoded=Promise.all(categories.flatMap(kind=>[1,2].map(async index=>{
@@ -55,7 +56,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       oscillator.frequency.value=frequency;gain.gain.value=amount;
       oscillator.connect(gain).connect(wash.gain);oscillator.start();sources.push(oscillator);
     }
-    source.start();sources.push(source);return true;
+    source.start();sources.push(source);sfx=createOrbSfx(context,master);return true;
   }
   return {
     prepare,
@@ -75,8 +76,11 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       if(!muted&&!hidden)context.resume().catch(()=>{});
       fade();notify();
     },
-    playContact({type,surface,impact=1,waterDepth=0}) {
+    playEffect(event){if(context&&started&&!disposed)sfx?.handle(event);},
+    playContact({type,surface,impact=1,waterDepth=0,double=false,volume:effectVolume=.7}) {
       if(!context||!started||disposed||muted||hidden)return;
+      if(type==='jump'){sfx.handle({type,double,volume:effectVolume});return;}
+      if(type==='dash'||type==='dash-impact'){sfx.handle({type,volume:effectVolume});return;}
       const now=context.currentTime;if(type==='step'&&now-lastContact<.075)return;lastContact=now;
       const wet=surface==='water'||waterDepth>.008;
       const kind=wet?(waterDepth>.10?'water':'puddle'):surface==='rock'?'stone':surface;
@@ -102,7 +106,7 @@ export function createOrbAmbience({onChange=()=>{}}={}) {
       else if(started)context.resume().then(fade).catch(()=>{});
     },
     dispose() {
-      if(disposed)return;disposed=true;abort.abort();clips.clear();
+      if(disposed)return;disposed=true;abort.abort();clips.clear();sfx?.dispose();
       for(const source of sources){try{source.stop();source.disconnect();}catch {}}
       for(const voice of [...voices])voice.stop();
       master?.disconnect();context?.close().catch(()=>{});notify();

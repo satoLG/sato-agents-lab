@@ -68,7 +68,7 @@ function createStars() {
   const group=new T.Points(geometry,material);group.frustumCulled=false;group.name='orb-starfield';return {group,time,dpr};
 }
 
-export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},onContact=()=>{},getLoadingDiameter=()=>140}={}) {
+export async function createOrbScene(container,{reducedMotion=false,onCameraChange=()=>{},onManualOrbit=()=>{},onError=()=>{},onProgress=()=>{},onContact=()=>{},onSound=()=>{},getLoadingDiameter=()=>140}={}) {
   const canvas=document.createElement('canvas');
   const context=canvas.getContext('webgl2',{alpha:false,antialias:true,powerPreference:'high-performance'});
   if(!context)throw new Error('WEBGL_UNAVAILABLE');
@@ -116,7 +116,7 @@ export async function createOrbScene(container,{reducedMotion=false,onCameraChan
   gradient.addColorStop(0,'rgba(18,72,102,.16)');gradient.addColorStop(.4,'rgba(16,52,81,.08)');gradient.addColorStop(1,'rgba(2,8,13,0)');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
   const glowTexture=new T.CanvasTexture(glowCanvas),glow=new T.Sprite(new T.SpriteMaterial({map:glowTexture,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));glow.scale.set(24,24,1);glow.position.set(0,0,-18);scene.add(glow);
   const depth=createOrbDepth(renderer,scene,water.uniforms);
-  const game=createOrbGame({world,island,water,camera,occluders:[moon.mesh],canvas,container,controls,reducedMotion,onContact,
+  const game=createOrbGame({world,island,water,camera,occluders:[moon.mesh],canvas,container,controls,reducedMotion,onContact,onSound,
     onActivate(){transition=null;automatic=false;controls.autoRotate=false;container.dataset.view='walk';},
     onExit(){setView('world');},
   });
