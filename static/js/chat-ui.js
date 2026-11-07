@@ -35,5 +35,21 @@ export function thinkingIndicator(text){
  const span=document.createElement('span');span.className='thinking-indicator';
  const dots=document.createElementNS('http://www.w3.org/2000/svg','svg');dots.setAttribute('viewBox','0 0 24 8');dots.setAttribute('aria-hidden','true');dots.classList.add('thinking-dots');
  for(let i=0;i<3;i++){const dot=document.createElementNS(dots.namespaceURI,'circle');dot.setAttribute('cx',String(4+i*8));dot.setAttribute('cy','4');dot.setAttribute('r','2');dots.append(dot);}
- span.append(document.createTextNode(text),dots);return span;
+ span.dataset.status=text;
+ const lines=text.split('\n');
+ if(lines.length===1){span.append(document.createTextNode(text),dots);return span;}
+ span.classList.add('thinking-steps');
+ for(const line of lines){
+  const step=document.createElement('span');
+  step.className='thinking-step';
+  step.textContent=line;
+  span.append(step);
+ }
+ span.lastChild.append(dots);
+ return span;
+}
+
+export function updateThinkingIndicator(container,text){
+ const current=container.querySelector('.thinking-indicator');
+ if(current?.dataset.status!==text)container.replaceChildren(thinkingIndicator(text));
 }

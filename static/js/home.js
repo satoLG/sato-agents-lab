@@ -1,7 +1,8 @@
 import {createCompanionScene} from './home-scene.js';
 import {createCompanionAudio} from './home-audio.js';
 import {createSpeechBubble} from './lab-dialogue.js';
-import {chatIcon,copyMessageButton,thinkingPhrase,thinkingIndicator,forgetThinking} from './chat-ui.js';
+import {chatIcon,copyMessageButton,thinkingPhrase,updateThinkingIndicator,forgetThinking} from './chat-ui.js';
+import {formatChatAnswer} from './chat-markdown.js';
 import {createChatTypewriter} from './chat-typewriter.js';
 import {fitChatPreview} from './chat-preview.js';
 import {createHomeWallpaper} from './home-wallpaper.js';
@@ -59,10 +60,16 @@ function placeSpeech(){
  speech.style.setProperty('--collapse-y',`${peekY-top-speech.offsetHeight/2}px`);
  const question=$('last-question'),chat=$('home-chat').getBoundingClientRect();question.style.setProperty('--collapse-y',`${peekY-(chat.top-root.top+question.offsetTop)-question.offsetHeight/2}px`);question.style.setProperty('--collapse-x',`${head.x-(chat.left-root.left+question.offsetLeft)-question.offsetWidth/2}px`);
 }
-function say(text,{reaction,sound=true,pending=false,animate=false,timestamp}={}){
+function say(text,{reaction,sound=true,pending=false,animate=false,timestamp,formatted}={}){
  if(disposed||!text)return;const indicator=pending&&speechPending?bubble.body.querySelector('.thinking-indicator'):null;lastSpoken=text;speechPending=pending;$('home-speech').hidden=false;setPreviewCollapsed(false);
- if(indicator){if(indicator.firstChild.nodeValue!==text)indicator.firstChild.nodeValue=text;}
- else{typing.finish(bubble.body);bubble.setText(animate?'':answerPreview(text),'SATO AGENT',text,{animate:false});if(pending)bubble.body.replaceChildren(thinkingIndicator(text));else typing.set(bubble.body,fitChatPreview(bubble.body,answerPreview(text)),{animate});}
+ if(indicator)updateThinkingIndicator(bubble.body,text);
+ else{
+  const summary=answerPreview(formatted?.preview||text);
+  typing.finish(bubble.body);
+  bubble.setText(animate?'':summary,'SATO AGENT',text,{animate:false});
+  if(pending)updateThinkingIndicator(bubble.body,text);
+  else typing.set(bubble.body,fitChatPreview(bubble.body,summary),{animate});
+ }
  bubble.copy.hidden=pending;
  setClock(speechTime,timestamp);
  $('home-speech').hidden=false;measurePreviews();placeSpeech();schedulePreviewCollapse();if(!pending)scene?.speak(Math.min(6,Math.max(2,text.length/35)));if(reaction)scene?.react(reaction);if(sound)audio.cue(reaction||'hello');
@@ -91,9 +98,11 @@ function historyEntry(job){
  for(const role of ['question','answer']){
   const node=document.createElement('div'),name=document.createElement('h3'),text=document.createElement('p'),footer=document.createElement('footer'),time=document.createElement('time'),more=document.createElement('button');
   node.className=`history-${role}`;name.textContent=role==='question'?'VOCÊ':'SATO AGENT';more.type='button';more.className='history-more';more.hidden=true;
-  const view={node,text,time,more,fullText:'',pending:false};view.copy=copyMessageButton(()=>view.fullText,role==='question'?'Copiar pergunta':'Copiar resposta');
+  const rich=role==='answer'?document.createElement('div'):null;
+  if(rich){rich.className='chat-markdown';rich.hidden=true;}
+  const view={node,text,rich,time,more,fullText:'',pending:false};view.copy=copyMessageButton(()=>view.fullText,role==='question'?'Copiar pergunta':'Copiar resposta');
   more.addEventListener('click',()=>{const key=`${job.id}:${role}`;if(expandedMessages.has(key))expandedMessages.delete(key);else expandedMessages.add(key);updateHistoryText(view,job.id,role);historyScroll();});
-  const meta=document.createElement('span');meta.className='bubble-meta';meta.append(view.copy,time);if(role==='question')meta.append(chatIcon('check-check'));footer.append(more,meta);node.append(name,text,footer);entry.append(node);entry.views[role]=view;
+  const meta=document.createElement('span');meta.className='bubble-meta';meta.append(view.copy,time);if(role==='question')meta.append(chatIcon('check-check'));footer.append(more,meta);node.append(name,text);if(rich)node.append(rich);node.append(footer);entry.append(node);entry.views[role]=view;
  }
  return entry;
 }
@@ -104,9 +113,20 @@ function pendingStatus(job){
 }
 function updateHistoryText(view,id,role){
  const expanded=expandedMessages.has(`${id}:${role}`),limit=role==='question'?180:420;
- if(view.pending){
-  const phrase=view.progressText,indicator=view.text.querySelector('.thinking-indicator');
-  if(indicator){if(indicator.firstChild.nodeValue!==phrase)indicator.firstChild.nodeValue=phrase;}else{typing.finish(view.text);view.text.replaceChildren(thinkingIndicator(phrase));}
+ if(view.rich)view.rich.hidden=!view.formatted;
+ view.text.hidden=!!view.formatted;
+ if(view.formatted){
+  if(view.text.hasChildNodes()){
+   typing.finish(view.text);
+   view.text.replaceChildren();
+  }
+  if(view.renderedFormat!==view.formatted){
+   view.rich.innerHTML=view.formatted.html;
+   view.renderedFormat=view.formatted;
+  }
+ }else if(view.pending){
+  if(!view.text.querySelector('.thinking-indicator'))typing.finish(view.text);
+  updateThinkingIndicator(view.text,view.progressText);
  }else{
   const value=expanded?view.fullText:role==='answer'?answerPreview(view.fullText):preview(view.fullText.split('\n').slice(0,5).join('\n'),limit);
   view.text.dataset.collapsed=String(!expanded);
@@ -126,11 +146,17 @@ function updateHistoryText(view,id,role){
  }
  view.text.classList.toggle('history-pending',view.pending);view.text.dataset.collapsed=String(!expanded&&!view.pending);view.copy.hidden=view.pending;
  const label=expanded?'Ver menos':'Ver mais';if(view.more.textContent!==label)view.more.textContent=label;view.more.setAttribute('aria-expanded',String(expanded));
- view.more.hidden=view.pending||!(expanded||view.fullText!==view.displayText);
+ view.more.hidden=view.pending||!!view.formatted||!(expanded||view.fullText!==view.displayText);
 }
 function updateHistoryEntry(entry,job){
  for(const role of ['question','answer']){
-  const view=entry.views[role];view.pending=role==='answer'&&['queued','running'].includes(job.status);view.fullText=role==='question'?job.question||'':job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');view.progressText=view.pending?pendingStatus(job):'';updateHistoryText(view,job.id,role);
+  const view=entry.views[role];view.pending=role==='answer'&&['queued','running'].includes(job.status);view.fullText=role==='question'?job.question||'':job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');view.progressText=view.pending?pendingStatus(job):'';
+  const answer=role==='answer'&&job.status==='done'?job.answer:null;
+  if(view.formatSource!==answer){
+   view.formatSource=answer;
+   view.formatted=answer?formatChatAnswer(answer):null;
+  }
+  updateHistoryText(view,job.id,role);
   // Pending updates must not change the clock or recreate footer icons.
   const timestamp=role==='question'||view.pending?job.created_at:job.updated_at||job.created_at;
   if(view.timestamp!==timestamp){view.timestamp=timestamp;const date=new Date(timestamp*1000);view.time.hidden=!timestamp||Number.isNaN(date.getTime());if(!view.time.hidden){view.time.dateTime=date.toISOString();view.time.textContent=date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}}
@@ -151,7 +177,7 @@ function showLatest(){
  for(const job of jobs){if(['queued','running'].includes(job.status))awaitingAnswers.add(job.id);else if(awaitingAnswers.delete(job.id)&&job.status==='done')animatedAnswers.add(job.id);}
  const incoming=animatedAnswers.has(latest.id);
  showQuestion(latest.question,latest.created_at);
- if(latest.status==='done'&&latest.answer){forgetThinking(latest.id);status('Chat conectado.');if((speechPending||lastSpoken!==latest.answer)&&!navigating)say(latest.answer,{sound:false,animate:incoming&&$('home-history').hidden,timestamp:latest.updated_at||latest.created_at});}
+ if(latest.status==='done'&&latest.answer){forgetThinking(latest.id);status('Chat conectado.');if((speechPending||lastSpoken!==latest.answer)&&!navigating)say(latest.answer,{sound:false,animate:incoming&&$('home-history').hidden,timestamp:latest.updated_at||latest.created_at,formatted:formatChatAnswer(latest.answer)});}
  else if(latest.status==='failed'){forgetThinking(latest.id);const error=latest.error||'Não consegui responder. Tente enviar novamente.';status(error,true);if((speechPending||lastSpoken!==error)&&!navigating)say(error,{sound:false});}
  else{awaitingAnswers.add(latest.id);const phrase=pendingStatus(latest);status(phrase);if((lastSpoken!==phrase||!speechPending)&&!navigating)say(phrase,{sound:false,pending:true});}
  renderHistory();animatedAnswers.clear();
