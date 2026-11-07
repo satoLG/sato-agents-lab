@@ -61,7 +61,7 @@
 #history-thread:has(#history-earlier:not([hidden])) #home-messages{top:calc(max(12px,env(safe-area-inset-top)) + 112px)}
 .speech-text[data-typing=true]{min-height:1.55em}
 .Typewriter__cursor{display:none}
-.thinking-indicator{display:inline;vertical-align:middle;color:var(--accent);font-size:13px;line-height:1.6;white-space:normal}
+.thinking-indicator{display:inline;vertical-align:middle;color:var(--accent);font-size:13px;line-height:1.6;white-space:pre-line}
 .thinking-indicator .thinking-dots{display:inline-block;vertical-align:middle;margin-left:5px;width:24px;height:8px;fill:currentColor;stroke:none}
 .thinking-dots circle{animation:thinking-dot 1.2s ease-in-out infinite;transform-origin:center}
 .thinking-dots circle:nth-child(2){animation-delay:.16s}.thinking-dots circle:nth-child(3){animation-delay:.32s}
