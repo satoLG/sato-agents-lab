@@ -31,7 +31,15 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-dots circle')).toHaveCount(3);
  expect(await page.locator('#home-speech .thinking-indicator').evaluate(el=>el.lastChild.classList.contains('thinking-dots'))).toBe(true);
  expect(chat.submitted).toMatchObject({robot_id:'guide:hermes',question:'O que a VM sabe sobre MCP?'});expect(chat.submitted.conversation_id).toMatch(/^[a-f0-9]{32}$/);expect(chat.csrfSeen).toBe(true);
+ chat.jobs[0].status='running';
+ chat.jobs[0].progress=[{kind:'context',text:'Consultando a base de documentos.'}];
+ await expect(page.locator('#home-speech')).toContainText('Consultando a base de documentos.');
+ chat.jobs[0].progress.push({kind:'search',text:'Buscando informações na web.'});
+ await expect(page.locator('#home-speech')).toContainText('Buscando informações na web.');
+ chat.jobs[0].progress.push({kind:'search',text:'Busca concluída. Analisando os resultados.'});
+ await expect(page.locator('#home-speech')).toContainText('Busca concluída. Analisando os resultados.');
  chat.jobs[0].status='done';chat.jobs[0].answer='MCP conecta o Hermes aos serviços configurados na VM.';
+ await expect(page.locator('#home-speech .thinking-indicator')).toHaveCount(0);
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});
  await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText(chat.jobs[0].question);await expect(page.locator('#home-messages')).toContainText(chat.jobs[0].answer);
  const glass=await page.locator('#home-history').evaluate(el=>({blur:getComputedStyle(el).backdropFilter,background:getComputedStyle(el).backgroundColor}));expect(glass.blur).toContain('blur');expect(glass.background).toMatch(/^rgba/);

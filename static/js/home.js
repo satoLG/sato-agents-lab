@@ -97,10 +97,15 @@ function historyEntry(job){
  }
  return entry;
 }
+function pendingStatus(job){
+ const stages=(job.progress||[]).filter(event=>['context','model','search','retry'].includes(event.kind));
+ const lines=stages.map(event=>event.text).filter((text,index,all)=>text&&text!==all[index-1]);
+ return lines.length?lines.slice(-5).join('\n'):thinkingPhrase(job.id);
+}
 function updateHistoryText(view,id,role){
  const expanded=expandedMessages.has(`${id}:${role}`),limit=role==='question'?180:420;
  if(view.pending){
-  const phrase=thinkingPhrase(id),indicator=view.text.querySelector('.thinking-indicator');
+  const phrase=view.progressText,indicator=view.text.querySelector('.thinking-indicator');
   if(indicator){if(indicator.firstChild.nodeValue!==phrase)indicator.firstChild.nodeValue=phrase;}else{typing.finish(view.text);view.text.replaceChildren(thinkingIndicator(phrase));}
  }else{
   const value=expanded?view.fullText:role==='answer'?answerPreview(view.fullText):preview(view.fullText.split('\n').slice(0,5).join('\n'),limit);
@@ -125,7 +130,7 @@ function updateHistoryText(view,id,role){
 }
 function updateHistoryEntry(entry,job){
  for(const role of ['question','answer']){
-  const view=entry.views[role];view.pending=role==='answer'&&['queued','running'].includes(job.status);view.fullText=role==='question'?job.question||'':job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');updateHistoryText(view,job.id,role);
+  const view=entry.views[role];view.pending=role==='answer'&&['queued','running'].includes(job.status);view.fullText=role==='question'?job.question||'':job.answer||job.error||(job.status==='failed'?'Não consegui responder. Tente novamente.':'');view.progressText=view.pending?pendingStatus(job):'';updateHistoryText(view,job.id,role);
   // Pending updates must not change the clock or recreate footer icons.
   const timestamp=role==='question'||view.pending?job.created_at:job.updated_at||job.created_at;
   if(view.timestamp!==timestamp){view.timestamp=timestamp;const date=new Date(timestamp*1000);view.time.hidden=!timestamp||Number.isNaN(date.getTime());if(!view.time.hidden){view.time.dateTime=date.toISOString();view.time.textContent=date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}}
@@ -148,10 +153,10 @@ function showLatest(){
  showQuestion(latest.question,latest.created_at);
  if(latest.status==='done'&&latest.answer){forgetThinking(latest.id);status('Chat conectado.');if((speechPending||lastSpoken!==latest.answer)&&!navigating)say(latest.answer,{sound:false,animate:incoming&&$('home-history').hidden,timestamp:latest.updated_at||latest.created_at});}
  else if(latest.status==='failed'){forgetThinking(latest.id);const error=latest.error||'Não consegui responder. Tente enviar novamente.';status(error,true);if((speechPending||lastSpoken!==error)&&!navigating)say(error,{sound:false});}
- else{awaitingAnswers.add(latest.id);const phrase=thinkingPhrase(latest.id);status(phrase);if((lastSpoken!==phrase||!speechPending)&&!navigating)say(phrase,{sound:false,pending:true});}
+ else{awaitingAnswers.add(latest.id);const phrase=pendingStatus(latest);status(phrase);if((lastSpoken!==phrase||!speechPending)&&!navigating)say(phrase,{sound:false,pending:true});}
  renderHistory();animatedAnswers.clear();
 }
-function schedulePoll(){clearTimeout(pollTimer);if(!disposed&&authenticated)pollTimer=setTimeout(refresh,jobs.some(j=>['queued','running'].includes(j.status))?1800:15000);}
+function schedulePoll(){clearTimeout(pollTimer);if(!disposed&&authenticated)pollTimer=setTimeout(refresh,jobs.some(j=>['queued','running'].includes(j.status))?900:15000);}
 function mergeJobs(entries){const merged=new Map(jobs.map(job=>[job.id,job]));for(const job of entries)merged.set(job.id,job);jobs=[...merged.values()].sort((a,b)=>a.created_at-b.created_at||a.id.localeCompare(b.id));}
 async function refresh(){
  if(disposed||!authenticated||refreshing===conversationRevision||requesting)return;if(document.hidden){schedulePoll();return;}const revision=conversationRevision,id=conversationId;refreshing=revision;

@@ -75,7 +75,7 @@ def test_hermes_invocation_passes_current_context_to_warm_runner(private_chat, m
     calls = []
     def run(payload, on_event):
         calls.append(payload)
-        on_event('isolation', 'Ferramentas desabilitadas')
+        on_event('search', 'Buscando informações na web')
         on_event('model', 'Consultando modelo')
         return 'CPU em 42%.'
     monkeypatch.setattr(web_chat.RUNNER, 'run', run)
@@ -85,7 +85,8 @@ def test_hermes_invocation_passes_current_context_to_warm_runner(private_chat, m
     assert calls[0]['id'] == created and '42' in calls[0]['prompt']
     assert calls[0]['history'] == []
     job=private_chat.get('/api/lab/hermes-chat/jobs/'+created).get_json()
-    assert any(event['kind']=='isolation' for event in job['progress'])
+    assert any(event['kind']=='context' for event in job['progress'])
+    assert any(event['kind']=='search' for event in job['progress'])
     assert any(event['kind']=='model' for event in job['progress'])
 
 def test_progress_stream_is_private_and_preserves_intermediate_events(private_chat):

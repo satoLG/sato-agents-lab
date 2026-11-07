@@ -27,7 +27,6 @@ DB_PATH = Path(os.getenv("HERMES_WEB_CHAT_DB", str(config.HERMES_HOME / "web-cha
 HERMES_ROOT = Path(os.getenv("HERMES_AGENT_ROOT", str(config.HERMES_HOME / "hermes-agent")))
 HERMES_BIN = HERMES_ROOT / "venv/bin/hermes"
 HERMES_PYTHON = HERMES_ROOT / "venv/bin/python"
-TOOLSET = "context_engine"  # Verified empty in the installed Hermes; rechecked for every job.
 MAX_ATTEMPTS = 3
 LOGIN_ATTEMPTS = defaultdict(deque)
 LOGIN_LOCK = threading.Lock()
@@ -353,14 +352,17 @@ def _claim():
 
 def _answer(row):
     started = time.monotonic()
+    _progress(row["id"], "context", "Consultando a telemetria e a base de documentos.")
     context = _context(row["robot_id"], question=row["question"])
     if not context:
         raise RuntimeError('Current VM context unavailable')
     context_seconds = time.monotonic() - started
-    prompt = ("Você é Hermes, líder do Núcleo, em MODO CONVERSA. Converse sobre qualquer assunto, "
+    prompt = ("Você é Hermes, líder do Núcleo, em MODO INFORMATIVO. Converse sobre qualquer assunto, "
               "responda perguntas gerais, explique e analise o material fornecido pelo usuário. "
-              "Você não tem ferramentas: não execute ações, comandos, alterações, consultas externas ou envio de mensagens, "
-              "e nunca afirme tê-los realizado. Se solicitarem ações, explique e ofereça uma análise informativa. "
+              "Use web_search para perguntas que precisem de informações públicas atuais, e cite os links usados. "
+              "Formule buscas com termos públicos, sem copiar dados da VM, do laboratório ou da conversa. "
+              "O painel é somente informativo. Se pedirem ações, comandos, alterações ou envio de mensagens, ofereça uma explicação. "
+              "Se a busca falhar, informe isso sem inventar resultados. "
               "Use conhecimento geral para assuntos gerais. Para fatos sobre a VM e o laboratório, use a telemetria e os trechos dos documentos abaixo, "
               "declare lacunas e não invente indicadores. Não revele segredos. "
               "Para contagens ou rankings de commits, use rag.commit_summary: as contagens são calculadas sobre todo o catálogo indexado, "
