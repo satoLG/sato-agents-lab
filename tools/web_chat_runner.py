@@ -26,6 +26,22 @@ def _search_only(execute):
     return guarded
 
 
+def _search_summary(result):
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except ValueError:
+            result = None
+    data = result.get('data') if isinstance(result, dict) else None
+    sources = data.get('web') if isinstance(data, dict) else None
+    if not isinstance(sources, list):
+        return 'Busca concluída. Analisando os resultados.'
+    if not sources:
+        return 'A busca não encontrou resultados.'
+    label = 'resultado encontrado' if len(sources) == 1 else 'resultados encontrados'
+    return f'Busca concluída · {len(sources)} {label}.'
+
+
 def _bootstrap(root):
     os.environ['HERMES_SESSION_SOURCE'] = 'web_chat'
     sys.path.insert(0, root)
@@ -55,7 +71,13 @@ def _answer(request, cli_module, emit):
     agent.suppress_status_output = True
     for name in ('tool_start_callback', 'tool_complete_callback', 'reasoning_callback', 'stream_delta_callback', 'tool_gen_callback'):
         setattr(agent, name, None)
-    agent.step_callback = lambda step, tools: emit('model', f'Consultando o modelo · etapa {step}.')
+    def model_step(step, _tools):
+        if step == 1:
+            emit('model', 'Analisando a pergunta e o contexto disponível.')
+        else:
+            emit('model', 'Cruzando os resultados para preparar a resposta.')
+
+    agent.step_callback = model_step
     def thinking(active=True, *args, **kwargs):
         if active:
             emit('thinking', 'O modelo está preparando a resposta.')
@@ -64,13 +86,12 @@ def _answer(request, cli_module, emit):
         if tool_name != SEARCH_TOOL:
             return
         if kind == 'tool.started':
-            emit('search', 'Buscando informações na web.')
+            emit('search', 'Buscando fontes públicas na web.')
         elif kind == 'tool.completed':
-            text = 'A busca retornou um erro.' if kwargs.get('is_error') else 'Busca concluída. Analisando os resultados.'
+            text = 'A busca retornou um erro.' if kwargs.get('is_error') else _search_summary(kwargs.get('result'))
             emit('search', text)
 
     agent.tool_progress_callback = progress
-    emit('model', 'Enviando a pergunta ao Hermes.')
     result = agent.run_conversation(user_message=request['prompt'], conversation_history=request.get('history', []))
     if not isinstance(result, dict) or result.get('failed') or not result.get('final_response'):
         raise RuntimeError('Hermes returned no answer')

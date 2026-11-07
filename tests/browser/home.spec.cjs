@@ -46,6 +46,58 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  await page.screenshot({path:testInfo.outputPath('home-history.png')});await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();expect(errors).toEqual([]);
 });
 
+test('mobile research steps yield to a formatted Markdown answer',async({page},testInfo)=>{
+ await page.setViewportSize({width:393,height:852});
+ await page.addInitScript(()=>{
+  const getContext=HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext=function(type,...args){
+   return type==='webgl2'?null:getContext.call(this,type,...args);
+  };
+ });
+ const chat=await chatRoutes(page);
+ await ready(page);
+ await page.locator('#home-input').fill('Compare os commits mais antigos em uma tabela.');
+ await page.locator('#home-send').click();
+ await expect(page.locator('#home-speech .thinking-indicator')).toBeVisible();
+ const job=chat.jobs[0];
+ job.status='running';
+ job.progress=[
+  {kind:'context',text:'Base local consultada · 6 trechos selecionados.'},
+  {kind:'search',text:'Buscando fontes públicas na web.'},
+  {kind:'search',text:'Busca concluída · 5 resultados encontrados.'},
+ ];
+ await page.locator('#home-history-toggle').click();
+ await chooseSession(page);
+ const steps=page.locator('.history-answer .thinking-step');
+ await expect(steps).toHaveCount(3);
+ await expect(steps.nth(1)).toHaveCSS('border-top-style','solid');
+ await expect(steps.nth(2)).toContainText('5 resultados encontrados');
+ await page.screenshot({path:testInfo.outputPath('mobile-research-progress.png')});
+
+ job.answer=[
+  '## Commits mais antigos nos exemplos',
+  '',
+  'Separei os **exemplos parciais** do índice.',
+  '',
+  '| Repositório | Commit | Data | Assunto |',
+  '| --- | --- | --- | --- |',
+  '| satoLG/rpg_char_profile_gen | **1d6ab7a** | 2020-11-20 | Refatoração do seletor |',
+  '| satoLG/assets | **e31b74f** | 2024-12-19 | Assets de vídeo |',
+  '',
+  '- [Ver a fonte](https://github.com/satoLG)',
+ ].join('\n');
+ job.status='done';
+ const answer=page.locator('.history-answer .chat-markdown');
+ await expect(steps).toHaveCount(0);
+ await expect(answer.getByRole('heading',{name:'Commits mais antigos nos exemplos'})).toBeVisible();
+ await expect(answer.locator('strong').first()).toHaveText('exemplos parciais');
+ await expect(answer.getByRole('columnheader')).toHaveCount(4);
+ await expect(answer.locator('tbody tr')).toHaveCount(2);
+ await expect(answer.getByRole('link',{name:'Ver a fonte'})).toHaveAttribute('href','https://github.com/satoLG');
+ expect(await answer.locator('.chat-table').evaluate(el=>el.scrollWidth>el.clientWidth&&el.getBoundingClientRect().right<=innerWidth)).toBe(true);
+ await page.screenshot({path:testInfo.outputPath('mobile-markdown-table.png')});
+});
+
 test('login preserves existing private access and handles incorrect passwords',async({page})=>{
  await chatRoutes(page,{loggedIn:false});await ready(page);await expect(page.locator('#home-login')).toBeVisible();await expect(page.locator('#home-form')).toBeHidden();
  await page.locator('#home-password').fill('wrong-password');await page.locator('#home-login button').click();await expect(page.locator('#home-chat-status')).toContainText('Senha incorreta');

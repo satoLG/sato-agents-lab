@@ -41,7 +41,7 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
                 dispatch(agent, types.SimpleNamespace(tool_calls=[search, terminal]), [], 'test')
             dispatch(agent, types.SimpleNamespace(tool_calls=[search]), [], 'test')
         agent.tool_progress_callback('tool.started', 'web_search', 'private query')
-        agent.tool_progress_callback('tool.completed', 'web_search', result='private result')
+        agent.tool_progress_callback('tool.completed', 'web_search', result=json.dumps({'data': {'web': [{'title': 'private result'}]}}))
         return {'final_response': 'Resultado da consulta.'}
 
     agent.run_conversation = conversation
@@ -74,7 +74,8 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
     assert calls == ['web_search'] * len(paths)
     assert 'private' not in output.getvalue()
     events = [json.loads(line) for line in output.getvalue().splitlines()]
-    assert [event['kind'] for event in events] == ['model', 'search', 'search', 'reply', 'answer']
+    assert [event['kind'] for event in events] == ['search', 'search', 'reply', 'answer']
+    assert events[1]['text'] == 'Busca concluída · 1 resultado encontrado.'
 
 
 def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history(monkeypatch):
