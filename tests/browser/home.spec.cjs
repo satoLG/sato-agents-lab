@@ -36,8 +36,8 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  await expect(page.locator('#home-speech')).toContainText('Consultando a base de documentos.');
  chat.jobs[0].progress.push({kind:'search',text:'Buscando informações na web.'});
  await expect(page.locator('#home-speech')).toContainText('Buscando informações na web.');
- chat.jobs[0].progress.push({kind:'search',text:'Busca concluída. Analisando os resultados.'});
- await expect(page.locator('#home-speech')).toContainText('Busca concluída. Analisando os resultados.');
+ chat.jobs[0].progress.push({kind:'model',text:'Analisando a pergunta e o contexto disponível.'});
+ await expect(page.locator('#home-speech')).toContainText('Analisando a pergunta e o contexto disponível.');
  chat.jobs[0].status='done';chat.jobs[0].answer='MCP conecta o Hermes aos serviços configurados na VM.';
  await expect(page.locator('#home-speech .thinking-indicator')).toHaveCount(0);
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});
@@ -63,16 +63,16 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  const job=chat.jobs[0];
  job.status='running';
  job.progress=[
+  {kind:'context',text:'Selecionando contexto para a pergunta.'},
   {kind:'context',text:'Base local consultada · 6 trechos selecionados.'},
-  {kind:'search',text:'Buscando fontes públicas na web.'},
-  {kind:'search',text:'Busca concluída · 5 resultados encontrados.'},
+  {kind:'model',text:'Analisando a pergunta e o contexto disponível.'},
  ];
  await page.locator('#home-history-toggle').click();
  await chooseSession(page);
  const steps=page.locator('.history-answer .thinking-step');
  await expect(steps).toHaveCount(3);
  await expect(steps.nth(1)).toHaveCSS('border-top-style','solid');
- await expect(steps.nth(2)).toContainText('5 resultados encontrados');
+ await expect(steps.nth(2)).toContainText('Analisando a pergunta');
  await page.screenshot({path:testInfo.outputPath('mobile-research-progress.png')});
 
  job.answer=[

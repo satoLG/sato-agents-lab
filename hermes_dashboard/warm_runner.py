@@ -1,4 +1,4 @@
-"""One serial, search-only Hermes child, with bounded lifetime and recovery."""
+"""One serial, tool-free Hermes child, with bounded lifetime and recovery."""
 import atexit
 import json
 import logging
@@ -75,8 +75,8 @@ class WarmRunner:
             threading.Thread(target=self._read, args=(self.process, self.events), daemon=True).start()
             try:
                 ready = self._next(started + self.startup_timeout)
-                if (ready.get('kind') != 'ready' or ready.get('protocol') != 2
-                        or ready.get('allowed_tools') != ['web_search']):
+                if (ready.get('kind') != 'ready' or ready.get('protocol') != 3
+                        or ready.get('allowed_tools') != []):
                     raise RuntimeError('Hermes tool isolation failed at startup')
             except Exception:
                 self.close()
@@ -106,7 +106,7 @@ class WarmRunner:
                     if event.get('request_id') != payload['id']:
                         raise RuntimeError('Hermes worker response mismatch')
                     kind = event.get('kind')
-                    if kind in {'tool.started', 'tool.completed'}:
+                    if kind in {'search', 'tool.started', 'tool.completed'}:
                         raise RuntimeError('Hermes tool isolation failed')
                     if kind == 'error':
                         raise RuntimeError('Hermes provider unavailable')
@@ -114,7 +114,7 @@ class WarmRunner:
                         output = event.get('text')
                     elif kind == 'done':
                         break
-                    elif kind in {'model', 'thinking', 'search', 'reply', 'notice'}:
+                    elif kind in {'model', 'thinking', 'reply', 'notice'}:
                         on_event(kind, str(event.get('text') or ''))
                 if not isinstance(output, str) or not output or len(output) > 10000:
                     raise RuntimeError('Hermes returned no usable response')

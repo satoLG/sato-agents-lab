@@ -8,11 +8,10 @@ import pytest
 
 
 SEARCH = {'function': {'name': 'web_search'}}
-TERMINAL = {'function': {'name': 'terminal'}}
 
 
-@pytest.mark.parametrize('exposed_tools', [[SEARCH], [SEARCH, TERMINAL]])
-def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, exposed_tools):
+@pytest.mark.parametrize('exposed_tools', [[], [SEARCH]])
+def test_local_runner_disables_tools_and_reports_progress(monkeypatch, exposed_tools):
     spec = importlib.util.spec_from_file_location(
         'web_chat_runner', Path(__file__).resolve().parents[1] / 'tools/web_chat_runner.py'
     )
@@ -38,18 +37,18 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
     def conversation(**kwargs):
         for name in paths:
             dispatch = getattr(executor, name)
-            with pytest.raises(RuntimeError, match='Only web_search'):
-                dispatch(agent, types.SimpleNamespace(tool_calls=[search, terminal]), [], 'test')
-            dispatch(agent, types.SimpleNamespace(tool_calls=[search]), [], 'test')
-        agent.tool_progress_callback('tool.started', 'web_search', 'private query')
-        agent.tool_progress_callback('tool.completed', 'web_search', result=json.dumps({'data': {'web': [{'title': 'private result'}]}}))
+            for tool in (search, terminal):
+                with pytest.raises(RuntimeError, match='Tools are disabled'):
+                    dispatch(agent, types.SimpleNamespace(tool_calls=[tool]), [], 'test')
+        assert agent.tool_progress_callback is None
+        agent.step_callback(1, [])
         return {'final_response': 'Resultado da consulta.'}
 
     agent.run_conversation = conversation
 
     class CLI:
         def __init__(self, **kwargs):
-            assert kwargs['toolsets'] == ['search'] and kwargs['max_turns'] > 1
+            assert kwargs['toolsets'] == [] and kwargs['max_turns'] > 1
             assert (kwargs['provider'], kwargs['model']) == ('openrouter', 'openrouter/free')
             self._fallback_model = [{'provider': 'opencode-go', 'model': 'gpt-5.6-luna'}]
             self.agent = agent
@@ -62,24 +61,22 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
             return True
 
     monkeypatch.setitem(sys.modules, 'cli', types.SimpleNamespace(HermesCLI=CLI))
-    monkeypatch.setitem(sys.modules, 'model_tools', types.SimpleNamespace(get_tool_definitions=lambda **_: [SEARCH]))
+    monkeypatch.setitem(sys.modules, 'model_tools', types.SimpleNamespace(get_tool_definitions=lambda **_: []))
     monkeypatch.setitem(sys.modules, 'agent', package)
     monkeypatch.setitem(sys.modules, 'agent.tool_executor', executor)
     output = io.StringIO()
     monkeypatch.setattr(sys, 'stdout', output)
     monkeypatch.setattr(sys, 'stdin', io.StringIO(json.dumps({'root': '.', 'prompt': 'Pesquise', 'history': []})))
-    if exposed_tools != [SEARCH]:
+    if exposed_tools:
         with pytest.raises(RuntimeError, match='isolation'):
             runner.main([])
         assert not calls and not output.getvalue()
         return
 
     runner.main([])
-    assert calls == ['web_search'] * len(paths)
-    assert 'private' not in output.getvalue()
+    assert not calls
     events = [json.loads(line) for line in output.getvalue().splitlines()]
-    assert [event['kind'] for event in events] == ['search', 'search', 'reply', 'answer']
-    assert events[1]['text'] == 'Busca concluída · 1 resultado encontrado.'
+    assert [event['kind'] for event in events] == ['model', 'reply', 'answer']
 
 
 def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history(monkeypatch):
@@ -90,14 +87,14 @@ def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history
         def __init__(self,**kwargs):
             assert 'resume' not in kwargs
             instances.append(self)
-            self.agent=types.SimpleNamespace(tools=[SEARCH],run_conversation=self.conversation,
+            self.agent=types.SimpleNamespace(tools=[],run_conversation=self.conversation,
                 provider='openrouter',model='openrouter/free',_fallback_chain=[])
         def _ensure_runtime_credentials(self):return True
         def _init_agent(self):return True
         def conversation(self,**kwargs):
             received.append((self.session_id,kwargs['conversation_history']))
             return {'final_response':'OK'}
-    monkeypatch.setitem(sys.modules,'model_tools',types.SimpleNamespace(get_tool_definitions=lambda **_:[SEARCH]))
+    monkeypatch.setitem(sys.modules,'model_tools',types.SimpleNamespace(get_tool_definitions=lambda **_:[]))
     monkeypatch.setattr(runner,'_bootstrap',lambda _:types.SimpleNamespace(HermesCLI=CLI))
     requests=[{'id':'one','conversation_id':'a'*32,'prompt':'First','history':[]},
               {'id':'two','conversation_id':'a'*32,'prompt':'Continue','history':[{'role':'user','content':'First'}]},
@@ -107,7 +104,7 @@ def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history
     runner.main(['--serve','--root','.'])
     assert len(instances)==3 and received==[('web-'+'a'*32,[]),('web-'+'a'*32,requests[1]['history']),('web-'+'b'*32,[])]
     events=[json.loads(line) for line in output.getvalue().splitlines()]
-    assert events[0]=={'kind':'ready','protocol':2,'allowed_tools':['web_search']}
+    assert events[0]=={'kind':'ready','protocol':3,'allowed_tools':[]}
     assert [event['request_id'] for event in events if event['kind']=='done']==['one','two','three']
 
 

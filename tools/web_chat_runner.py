@@ -1,4 +1,4 @@
-"""Read-only search with Hermes in a persistent JSONL child."""
+"""Hermes with server-provided context in a persistent JSONL child."""
 import argparse
 import contextlib
 import gc
@@ -10,38 +10,17 @@ from functools import wraps
 from threading import Lock
 
 
-SEARCH_TOOL = 'web_search'
 WEB_PROVIDER = 'openrouter'
 WEB_MODEL = 'openrouter/free'
 
 
-def _tool_names(definitions):
-    return {tool['function']['name'] for tool in definitions}
-
-
-def _search_only(execute):
+def _without_tools(execute):
     @wraps(execute)
     def guarded(agent, assistant_message, *args, **kwargs):
-        if any(call.function.name != SEARCH_TOOL for call in assistant_message.tool_calls):
-            raise RuntimeError('Only web_search is allowed in the dashboard chat')
+        if assistant_message.tool_calls:
+            raise RuntimeError('Tools are disabled in the dashboard chat')
         return execute(agent, assistant_message, *args, **kwargs)
     return guarded
-
-
-def _search_summary(result):
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-        except ValueError:
-            result = None
-    data = result.get('data') if isinstance(result, dict) else None
-    sources = data.get('web') if isinstance(data, dict) else None
-    if not isinstance(sources, list):
-        return 'Busca concluída. Analisando os resultados.'
-    if not sources:
-        return 'A busca não encontrou resultados.'
-    label = 'resultado encontrado' if len(sources) == 1 else 'resultados encontrados'
-    return f'Busca concluída · {len(sources)} {label}.'
 
 
 def _restrict_auxiliary_routing(auxiliary):
@@ -74,17 +53,17 @@ def _bootstrap(root):
 
     _restrict_auxiliary_routing(auxiliary_client)
 
-    if _tool_names(get_tool_definitions(enabled_toolsets=['search'], quiet_mode=True)) != {SEARCH_TOOL}:
-        raise RuntimeError('Hermes search tool isolation failed at startup')
+    if get_tool_definitions(enabled_toolsets=[], quiet_mode=True):
+        raise RuntimeError('Hermes tool isolation failed at startup')
     for name in ('execute_tool_calls_concurrent', 'execute_tool_calls_sequential', 'execute_tool_calls_segmented'):
-        setattr(executor, name, _search_only(getattr(executor, name)))
+        setattr(executor, name, _without_tools(getattr(executor, name)))
     return cli
 
 
 def _answer(request, cli_module, emit):
     # Fresh agents receive only explicit, conversation-scoped history. No /resume.
     cli = cli_module.HermesCLI(
-        provider=WEB_PROVIDER, model=WEB_MODEL, toolsets=['search'],
+        provider=WEB_PROVIDER, model=WEB_MODEL, toolsets=[],
         max_turns=6, run_budget=180, ignore_rules=True,
     )
     # The CLI uses this chain both for credential resolution and agent setup.
@@ -97,8 +76,8 @@ def _answer(request, cli_module, emit):
     agent = cli.agent
     if (agent.provider, agent.model) != (WEB_PROVIDER, WEB_MODEL) or agent._fallback_chain:
         raise RuntimeError('Unexpected Hermes dashboard model route')
-    if _tool_names(agent.tools) != {SEARCH_TOOL}:
-        raise RuntimeError('Hermes search tool isolation failed')
+    if agent.tools:
+        raise RuntimeError('Hermes tool isolation failed')
     agent.quiet_mode = True
     agent.suppress_status_output = True
     for name in ('tool_start_callback', 'tool_complete_callback', 'reasoning_callback', 'stream_delta_callback', 'tool_gen_callback'):
@@ -114,16 +93,7 @@ def _answer(request, cli_module, emit):
         if active:
             emit('thinking', 'O modelo está preparando a resposta.')
     agent.thinking_callback = thinking
-    def progress(kind, tool_name, *args, **kwargs):
-        if tool_name != SEARCH_TOOL:
-            return
-        if kind == 'tool.started':
-            emit('search', 'Buscando fontes públicas na web.')
-        elif kind == 'tool.completed':
-            text = 'A busca retornou um erro.' if kwargs.get('is_error') else _search_summary(kwargs.get('result'))
-            emit('search', text)
-
-    agent.tool_progress_callback = progress
+    agent.tool_progress_callback = None
     result = agent.run_conversation(user_message=request['prompt'], conversation_history=request.get('history', []))
     if not isinstance(result, dict) or result.get('failed') or not result.get('final_response'):
         raise RuntimeError('Hermes returned no answer')
@@ -156,7 +126,7 @@ def main(argv=None):
         parser.error('--root is required with --serve')
     with contextlib.redirect_stdout(sys.stderr):
         module = _bootstrap(args.root)
-    write({'kind': 'ready', 'protocol': 2, 'allowed_tools': [SEARCH_TOOL]})
+    write({'kind': 'ready', 'protocol': 3, 'allowed_tools': []})
     for line in sys.stdin:
         request = json.loads(line)
         request_id = request['id']

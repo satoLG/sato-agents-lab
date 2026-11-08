@@ -8,6 +8,17 @@ def _words(text):
     return set(re.findall(r"[a-z0-9_]{3,}", plain)) - {"que", "com", "uma", "para", "sobre", "como", "qual", "the", "and"}
 
 
+_COMMIT_RANK = re.compile(
+    r"\b(?:(primeir[oa]|segund[oa]|terceir[oa]|quart[oa]|quint[oa]|sext[oa]|setim[oa]|oitav[oa]|non[oa]|decim[oa]|\d+(?:[oa])?)\s+)?"
+    r"(?:repositorio|repo)\s+(?:com\s+mais\s+commits?|mais\s+commitad[oa])\b"
+)
+_ORDINALS = {
+    "primeiro": 1, "primeira": 1, "segundo": 2, "segunda": 2, "terceiro": 3, "terceira": 3,
+    "quarto": 4, "quarta": 4, "quinto": 5, "quinta": 5, "sexto": 6, "sexta": 6,
+    "setimo": 7, "setima": 7, "oitavo": 8, "oitava": 8, "nono": 9, "nona": 9, "decimo": 10, "decima": 10,
+}
+
+
 def _commit_context(docs, question, now=None):
     """Count the whole catalog, deduplicated by URL; examples never imply totals."""
     now = now or datetime.now(timezone.utc)
@@ -38,8 +49,11 @@ def _commit_context(docs, question, now=None):
         except ValueError:
             pass
     repos = {d.get("repo") for d in commits.values() if d.get("repo")}
-    selected = {r for r in repos if r.lower() in plain or
-                re.search(r"(?<![\w-])" + re.escape(r.split("/")[-1].lower()) + r"(?![\w-])", plain)}
+    selected = {
+        repo for repo in repos
+        if re.search(r"(?<![\w-])" + re.escape(repo.lower()) + r"(?![\w-])", plain)
+        or re.search(r"(?<![\w/-])" + re.escape(repo.lower().split("/")[-1]) + r"(?![\w-])", plain)
+    }
     groups, matches, unknown_dates = {}, [], 0
     oldest_request = bool(re.search(r"\b(?:repositorios?|repos?)\b.*\b(?:mais antig[oa]s?|oldest)\b", plain))
     earliest = None
@@ -85,6 +99,13 @@ def _commit_context(docs, question, now=None):
                "by_repo": by_repo[:64], "repository_groups_truncated": max(0, len(by_repo) - 64),
                "counts_are_exact_for_indexed_data": True,
                "topic_examples_are_partial": True}
+    rank_match = _COMMIT_RANK.search(plain)
+    if rank_match and not selected:
+        ordinal = rank_match[1] or "primeiro"
+        position = _ORDINALS[ordinal] if ordinal in _ORDINALS else int(ordinal.rstrip("oa")[:12])
+        known_repos = [group for group in by_repo if group["repo"] in repos]
+        summary["requested_rank"] = position
+        summary["ranked_repository"] = known_repos[position - 1] if 1 <= position <= len(known_repos) else None
     if earliest is not None:
         summary["earliest_indexed_commit"] = {
             key: earliest[1].get(key) for key in ("repo", "title", "updated", "url")
