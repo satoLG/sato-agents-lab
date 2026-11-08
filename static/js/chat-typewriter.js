@@ -4,16 +4,16 @@ import Typewriter from '../vendor/typewriter.module.js';
 // literal, including HTML, backticks, emoji and Typed-style pause sequences.
 export function createChatTypewriter(audio,onLayout=()=>{}){
  const active=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
- function finish(body){const entry=active.get(body);if(!entry)return;entry.writer.stop();body.textContent=entry.text;delete body.dataset.typing;active.delete(body);if(!active.size)audio.stopTyping();onLayout();}
- function set(body,text,{animate=false}={}){
+ function finish(body){const entry=active.get(body);if(!entry)return;entry.writer.stop();body.textContent=entry.text;delete body.dataset.typing;active.delete(body);if(!active.size)audio.stopTyping();entry.onFinish?.();onLayout();}
+ function set(body,text,{animate=false,onFinish}={}){
   if(active.get(body)?.text===text)return;
-  if(!active.has(body)&&body.textContent===text)return;
-  finish(body);if(!animate||reduced.matches||document.hidden||!text){body.textContent=text;return;}
+  if(!active.has(body)&&body.textContent===text){onFinish?.();return;}
+  finish(body);if(!animate||reduced.matches||document.hidden||!text){body.textContent=text;onFinish?.();return;}
   const chars=Array.from(text);let index=0;
   body.replaceChildren();body.dataset.typing='true';
   const writer=new Typewriter(body,{delay:10,loop:false,cursor:'',skipAddStyles:true,
    onCreateTextNode:()=>{onLayout();return document.createTextNode(chars[index++]||'');}});
-  active.set(body,{writer,text});audio.startTyping();
+  active.set(body,{writer,text,onFinish});audio.startTyping();
   writer.typeString('x'.repeat(chars.length)).callFunction(()=>finish(body)).start();
  }
  const visibility=()=>{if(document.hidden)for(const body of [...active.keys()])finish(body);};

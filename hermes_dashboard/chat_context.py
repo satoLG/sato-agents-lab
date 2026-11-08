@@ -81,17 +81,15 @@ def _read(producer):
         return {"error": "Fonte indisponível"}
 
 
-def collect(snapshot, question):
+def _collect_telemetry(snapshot, words, scope):
     context = {"sectors": snapshot.get("sectors", []), "workers": snapshot.get("workers", []),
                "events": snapshot.get("events", [])[:24], "warnings": snapshot.get("warnings", []),
                "visuals": snapshot.get("visuals", {}), "telemetry_available": snapshot.get("telemetry_available"),
                "vm": _read(lambda: vm.snapshot(with_breakdown=False))}
-    scope = (str(config.HERMES_HOME), str(config.RAG_PATH), str(Path.cwd()))
     catalog, catalog_freshness = CACHE.get(('catalog', scope), _catalog_version(), 30, lambda: _read(memory.catalog))
     entries = catalog.get("documents", []) + catalog.get("skills", [])
     context["document_catalog"] = [{key: entry.get(key) for key in ("name", "category", "modified")}
                                    for entry in entries[:96]]
-    words = _words(question)
     # Only catalog paths are read. Prompt text can never become a filesystem path.
     candidates = sorted(entries, key=lambda e: (-len(words & _words(e.get("name", ""))),
                                                e.get("category") not in ("memoria", "contexto"), e.get("name", "")))[:16]
@@ -110,15 +108,52 @@ def collect(snapshot, question):
         documents.append((score, {"name": entry.get("name"), "category": entry.get("category"),
                                   "content": excerpt[:4000], "excerpt": True}))
     context["documents"] = [item for _, item in sorted(documents, key=lambda pair: -pair[0])[:6]]
+    context["freshness"] = {
+        "vm": {"observed_at": context["vm"].get("timestamp"), "max_age_seconds": 0},
+        "lab_catalog": {"observed_at": snapshot.get("catalog_sampled_at"), "max_age_seconds": 30},
+        "document_catalog": catalog_freshness,
+    }
+    return context
+
+
+def wants_telemetry(question):
+    words = _words(question)
+    return bool(words & {
+        "cpu", "ram", "telemetria", "cron", "crons", "agendamento", "agendamentos",
+        "processo", "processos", "gateway", "gateways", "webhook", "webhooks",
+        "laboratorio", "dashboard", "mcp", "uptime", "disco", "provedor", "provedores",
+        "fallback", "fallbacks", "openrouter", "opencode",
+    } or re.search(r"\bvm\b", question, re.I))
+
+
+def collect(snapshot, question):
+    context = {}
+    words = _words(question)
+    repository_question = bool(words & {"git", "github", "satolg", "repo", "repos", "repositorio", "repositorios",
+                                        "commit", "commits", "rag", "indexado", "indexados"})
+    if snapshot is None and not repository_question:
+        return context
+
+    scope = (str(config.HERMES_HOME), str(config.RAG_PATH), str(Path.cwd()))
+    if snapshot is not None:
+        context = _collect_telemetry(snapshot, words, scope)
     vector, rag_freshness = CACHE.get(('rag', scope), _rag_version(), 30, _rag_catalog)
-    context['freshness'] = {'vm': {'observed_at': context['vm'].get('timestamp'), 'max_age_seconds': 0},
-                            'lab_catalog': {'observed_at': snapshot.get('catalog_sampled_at'), 'max_age_seconds': 30},
-                            'document_catalog': catalog_freshness, 'rag': rag_freshness}
+    context.setdefault("freshness", {})["rag"] = rag_freshness
     all_docs = vector.get("docs", [])
     summary, commit_docs = _commit_context(all_docs, question)
     summary["counts_are_exact_for_indexed_data"] = not bool(vector.get("error"))
     commit_question = bool(words & {"commit", "commits"})
-    docs = sorted(commit_docs if commit_question else all_docs,
+    oldest = summary.get("earliest_indexed_commit")
+    if oldest:
+        summary.pop("by_repo", None)
+        all_relevant = [d for d in all_docs if d.get("repo") == oldest["repo"]]
+    elif commit_question:
+        all_relevant = commit_docs
+    elif summary["selected_repositories"]:
+        all_relevant = [d for d in all_docs if d.get("repo") in summary["selected_repositories"]]
+    else:
+        all_relevant = all_docs
+    docs = sorted(all_relevant,
                   key=lambda d: (len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")),
                                  str(d.get("updated", ""))), reverse=True)
     context["rag"] = {"total": vector.get("total"), "error": vector.get("error"),
@@ -127,10 +162,10 @@ def collect(snapshot, question):
                       "commit_summary": summary, "documents_are_partial": True,
                       "documents": [{key: item.get(key) for key in ("title", "repo", "type", "preview", "url", "updated")}
                                     for item in docs[:8]]}
-    context["limits"] = "Telemetria e trechos selecionados do catálogo da VM; não é uma leitura completa de todos os arquivos ou fontes externas."
+    context["limits"] = "O índice local contém amostras de documentos e commits. Consulte a fonte quando precisar analisar o código atual."
     cleaned = scrub(context)
     # Retain the VM readings and document excerpts when a busy host has many runs.
-    if len(json.dumps(cleaned, ensure_ascii=False)) > 80000:
+    if snapshot is not None and len(json.dumps(cleaned, ensure_ascii=False)) > 80000:
         cleaned["workers"] = [w for w in cleaned["workers"] if str(w.get("id", "")).startswith("guide:")] + cleaned["workers"][:8]
         cleaned["events"] = cleaned["events"][:8]
         cleaned["limits"] += " A lista de execuções recentes foi reduzida para caber no contexto."

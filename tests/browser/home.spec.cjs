@@ -47,6 +47,7 @@ test('root starts empty with one robot, real chat protocol and a glass history',
 });
 
 test('mobile research steps yield to a formatted Markdown answer',async({page},testInfo)=>{
+ await page.emulateMedia({reducedMotion:'no-preference'});
  await page.setViewportSize({width:393,height:852});
  await page.addInitScript(()=>{
   const getContext=HTMLCanvasElement.prototype.getContext;
@@ -77,7 +78,7 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  job.answer=[
   '## Commits mais antigos nos exemplos',
   '',
-  'Separei os **exemplos parciais** do índice.',
+  'Separei os **exemplos parciais** do índice. A comparação usa o primeiro registro disponível de cada projeto e indica de onde vêm os dados.',
   '',
   '| Repositório | Commit | Data | Assunto |',
   '| --- | --- | --- | --- |',
@@ -89,6 +90,9 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  job.status='done';
  const answer=page.locator('.history-answer .chat-markdown');
  await expect(steps).toHaveCount(0);
+ await expect(page.locator('.history-answer > p')).toHaveAttribute('data-typing','true');
+ await expect(answer).toBeHidden();
+ await page.locator('.history-answer').getByRole('button',{name:'Ver mais'}).click();
  await expect(answer.getByRole('heading',{name:'Commits mais antigos nos exemplos'})).toBeVisible();
  await expect(answer.locator('strong').first()).toHaveText('exemplos parciais');
  await expect(answer.getByRole('columnheader')).toHaveCount(4);
@@ -96,6 +100,8 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  await expect(answer.getByRole('link',{name:'Ver a fonte'})).toHaveAttribute('href','https://github.com/satoLG');
  expect(await answer.locator('.chat-table').evaluate(el=>el.scrollWidth>el.clientWidth&&el.getBoundingClientRect().right<=innerWidth)).toBe(true);
  await page.screenshot({path:testInfo.outputPath('mobile-markdown-table.png')});
+ await page.locator('.history-answer').getByRole('button',{name:'Ver menos'}).click();
+ await expect(answer).toBeHidden();
 });
 
 test('login preserves existing private access and handles incorrect passwords',async({page})=>{
