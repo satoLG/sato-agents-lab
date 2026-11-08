@@ -34,8 +34,8 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  chat.jobs[0].status='running';
  chat.jobs[0].progress=[{kind:'context',text:'Consultando a base de documentos.'}];
  await expect(page.locator('#home-speech')).toContainText('Consultando a base de documentos.');
- chat.jobs[0].progress.push({kind:'search',text:'Buscando informações na web.'});
- await expect(page.locator('#home-speech')).toContainText('Buscando informações na web.');
+ chat.jobs[0].progress.push({kind:'context',text:'Base local consultada · 6 trechos selecionados.'});
+ await expect(page.locator('#home-speech')).toContainText('Base local consultada · 6 trechos selecionados.');
  chat.jobs[0].progress.push({kind:'model',text:'Analisando a pergunta e o contexto disponível.'});
  await expect(page.locator('#home-speech')).toContainText('Analisando a pergunta e o contexto disponível.');
  chat.jobs[0].status='done';chat.jobs[0].answer='MCP conecta o Hermes aos serviços configurados na VM.';
