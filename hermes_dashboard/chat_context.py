@@ -144,17 +144,29 @@ def collect(snapshot, question):
     summary["counts_are_exact_for_indexed_data"] = not bool(vector.get("error"))
     commit_question = bool(words & {"commit", "commits"})
     oldest = summary.get("earliest_indexed_commit")
+    ranked = summary.get("ranked_repository")
+    selected = set(summary["selected_repositories"])
     if oldest:
+        selected = {oldest["repo"]}
         summary.pop("by_repo", None)
-        all_relevant = [d for d in all_docs if d.get("repo") == oldest["repo"]]
+    elif ranked:
+        selected = {ranked["repo"]}
+    if not oldest and (selected or "requested_rank" in summary):
+        # Aggregate counts are safe to keep. Excerpts and examples must belong
+        # to the repository being described, including when it was chosen by rank.
+        summary["by_repo"] = [
+            group if group["repo"] in selected else {"repo": group["repo"], "commit_count": group["commit_count"]}
+            for group in summary["by_repo"]
+        ]
+    if selected or "requested_rank" in summary:
+        all_relevant = [doc for doc in all_docs if doc.get("repo") in selected]
     elif commit_question:
         all_relevant = commit_docs
-    elif summary["selected_repositories"]:
-        all_relevant = [d for d in all_docs if d.get("repo") in summary["selected_repositories"]]
     else:
         all_relevant = all_docs
     docs = sorted(all_relevant,
-                  key=lambda d: (len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")),
+                  key=lambda d: (bool(selected) and d.get("type") == "readme",
+                                 len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")),
                                  str(d.get("updated", ""))), reverse=True)
     context["rag"] = {"total": vector.get("total"), "error": vector.get("error"),
                       "by_type": dict(Counter(d.get("type") or "doc" for d in all_docs)),
@@ -162,7 +174,7 @@ def collect(snapshot, question):
                       "commit_summary": summary, "documents_are_partial": True,
                       "documents": [{key: item.get(key) for key in ("title", "repo", "type", "preview", "url", "updated")}
                                     for item in docs[:8]]}
-    context["limits"] = "O índice local contém amostras de documentos e commits. Consulte a fonte quando precisar analisar o código atual."
+    context["limits"] = "O índice local contém amostras de documentos e commits. Ele não substitui uma leitura do código atual."
     cleaned = scrub(context)
     # Retain the VM readings and document excerpts when a busy host has many runs.
     if snapshot is not None and len(json.dumps(cleaned, ensure_ascii=False)) > 80000:

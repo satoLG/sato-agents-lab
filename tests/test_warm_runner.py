@@ -5,14 +5,14 @@ import pytest
 from hermes_dashboard.warm_runner import WarmRunner
 
 STUB = '''import json,os,sys,time
-print(json.dumps({'kind':'ready','protocol':2,'allowed_tools':['web_search']}),flush=True)
+print(json.dumps({'kind':'ready','protocol':3,'allowed_tools':[]}),flush=True)
 for line in sys.stdin:
     item=json.loads(line); mode=item['prompt']; rid=item['id']
     if mode=='hang': time.sleep(10)
     if mode=='crash': sys.exit(1)
     if mode=='bad_id': rid='another-job'
-    if mode=='search': print(json.dumps({'request_id':rid,'kind':'search','text':'Buscando'}),flush=True)
-    kind=mode if mode.startswith('tool.') else 'answer'
+    if mode=='model': print(json.dumps({'request_id':rid,'kind':'model','text':'Analisando'}),flush=True)
+    kind=mode if mode.startswith('tool.') or mode=='search' else 'answer'
     print(json.dumps({'request_id':rid,'kind':kind,'text':str(os.getpid())}),flush=True)
     print(json.dumps({'request_id':rid,'kind':'done'}),flush=True)
 '''
@@ -39,7 +39,7 @@ def test_reuses_process_and_reloads_after_config_change(runner):
     assert call(runner)!=first
 
 
-@pytest.mark.parametrize('mode,message',[('tool.started','isolation failed'),('tool.completed','isolation failed'),('bad_id','mismatch'),('crash','stopped')])
+@pytest.mark.parametrize('mode,message',[('search','isolation failed'),('tool.started','isolation failed'),('tool.completed','isolation failed'),('bad_id','mismatch'),('crash','stopped')])
 def test_bad_response_kills_child_and_next_request_recovers(runner,mode,message):
     with pytest.raises(RuntimeError,match=message): call(runner,mode)
     assert runner.process is None
@@ -61,13 +61,13 @@ def test_recycles_after_memory_or_request_limit(runner,monkeypatch):
     assert runner.process is None
 
 
-def test_start_requires_search_only_protocol(runner):
-    runner.script.write_text("import json;print(json.dumps({'kind':'ready','protocol':2,'allowed_tools':['web_search','terminal']}),flush=True)")
+def test_start_requires_tool_free_protocol(runner):
+    runner.script.write_text("import json;print(json.dumps({'kind':'ready','protocol':3,'allowed_tools':['web_search']}),flush=True)")
     with pytest.raises(RuntimeError,match='isolation'): runner.start()
     assert runner.process is None
 
 
-def test_forwards_search_progress_before_final_response(runner):
+def test_forwards_model_progress_before_final_response(runner):
     events = []
-    assert runner.run({'id': 'job-1', 'prompt': 'search'}, lambda *event: events.append(event))
-    assert events == [('search', 'Buscando')]
+    assert runner.run({'id': 'job-1', 'prompt': 'model'}, lambda *event: events.append(event))
+    assert events == [('model', 'Analisando')]

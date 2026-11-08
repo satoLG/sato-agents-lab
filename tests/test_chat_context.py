@@ -69,3 +69,37 @@ def test_collect_exposes_exact_counts_and_preserves_examples_through_scrubbing(v
     assert len(data['rag']['documents']) == 8
     assert data['rag']['documents_are_partial']
     assert data['rag']['commit_summary']['by_repo'][0]['examples'][0]['title'] is not None
+
+
+def test_ranked_repo_context_uses_only_target_excerpts_and_prioritizes_readme(vm, monkeypatch):
+    repos = {'satoLG/portfolio': 4, 'satoLG/defend_the_crystal': 3, 'satoLG/sato-agents-lab': 2}
+    docs = [
+        {'type': 'commit', 'repo': repo, 'title': f'Commit {i}', 'url': f'{repo}/commit/{i}',
+         'preview': 'Me fala sobre o repositório mais commitado e o que ele tem nele'}
+        for repo, count in repos.items() for i in range(count)
+    ]
+    docs += [{'type': 'readme', 'repo': repo, 'title': f'{repo} README'} for repo in repos]
+    monkeypatch.setattr(chat_context.rag, 'catalog', lambda **_: {'docs': docs})
+    for ordinal in ('segundo', '2º'):
+        question = f'Me fala sobre o {ordinal} repositório mais commitado e o que ele tem nele'
+        data = chat_context.collect(None, question)['rag']
+        summary = data['commit_summary']
+        assert summary['requested_rank'] == 2
+        assert summary['ranked_repository']['repo'] == 'satoLG/defend_the_crystal'
+        assert summary['ranked_repository']['commit_count'] == 3
+        assert summary['indexed_unique_commits'] == 9
+        assert summary['by_repo'][0] == {'repo': 'satoLG/portfolio', 'commit_count': 4}
+        assert data['documents'][0]['type'] == 'readme'
+        assert {doc['repo'] for doc in data['documents']} == {'satoLG/defend_the_crystal'}
+    missing = chat_context.collect(None, 'Qual o quinto repositório com mais commits?')['rag']
+    assert missing['commit_summary']['ranked_repository'] is None
+    assert not missing['documents']
+
+
+def test_qualified_repo_matches_only_its_owner():
+    docs = [{'type': 'commit', 'repo': f'{owner}/defend_the_crystal', 'url': f'{owner}/1'}
+            for owner in ('satoLG', 'someone-else')]
+    for name in ('satoLG/defend_the_crystal', 'https://github.com/satoLG/defend_the_crystal'):
+        summary, matches = chat_context._commit_context(docs, f'Veja {name}')
+        assert summary['selected_repositories'] == ['satoLG/defend_the_crystal']
+        assert len(matches) == 1
