@@ -110,3 +110,29 @@ def test_submit_does_not_prepare_or_capture_stale_vm_context(private_chat,monkey
     assert json.loads(row['context'])['prepared_at'] is None
     monkeypatch.setattr(web_chat,'_context',lambda *args,**kwargs:None)
     with pytest.raises(RuntimeError,match='Current VM context unavailable'):web_chat._answer(row)
+
+
+def test_repository_question_uses_oldest_indexed_commit_without_vm_telemetry(private_chat, monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("A repository question must not collect VM telemetry or the local skills catalog")
+
+    monkeypatch.setattr(web_chat.lab, 'snapshot', unexpected)
+    monkeypatch.setattr(web_chat.chat_context.vm, 'snapshot', unexpected)
+    monkeypatch.setattr(web_chat.chat_context.memory, 'catalog', unexpected)
+    docs = [
+        {'type': 'commit', 'repo': 'satoLG/newer', 'title': 'Newer', 'updated': '2024-02-01',
+         'url': 'https://github.com/satoLG/newer/commit/new'},
+        {'type': 'commit', 'repo': 'satoLG/older', 'title': 'First indexed commit', 'updated': '2019-08-01',
+         'url': 'https://github.com/satoLG/older/commit/old'},
+        {'type': 'readme', 'repo': 'satoLG/older', 'title': 'README'},
+    ]
+    monkeypatch.setattr(web_chat.chat_context.rag, 'catalog', lambda **_: {'docs': docs, 'total': len(docs)})
+    monkeypatch.setattr(web_chat.chat_context, 'CACHE', web_chat.chat_context.SourceCache())
+
+    context = web_chat._context('guide:hermes', question='Olhando o repositório mais antigo do sato, quais melhorias faria?')
+    assert set(context) == {'vm_context'}
+    rag = context['vm_context']['rag']
+    assert set(context['vm_context']) == {'rag', 'freshness', 'limits'}
+    assert rag['commit_summary']['earliest_indexed_commit']['repo'] == 'satoLG/older'
+    assert {d['repo'] for d in rag['documents']} == {'satoLG/older'}
+    assert web_chat._context('guide:hermes', question='Oi, tudo bem?') == {'vm_context': {}}

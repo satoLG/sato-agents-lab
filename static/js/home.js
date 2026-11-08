@@ -113,22 +113,36 @@ function pendingStatus(job){
 }
 function updateHistoryText(view,id,role){
  const expanded=expandedMessages.has(`${id}:${role}`),limit=role==='question'?180:420;
- if(view.rich)view.rich.hidden=!view.formatted;
- view.text.hidden=!!view.formatted;
- if(view.formatted){
-  if(view.text.hasChildNodes()){
-   typing.finish(view.text);
+ const animate=role==='answer'&&!expanded&&animatedAnswers.has(id)&&!$('home-history').hidden&&historyView==='thread';
+ const longFormat=!!view.formatted&&answerPreview(view.fullText)!==view.fullText;
+ const showRich=!!view.formatted&&(expanded||!longFormat);
+ if(!showRich){
+  if(view.rich)view.rich.hidden=true;
+  view.text.hidden=false;
+ }
+ if(showRich){
+  const reveal=()=>{
+   view.text.hidden=true;
    view.text.replaceChildren();
-  }
+   view.rich.hidden=false;
+  };
   if(view.renderedFormat!==view.formatted){
    view.rich.innerHTML=view.formatted.html;
    view.renderedFormat=view.formatted;
+  }
+  if(animate){
+   view.text.hidden=false;
+   view.rich.hidden=true;
+   typing.set(view.text,view.formatted.preview,{animate,onFinish:reveal});
+  }else if(!view.text.dataset.typing||expanded){
+   typing.finish(view.text);
+   reveal();
   }
  }else if(view.pending){
   if(!view.text.querySelector('.thinking-indicator'))typing.finish(view.text);
   updateThinkingIndicator(view.text,view.progressText);
  }else{
-  const value=expanded?view.fullText:role==='answer'?answerPreview(view.fullText):preview(view.fullText.split('\n').slice(0,5).join('\n'),limit);
+  const value=expanded?view.fullText:role==='answer'?answerPreview(view.formatted?.preview||view.fullText):preview(view.fullText.split('\n').slice(0,5).join('\n'),limit);
   view.text.dataset.collapsed=String(!expanded);
   // Measure only when the text or available width changes; polling must not
   // replace text nodes in a completed message or disturb a user's selection.
@@ -141,12 +155,12 @@ function updateHistoryText(view,id,role){
    }
    fitted=view.previewText;
   }
-  typing.set(view.text,fitted,{animate:role==='answer'&&!expanded&&animatedAnswers.has(id)&&!$('home-history').hidden&&historyView==='thread'});
+  typing.set(view.text,fitted,{animate});
   view.displayText=fitted;
  }
  view.text.classList.toggle('history-pending',view.pending);view.text.dataset.collapsed=String(!expanded&&!view.pending);view.copy.hidden=view.pending;
  const label=expanded?'Ver menos':'Ver mais';if(view.more.textContent!==label)view.more.textContent=label;view.more.setAttribute('aria-expanded',String(expanded));
- view.more.hidden=view.pending||!!view.formatted||!(expanded||view.fullText!==view.displayText);
+ view.more.hidden=view.pending||!(view.formatted?longFormat:expanded||view.fullText!==view.displayText);
 }
 function updateHistoryEntry(entry,job){
  for(const role of ['question','answer']){

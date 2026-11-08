@@ -41,6 +41,8 @@ def _commit_context(docs, question, now=None):
     selected = {r for r in repos if r.lower() in plain or
                 re.search(r"(?<![\w-])" + re.escape(r.split("/")[-1].lower()) + r"(?![\w-])", plain)}
     groups, matches, unknown_dates = {}, [], 0
+    oldest_request = bool(re.search(r"\b(?:repositorios?|repos?)\b.*\b(?:mais antig[oa]s?|oldest)\b", plain))
+    earliest = None
     for doc in commits.values():
         if selected and doc.get("repo") not in selected:
             continue
@@ -61,6 +63,10 @@ def _commit_context(docs, question, now=None):
             continue
         item = {**doc, "updated": stamp}
         matches.append(item)
+        if oldest_request and when is not None and doc.get("repo"):
+            key = (when, doc["repo"], str(doc.get("url") or ""))
+            if earliest is None or key < earliest[0]:
+                earliest = (key, item)
         groups.setdefault(doc.get("repo") or "sem repo", []).append(item)
     ranked = sorted(groups.items(), key=lambda pair: (-len(pair[1]), pair[0]))
     words = _words(question) - {"commit", "commits", "repositorio", "repositorios"}
@@ -79,4 +85,8 @@ def _commit_context(docs, question, now=None):
                "by_repo": by_repo[:64], "repository_groups_truncated": max(0, len(by_repo) - 64),
                "counts_are_exact_for_indexed_data": True,
                "topic_examples_are_partial": True}
+    if earliest is not None:
+        summary["earliest_indexed_commit"] = {
+            key: earliest[1].get(key) for key in ("repo", "title", "updated", "url")
+        }
     return summary, matches
