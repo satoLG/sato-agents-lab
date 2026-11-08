@@ -27,6 +27,25 @@ jobs:
       - run: npm run test:rigs
       - run: npm run test:controls
       - run: node --test tests/lab-monitors.test.mjs tests/lab-grid.test.mjs tests/scene-nature.test.mjs tests/orb-game.test.mjs tests/orb-power.test.mjs tests/orb-combat.test.mjs
+  browser:
+    name: Browser tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: pip install flask pyyaml lancedb pandas
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Start local dashboard
         run: |
@@ -37,9 +56,13 @@ jobs:
           done
           cat /tmp/sato-lab.log
           exit 1
-      - run: npm run test:browser
+      - name: Run Playwright shard
+        run: npm run test:browser -- --shard=${{ matrix.shard }}/4 --fully-parallel --reporter=list
+        timeout-minutes: 20
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() || cancelled()
         with:
-          name: browser-test-results
-          path: test-results/
+          name: browser-test-results-${{ matrix.shard }}
+          path: |
+            test-results/
+            /tmp/sato-lab.log
