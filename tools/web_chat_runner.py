@@ -11,6 +11,8 @@ from threading import Lock
 
 
 SEARCH_TOOL = 'web_search'
+WEB_PROVIDER = 'openrouter'
+WEB_MODEL = 'openrouter/free'
 
 
 def _tool_names(definitions):
@@ -42,12 +44,35 @@ def _search_summary(result):
     return f'Busca concluída · {len(sources)} {label}.'
 
 
+def _restrict_auxiliary_routing(auxiliary):
+    resolve = auxiliary.resolve_provider_client
+
+    @wraps(resolve)
+    def free_client(provider, model=None, *args, **kwargs):
+        if (provider, model) != (WEB_PROVIDER, WEB_MODEL):
+            return None, None
+        return resolve(provider, model, *args, **kwargs)
+
+    # The child is private to the dashboard. Pin even auxiliary calls which
+    # would otherwise use the shared profile's provider discovery and reserves.
+    auxiliary._resolve_task_provider_model = lambda *args, **kwargs: (
+        WEB_PROVIDER, WEB_MODEL, None, None, 'chat_completions'
+    )
+    auxiliary.resolve_provider_client = free_client
+    auxiliary._get_provider_chain = lambda: []
+    # This Hermes version recognises :free SKUs but not the free router alias.
+    auxiliary._is_free_model = lambda model: model == WEB_MODEL
+
+
 def _bootstrap(root):
     os.environ['HERMES_SESSION_SOURCE'] = 'web_chat'
     sys.path.insert(0, root)
     import cli
     from model_tools import get_tool_definitions
+    from agent import auxiliary_client
     import agent.tool_executor as executor
+
+    _restrict_auxiliary_routing(auxiliary_client)
 
     if _tool_names(get_tool_definitions(enabled_toolsets=['search'], quiet_mode=True)) != {SEARCH_TOOL}:
         raise RuntimeError('Hermes search tool isolation failed at startup')
@@ -58,13 +83,20 @@ def _bootstrap(root):
 
 def _answer(request, cli_module, emit):
     # Fresh agents receive only explicit, conversation-scoped history. No /resume.
-    cli = cli_module.HermesCLI(toolsets=['search'], max_turns=6, run_budget=180, ignore_rules=True)
+    cli = cli_module.HermesCLI(
+        provider=WEB_PROVIDER, model=WEB_MODEL, toolsets=['search'],
+        max_turns=6, run_budget=180, ignore_rules=True,
+    )
+    # The CLI uses this chain both for credential resolution and agent setup.
+    cli._fallback_model = []
     conversation = request.get('conversation_id', '')
     if re.fullmatch(r'[0-9a-f]{32}', conversation):
         cli.session_id = 'web-' + conversation
     if not cli._ensure_runtime_credentials() or not cli._init_agent():
         raise RuntimeError('Hermes initialization failed')
     agent = cli.agent
+    if (agent.provider, agent.model) != (WEB_PROVIDER, WEB_MODEL) or agent._fallback_chain:
+        raise RuntimeError('Unexpected Hermes dashboard model route')
     if _tool_names(agent.tools) != {SEARCH_TOOL}:
         raise RuntimeError('Hermes search tool isolation failed')
     agent.quiet_mode = True

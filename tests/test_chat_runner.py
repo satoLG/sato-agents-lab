@@ -22,6 +22,7 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
     package = types.ModuleType('agent')
     package.__path__ = []
     package.tool_executor = executor
+    package.auxiliary_client = types.SimpleNamespace(resolve_provider_client=lambda *_: (None, None))
     calls = []
 
     def execute(agent, message, *args, **kwargs):
@@ -30,7 +31,7 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
     paths = ('execute_tool_calls_concurrent', 'execute_tool_calls_sequential', 'execute_tool_calls_segmented')
     for name in paths:
         setattr(executor, name, execute)
-    agent = types.SimpleNamespace(tools=exposed_tools)
+    agent = types.SimpleNamespace(tools=exposed_tools, provider='openrouter', model='openrouter/free', _fallback_chain=[])
     search = types.SimpleNamespace(function=types.SimpleNamespace(name='web_search'))
     terminal = types.SimpleNamespace(function=types.SimpleNamespace(name='terminal'))
 
@@ -49,9 +50,12 @@ def test_search_runner_allows_only_search_and_reports_progress(monkeypatch, expo
     class CLI:
         def __init__(self, **kwargs):
             assert kwargs['toolsets'] == ['search'] and kwargs['max_turns'] > 1
+            assert (kwargs['provider'], kwargs['model']) == ('openrouter', 'openrouter/free')
+            self._fallback_model = [{'provider': 'opencode-go', 'model': 'gpt-5.6-luna'}]
             self.agent = agent
 
         def _ensure_runtime_credentials(self):
+            assert self._fallback_model == []
             return True
 
         def _init_agent(self):
@@ -86,7 +90,8 @@ def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history
         def __init__(self,**kwargs):
             assert 'resume' not in kwargs
             instances.append(self)
-            self.agent=types.SimpleNamespace(tools=[SEARCH],run_conversation=self.conversation)
+            self.agent=types.SimpleNamespace(tools=[SEARCH],run_conversation=self.conversation,
+                provider='openrouter',model='openrouter/free',_fallback_chain=[])
         def _ensure_runtime_credentials(self):return True
         def _init_agent(self):return True
         def conversation(self,**kwargs):
@@ -104,3 +109,49 @@ def test_persistent_runner_builds_fresh_agents_and_explicit_conversation_history
     events=[json.loads(line) for line in output.getvalue().splitlines()]
     assert events[0]=={'kind':'ready','protocol':2,'allowed_tools':['web_search']}
     assert [event['request_id'] for event in events if event['kind']=='done']==['one','two','three']
+
+
+def test_web_route_fails_closed_when_openrouter_credentials_are_unavailable():
+    spec = importlib.util.spec_from_file_location(
+        'web_chat_runner', Path(__file__).resolve().parents[1] / 'tools/web_chat_runner.py'
+    )
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    class CLI:
+        def __init__(self, *, provider, model, **kwargs):
+            assert (provider, model) == ('openrouter', 'openrouter/free')
+            self._fallback_model = [{'provider': 'opencode-go', 'model': 'gpt-5.6-luna'}]
+
+        def _ensure_runtime_credentials(self):
+            assert self._fallback_model == []
+            return False
+
+        def _init_agent(self):
+            pytest.fail('Web chat must stop when the free route cannot authenticate')
+
+    with pytest.raises(RuntimeError, match='initialization failed'):
+        runner._answer({'prompt': 'oi'}, types.SimpleNamespace(HermesCLI=CLI), lambda *_: None)
+
+
+def test_auxiliary_routes_cannot_use_shared_fallback_providers():
+    spec = importlib.util.spec_from_file_location(
+        'web_chat_runner', Path(__file__).resolve().parents[1] / 'tools/web_chat_runner.py'
+    )
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    calls = []
+
+    def resolve(provider, model, **kwargs):
+        calls.append((provider, model, kwargs))
+        return 'client', model
+
+    auxiliary = types.SimpleNamespace(resolve_provider_client=resolve)
+    runner._restrict_auxiliary_routing(auxiliary)
+    assert auxiliary._resolve_task_provider_model('vision')[:2] == ('openrouter', 'openrouter/free')
+    assert auxiliary.resolve_provider_client('opencode-go', 'minimax-m3') == (None, None)
+    assert auxiliary.resolve_provider_client('openrouter', 'z-ai/glm-5.2') == (None, None)
+    assert auxiliary.resolve_provider_client('openrouter', 'openrouter/free', async_mode=True) == ('client', 'openrouter/free')
+    assert calls == [('openrouter', 'openrouter/free', {'async_mode': True})]
+    assert auxiliary._is_free_model('openrouter/free')
+    assert auxiliary._get_provider_chain() == []
