@@ -142,9 +142,9 @@ def _private(write=False):
     return None
 
 
-def _context(robot_id, snapshot=None, question=""):
+def _context(robot_id, snapshot=None, question="", previous=()):
     if snapshot is None and not chat_context.wants_telemetry(question):
-        return {"vm_context": chat_context.collect(None, question)}
+        return {"vm_context": chat_context.collect(None, question, previous)}
     snapshot = snapshot if snapshot is not None else lab.snapshot()
     worker = next((w for w in snapshot.get("workers", []) if w.get("id") == robot_id), None)
     if not worker:
@@ -154,7 +154,7 @@ def _context(robot_id, snapshot=None, question=""):
     robot["facts"] = [str(f)[:300] for f in worker.get("facts", [])[:8]]
     return {"observed_at": snapshot.get("now"), "robot": chat_context.scrub(robot),
             "metrics": {key: snapshot.get("metrics", {}).get(key) for key in ("cpu", "memory", "processes")},
-            "vm_context": chat_context.collect(snapshot, question)}
+            "vm_context": chat_context.collect(snapshot, question, previous)}
 
 
 def _question_ok(value):
@@ -357,7 +357,17 @@ def _answer(row):
     question = row["question"]
     stage = "Consultando a telemetria solicitada." if chat_context.wants_telemetry(question) else "Selecionando contexto para a pergunta."
     _progress(row["id"], "context", stage)
-    context = _context(row["robot_id"], question=question)
+    conn = _connection()
+    try:
+        past = conn.execute("SELECT question,answer,context FROM jobs WHERE robot_id=? AND conversation_id=? AND status='done' AND created_at<? ORDER BY created_at DESC LIMIT 8", (row["robot_id"], row["conversation_id"], row["created_at"])).fetchall()
+    finally:
+        conn.close()
+    previous_turns = [{"question": turn["question"], "repository": json.loads(turn["context"]).get("repository")}
+                      for turn in past]
+    history = []
+    for previous in reversed(past):
+        history.extend([{"role": "user", "content": previous["question"]}, {"role": "assistant", "content": previous["answer"]}])
+    context = _context(row["robot_id"], question=question, previous=previous_turns)
     if not context:
         raise RuntimeError('Current VM context unavailable')
     context_seconds = time.monotonic() - started
@@ -377,12 +387,17 @@ def _answer(row):
     )
     if "vm" in local:
         prompt += " Use a telemetria somente para os indicadores solicitados e indique lacunas."
+    if "owner_profile" in local:
+        prompt += " Para dados profissionais do Leonardo, use owner_profile e suas fontes. Preserve as datas e os vínculos entre cargos e tecnologias."
     if "rag" in local:
         prompt += (
             " Para descrever um repositório, use só trechos cujo campo repo coincide com o identificador completo do alvo. "
-            "Use o README como primeira fonte para tecnologia e funcionamento. O histórico serve para entender referências, "
+            "Use repository_metadata do alvo para a linguagem principal e bytes detectados pelo GitHub e para extensões na branch padrão. "
+            "Extensões são formatos; não conclua a linguagem só pelo sufixo. Indique se a árvore foi truncada. "
+            "Use o README do alvo para tecnologia e funcionamento. O histórico serve para entender referências, "
             "e fatos de respostas anteriores precisam de confirmação no contexto atual. "
             "Se houver requested_rank, use ranked_repository como alvo; se estiver vazio, informe que a posição não consta do índice. "
+            "Se reference_unresolved for verdadeiro, peça o nome do repositório. "
             "Se só tiver commits ou amostras, diferencie sugestões de problemas verificados no código. "
             "earliest_indexed_commit é a data do primeiro commit indexado. A criação do repositório pode ter outra data. "
             "Para contagens ou rankings, use o commit_count de cada repositório. indexed_unique_commits é o total do catálogo. "
@@ -391,17 +406,18 @@ def _answer(row):
     if local:
         prompt += "\nContexto JSON:\n" + json.dumps(context, ensure_ascii=False)
     prompt += "\nPergunta JSON:\n" + json.dumps(question, ensure_ascii=False)
-    conn = _connection()
-    try:
-        past = conn.execute("SELECT question,answer FROM jobs WHERE robot_id=? AND conversation_id=? AND status='done' AND created_at<? ORDER BY created_at DESC LIMIT 8", (row["robot_id"], row["conversation_id"], row["created_at"])).fetchall()
-    finally:
-        conn.close()
-    history = []
-    for previous in reversed(past):
-        history.extend([{"role": "user", "content": previous["question"]}, {"role": "assistant", "content": previous["answer"]}])
     payload = {'id': row['id'], 'conversation_id': row['conversation_id'],
                'prompt': prompt, 'history': history, 'root': str(HERMES_ROOT)}
     output = RUNNER.run(payload, lambda kind, text: _progress(row['id'], kind, text))
+    targets = local.get("rag", {}).get("target_repositories", [])
+    if len(targets) == 1:
+        conn = _connection()
+        try:
+            saved = {**json.loads(row.get("context") or "{}"), "repository": targets[0]}
+            conn.execute("UPDATE jobs SET context=? WHERE id=?", (json.dumps(saved), row["id"]))
+            conn.commit()
+        finally:
+            conn.close()
     LOG.info('Hermes chat performance job=%s context_s=%.3f prompt_chars=%s history_messages=%s runner=%s',
              row['id'], context_seconds, len(prompt), len(history), RUNNER.last_metrics)
     return output

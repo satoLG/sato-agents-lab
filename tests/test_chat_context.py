@@ -103,3 +103,44 @@ def test_qualified_repo_matches_only_its_owner():
         summary, matches = chat_context._commit_context(docs, f'Veja {name}')
         assert summary['selected_repositories'] == ['satoLG/defend_the_crystal']
         assert len(matches) == 1
+
+
+def test_follow_up_uses_repository_metadata_and_readme_from_same_ranked_target(vm, monkeypatch):
+    docs = [
+        {'type': 'commit', 'repo': 'satoLG/portfolio', 'url': f'portfolio/{i}'}
+        for i in range(2)
+    ] + [
+        {'type': 'commit', 'repo': 'satoLG/game', 'url': 'game/1'},
+        {'type': 'readme', 'repo': 'satoLG/game', 'preview': '3D with three.js'},
+        {'type': 'repository_metadata', 'repo': 'satoLG/game',
+         'repository_metadata': {'primary_language': 'JavaScript', 'file_extensions': {'.js': 8}}},
+        {'type': 'repository_metadata', 'repo': 'satoLG/portfolio',
+         'repository_metadata': {'primary_language': 'TypeScript'}},
+    ]
+    monkeypatch.setattr(chat_context.rag, 'catalog', lambda **_: {'docs': docs})
+    previous = [{'question': 'Me fala sobre o segundo repositório mais commitado'}]
+    question = 'qual a linguagem desse repositorio ai'
+    result = chat_context.collect(None, question, previous)['rag']
+    assert result['target_repositories'] == ['satoLG/game']
+    assert result['repository_metadata'] == [
+        {'repo': 'satoLG/game', 'primary_language': 'JavaScript', 'file_extensions': {'.js': 8}}
+    ]
+    assert result['documents'][0]['type'] == 'readme'
+    assert {doc['repo'] for doc in result['documents']} == {'satoLG/game'}
+    explicit = chat_context.collect(None, 'E a linguagem de satoLG/portfolio?', previous)['rag']
+    assert explicit['target_repositories'] == ['satoLG/portfolio']
+    assert chat_context.collect(None, 'Qual a linguagem do game?')['rag']['target_repositories'] == ['satoLG/game']
+    assert chat_context.collect(None, 'e a linguagem?', previous)['rag']['target_repositories'] == ['satoLG/game']
+    assert chat_context.collect(None, question)['rag'] == {'reference_unresolved': True}
+
+
+def test_profile_birth_date_only_attached_for_personal_date_questions(vm):
+    directory = config.HERMES_HOME / 'private'
+    directory.mkdir()
+    (directory / 'owner-profile.json').write_text(json.dumps(
+        {'name': 'Nome de teste', 'birth_date': '2000-01-01', 'experience': [{'role': 'Dev'}]}))
+    assert 'owner_profile' not in chat_context.collect(None, 'Oi')
+    profile = chat_context.collect(None, 'Me fala da formação do Leonardo')['owner_profile']
+    assert profile['experience'][0]['role'] == 'Dev'
+    assert 'birth_date' not in profile
+    assert chat_context.collect(None, 'Qual é a idade do Sato?')['owner_profile']['birth_date'] == '2000-01-01'

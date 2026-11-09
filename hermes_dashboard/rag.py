@@ -17,6 +17,7 @@ CATEGORY_LABELS = {
     "pull_request": "Pull requests",
     "commit": "Commits",
     "readme": "READMEs",
+    "repository_metadata": "Metadados do repositório",
     "doc": "Docs",
 }
 
@@ -76,6 +77,13 @@ def _records(df, preview=200):
         content = "" if _isnan(content) else str(content)
         item["size"] = len(content)
         item["preview"] = content[:preview]
+        if item.get("type") == "repository_metadata":
+            try:
+                metadata = json.loads(content)
+                if isinstance(metadata, dict):
+                    item["repository_metadata"] = metadata
+            except ValueError:
+                pass
         if "_distance" in df.columns and not _isnan(row["_distance"]):
             item["distance"] = float(row["_distance"])
         out.append(item)

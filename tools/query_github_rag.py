@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Semantic examples, or exact commit counts with --summary; no inference calls."""
+"""Local GitHub evidence, semantic examples and exact commit counts."""
 import argparse
 import importlib.util
 import json
@@ -10,11 +10,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("question", nargs="?", default="architecture decisions")
     parser.add_argument("limit", nargs="?", type=int, default=5)
-    parser.add_argument("--summary", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--summary", action="store_true")
+    mode.add_argument("--repo", metavar="OWNER/REPO", help="Exact repository languages, file formats and README")
+
     args = parser.parse_args()
     import lancedb
     table = lancedb.connect(str(Path.home() / "rag-db")).open_table("github_docs")
-    if args.summary:
+    if args.repo:
+        rows = table.to_arrow().select(["repo", "type", "url", "content"]).to_pylist()
+        docs = {row["type"]: row for row in rows
+                if (row["repo"] or "").lower() == args.repo.lower()
+                and row["type"] in ("repository_metadata", "readme")}
+        metadata, readme = docs.get("repository_metadata"), docs.get("readme")
+        print(json.dumps({
+            "repo": (metadata or readme or {}).get("repo", args.repo),
+            "repository_metadata": json.loads(metadata["content"]) if metadata else None,
+            "readme": {"url": readme["url"], "content": readme["content"][:12000],
+                       "truncated": len(readme["content"]) > 12000} if readme else None,
+        }, ensure_ascii=False, indent=2))
+    elif args.summary:
         helper = Path(__file__).with_name("commit_context.py")
         if not helper.exists():
             helper = Path(__file__).parents[1] / "hermes_dashboard/commit_context.py"

@@ -19,7 +19,17 @@ _ORDINALS = {
 }
 
 
-def _commit_context(docs, question, now=None):
+def repository_names(docs, question):
+    plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
+    repos = {doc["repo"] for doc in docs if doc.get("repo") and "/" in doc["repo"]}
+    return {
+        repo for repo in repos
+        if re.search(r"(?<![\w-])" + re.escape(repo.lower()) + r"(?![\w-])", plain)
+        or re.search(r"(?<![\w/-])" + re.escape(repo.lower().split("/")[-1]) + r"(?![\w-])", plain)
+    }
+
+
+def _commit_context(docs, question, now=None, *, repository=None):
     """Count the whole catalog, deduplicated by URL; examples never imply totals."""
     now = now or datetime.now(timezone.utc)
     plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
@@ -49,11 +59,7 @@ def _commit_context(docs, question, now=None):
         except ValueError:
             pass
     repos = {d.get("repo") for d in commits.values() if d.get("repo")}
-    selected = {
-        repo for repo in repos
-        if re.search(r"(?<![\w-])" + re.escape(repo.lower()) + r"(?![\w-])", plain)
-        or re.search(r"(?<![\w/-])" + re.escape(repo.lower().split("/")[-1]) + r"(?![\w-])", plain)
-    }
+    selected = {repository} if repository else repository_names(docs, question)
     groups, matches, unknown_dates = {}, [], 0
     oldest_request = bool(re.search(r"\b(?:repositorios?|repos?)\b.*\b(?:mais antig[oa]s?|oldest)\b", plain))
     earliest = None
