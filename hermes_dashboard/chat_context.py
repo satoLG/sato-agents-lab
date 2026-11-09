@@ -179,7 +179,7 @@ def collect(snapshot, question, previous=()):
         r"\b(?:des[st][ea]|nes[st][ea]|es[st][ea]|daquel[ea])\s+(?:reposit[oó]rio|repo|projeto)\b"
         r"|\b(?:linguagem|linguagens|extens[oõ]es|arquivos|stack|readme)\b.*\b(?:del[ea]|nel[ea])\b",
         question, re.I) or previous and re.fullmatch(
-            r"\s*(?:e\s+)?(?:(?:qual|quais)\s+(?:a|o|as|os)\s+)?(?:linguagem|stack|extens[oõ]es|arquivos)[?.\s]*",
+            r"\s*(?:e\s+)?(?:(?:qual|quais)\s+)?(?:(?:a|o|as|os)\s+)?(?:linguagem|stack|extens[oõ]es|arquivos)[?.\s]*",
             question, re.I))
     if snapshot is None and not (repository_question or follow_up or repo_details and not profile):
         return context
