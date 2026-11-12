@@ -147,3 +147,7 @@ html,body,#home{background:#111b21}
 .chat-table th{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--ink)}
 .chat-table tr+tr,.chat-table tbody{border-top:1px solid color-mix(in srgb,var(--muted) 24%,transparent)}
 .chat-table tbody tr:nth-child(even){background:#0001}
+/* Juice: particles float above the page; exiting elements stop taking input. */
+.juice-particles{position:fixed;inset:0;width:100%;height:100%;z-index:2147483000;pointer-events:none}
+#home [data-juice-out],#home-settings[data-juice-out]{pointer-events:none!important}
+#home[data-juice-intro=pending] .home-header .brand,#home[data-juice-intro=pending] .home-header .site-nav a{opacity:0}
