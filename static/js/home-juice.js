@@ -74,7 +74,9 @@ export function createHomeJuice(root,audio){
  }
  function stopExit(el,state){if(!state.exit)return;const animations=state.exit;state.exit=null;delete el.dataset.juiceOut;animations.forEach(animation=>animation.cancel());}
  function change(el,state,hide){
-  if(!batch.has(el)){const shown=!el.hasAttribute('hidden')&&visible(el)&&!el.parentElement?.closest('[data-juice-out]');batch.set(el,{shown,rect:shown?el.getBoundingClientRect():null,floating:shown&&['absolute','fixed'].includes(getComputedStyle(el).position)});}
+  // A child hidden in the same task its container appears never painted: no exit.
+  const revealed=[...batch].some(([other,record])=>other!==el&&!record.shown&&other.contains(el));
+  if(!batch.has(el)){const shown=!revealed&&!el.hasAttribute('hidden')&&visible(el)&&!el.parentElement?.closest('[data-juice-out]');batch.set(el,{shown,rect:shown?el.getBoundingClientRect():null,floating:shown&&['absolute','fixed'].includes(getComputedStyle(el).position)});}
   const before=batch.get(el);state.logical=hide;
   if(!hide){stopExit(el,state);el.removeAttribute('hidden');}
   else if(!state.exit){
