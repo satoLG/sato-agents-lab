@@ -1,4 +1,6 @@
+import base64
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -29,10 +31,19 @@ def test_pagination_follows_second_page_and_fails_on_api_error():
 
 
 class API:
+    def get(self, path, params=None, *, missing_ok=False):
+        if path.endswith("/languages"):
+            return {"Python": 42}
+        if path.endswith("/git/trees/a"):
+            return {"tree": [], "truncated": False}
+        if path.endswith("/readme") and missing_ok:
+            return None
+        raise AssertionError(path)
+
     def pages(self, path, params=None):
         if path == "/user/repos":
             yield [{"full_name": "satoLG/fork", "owner": {"login": "satoLG"},
-                    "fork": True, "default_branch": "main"}]
+                    "fork": True, "default_branch": "main", "html_url": "https://github.com/satoLG/fork"}]
         elif path.endswith("/branches"):
             yield [{"name": "main", "commit": {"sha": "a"}}, {"name": "old", "commit": {"sha": "b"}}]
         elif path.endswith("/commits"):
@@ -50,6 +61,8 @@ class API:
 class Writer:
     def __init__(self):
         self.existing = {}
+    def remove_readme(self, repo):
+        self.existing.pop(f"{repo}/README", None)
     def write(self, docs):
         self.existing.update((d["id"], d) for d in docs)
 
@@ -57,8 +70,9 @@ class Writer:
 def test_full_import_includes_old_commits_forks_all_branches_and_deduplicates():
     writer = Writer()
     heads, coverage = syncer.sync(API(), writer, {}, "satoLG", full=True)
-    assert len(writer.existing) == 102
-    assert {d["updated"] for d in writer.existing.values()} == {"2010-01-01T00:00:00Z"}
+    commits = [doc for doc in writer.existing.values() if doc["type"] == "commit"]
+    assert len(commits) == 102
+    assert {d["updated"] for d in commits} == {"2010-01-01T00:00:00Z"}
     assert coverage["satoLG/fork"]["visited_unique_commits"] == 102
     assert len(heads) == 2
 
@@ -90,7 +104,7 @@ def test_changed_branch_checks_later_pages_even_if_first_page_is_already_known()
     writer = Writer()
     writer.write([syncer.commit_doc("satoLG/fork", commit(i)) for i in range(100)])
     syncer.sync(API(), writer, {"complete": True, "heads": {}}, "satoLG")
-    assert len(writer.existing) == 102
+    assert sum(doc["type"] == "commit" for doc in writer.existing.values()) == 102
 
 
 def test_canonicalization_keeps_richer_content_vector_and_unrelated_documents(tmp_path):
@@ -109,3 +123,33 @@ def test_canonicalization_keeps_richer_content_vector_and_unrelated_documents(tm
     assert saved["content"] == old["content"] and saved["vector"] == stored_vector
     syncer.normalize_commits(table)
     assert table.count_rows() == 2
+
+
+def test_repository_evidence_uses_default_head_and_keeps_formats_separate():
+    repo = {'full_name': 'satoLG/game', 'html_url': 'https://github.com/satoLG/game',
+            'default_branch': 'main', 'language': 'JavaScript'}
+
+    class GitHub:
+        def get(self, path, params=None, *, missing_ok=False):
+            if path.endswith('/languages'):
+                return {'CSS': 50, 'JavaScript': 100}
+            if path.endswith('/readme'):
+                assert missing_ok and params == {'ref': 'head'}
+                return {'encoding': 'base64', 'content': base64.b64encode(b'3D with Three.js').decode(),
+                        'html_url': repo['html_url'] + '/blob/head/README.md'}
+            assert path.endswith('/git/trees/head') and params == {'recursive': 1}
+            return {'truncated': True, 'tree': [
+                {'type': 'blob', 'mode': '100644', 'path': 'src/Main.JS'},
+                {'type': 'blob', 'mode': '100644', 'path': 'image.png'},
+                {'type': 'blob', 'mode': '120000', 'path': 'link.css'},
+                {'type': 'tree', 'mode': '040000', 'path': 'src'},
+            ]}
+
+    metadata, readme = syncer.repository_documents(GitHub(), repo, 'head')
+    detail = json.loads(metadata['content'])
+    assert detail['default_branch'] == 'main'
+    assert detail['primary_language'] == 'JavaScript'
+    assert list(detail['language_bytes']) == ['JavaScript', 'CSS']
+    assert detail['file_extensions'] == {'.js': 1, '.png': 1}
+    assert detail['file_tree_truncated'] is True
+    assert readme['id'] == 'satoLG/game/README' and readme['content'] == '3D with Three.js'

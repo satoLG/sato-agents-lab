@@ -7,6 +7,7 @@ of changed branches, including backdated commits. --full rechecks all history. N
 filter is applied. Credentials are read in-process and never logged.
 """
 import argparse
+import base64
 import datetime as dt
 import fcntl
 import json
@@ -17,6 +18,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -26,7 +28,7 @@ class GitHub:
     def __init__(self, token):
         self.token = token
 
-    def get(self, path, params=None):
+    def get(self, path, params=None, *, missing_ok=False):
         url = "https://api.github.com" + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
@@ -40,6 +42,8 @@ class GitHub:
                 with urllib.request.urlopen(request, timeout=45) as response:
                     return json.load(response)
             except urllib.error.HTTPError as error:
+                if missing_ok and error.code == 404:
+                    return None
                 if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
                     raise RuntimeError(f"GitHub {path}: HTTP {error.code}") from None
             except (OSError, ValueError):
@@ -118,18 +122,63 @@ def issue_doc(repo, item):
     }
 
 
+def repository_documents(api, repo, head):
+    name = repo["full_name"]
+    endpoint = f"/repos/{name}"
+    url = repo["html_url"]
+    tree = api.get(f"{endpoint}/git/trees/{head}", {"recursive": 1})
+    languages = api.get(f"{endpoint}/languages")
+    paths = [item["path"] for item in tree["tree"]
+             if item["type"] == "blob" and item["mode"] != "120000"]
+    extensions = Counter(Path(path).suffix.lower() or "(sem extensão)" for path in paths)
+    metadata = {
+        "default_branch": repo["default_branch"],
+        "head_sha": head,
+        "primary_language": repo.get("language"),
+        "language_bytes": dict(sorted(languages.items(), key=lambda item: (-item[1], item[0]))),
+        "file_extensions": dict(sorted(extensions.items(), key=lambda item: (-item[1], item[0]))),
+        "file_count": len(paths),
+        "file_tree_truncated": tree.get("truncated", False),
+        "languages_source": f"https://api.github.com{endpoint}/languages",
+        "file_tree_source": f"{url}/tree/{head}",
+    }
+    common = {"repo": name, "state": "active", "labels": "", "parent_id": name,
+              "updated": repo.get("pushed_at") or ""}
+    docs = [{**common, "id": f"{name}/repository-metadata", "type": "repository_metadata",
+             "title": f"{name} — GitHub languages and file extensions", "url": url,
+             "content": json.dumps(metadata, ensure_ascii=False)}]
+    readme = api.get(f"{endpoint}/readme", {"ref": head}, missing_ok=True)
+    if readme is not None:
+        if readme.get("encoding") != "base64" or not isinstance(readme.get("content"), str):
+            raise RuntimeError(f"GitHub {name}: unsupported README response")
+        content = base64.b64decode(readme["content"]).decode("utf-8", errors="replace")
+        docs.append({**common, "id": f"{name}/README", "type": "readme",
+                     "title": f"{name} README", "url": readme["html_url"], "content": content})
+    return docs
+
+
 class Writer:
     def __init__(self, table, existing):
         self.table, self.existing, self.model = table, existing, None
         self.added = self.updated = 0
+
+    def remove_readme(self, repo):
+        key = f"{repo}/README"
+        if key in self.existing:
+            self.table.delete("id = '" + key.replace("'", "''") + "'")
+            self.existing.pop(key)
 
     def write(self, documents):
         import pyarrow as pa
         pending = []
         for doc in documents:
             old = self.existing.get(doc["id"])
-            if old and old.get("updated") == doc.get("updated"):
-                continue
+            if old:
+                if doc["type"] in ("repository_metadata", "readme"):
+                    if all(old.get(key) == doc[key] for key in ("content", "url")):
+                        continue
+                elif old.get("updated") == doc.get("updated"):
+                    continue
             # Preserve previously fetched comments and diffs while metadata is unchanged.
             if old:
                 self.updated += 1
@@ -152,7 +201,7 @@ class Writer:
             print(f"Persisted: +{self.added} new, {self.updated} updated; {self.table.count_rows()} rows", flush=True)
 
 
-def sync(api, writer, state, user, full=False):
+def sync(api, writer, state, user, full=False, metadata_only=False):
     heads, coverage = {}, {}
     for page in api.pages("/user/repos", {"affiliation": "owner"}):
         for repo in page:
@@ -162,6 +211,13 @@ def sync(api, writer, state, user, full=False):
             print(f"Repository: {name}", flush=True)
             branches = [branch for page in api.pages(f"/repos/{name}/branches") for branch in page]
             branches.sort(key=lambda b: b["name"] != repo["default_branch"])
+            if branches and branches[0]["name"] == repo["default_branch"]:
+                docs = repository_documents(api, repo, branches[0]["commit"]["sha"])
+                writer.write(docs)
+                if len(docs) == 1:
+                    writer.remove_readme(name)
+            if metadata_only:
+                continue
             repo_seen = set()
             for branch in branches:
                 key, head = f"{name}:{branch['name']}", branch["commit"]["sha"]
@@ -195,7 +251,9 @@ def sync(api, writer, state, user, full=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--full", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--full", action="store_true")
+    mode.add_argument("--metadata-only", action="store_true", help="Refresh languages, file extensions and READMEs without advancing the history checkpoint")
     parser.add_argument("--user", default="satoLG")
     parser.add_argument("--db", type=Path, default=Path.home() / "rag-db")
     parser.add_argument("--state", type=Path, default=Path.home() / ".hermes/rag_commit_state/sync.json")
@@ -215,8 +273,14 @@ def main():
             raise RuntimeError("Expected the existing 384-dimensional embedding schema")
         started_at = dt.datetime.now(dt.timezone.utc).isoformat()
         state = json.loads(args.state.read_text()) if args.state.exists() else {}
-        writer = Writer(table, normalize_commits(table))
-        heads, coverage = sync(GitHub(token), writer, state, args.user, args.full or not state.get("complete"))
+        existing = ({row["id"]: row for row in table.to_arrow().to_pylist()}
+                    if args.metadata_only else normalize_commits(table))
+        writer = Writer(table, existing)
+        heads, coverage = sync(GitHub(token), writer, state, args.user,
+                               args.full or not state.get("complete"), args.metadata_only)
+        if args.metadata_only:
+            print(f"METADATA SYNC COMPLETE: {writer.added} new, {writer.updated} updated", flush=True)
+            return
         # Only advance after every API page and database write succeeded.
         result = {"complete": True, "completed_at": started_at, "heads": heads,
                   "coverage": coverage, "added": writer.added, "updated": writer.updated,

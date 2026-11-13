@@ -1,11 +1,12 @@
 """Bounded, read-only VM context prepared by the server, never model tool calls."""
 import json
 import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
 from . import config, memory, rag, vm
-from .commit_context import _words, _commit_context
+from .commit_context import _words, _commit_context, repository_names
 from .context_cache import SourceCache
 
 TOKEN = re.compile(r"\b(?:sk-[\w-]{16,}|gh[pousr]_[\w]{20,}|github_pat_[\w]{20,})\b")
@@ -126,22 +127,82 @@ def wants_telemetry(question):
     } or re.search(r"\bvm\b", question, re.I))
 
 
-def collect(snapshot, question):
+def _owner_profile(question):
+    plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
+    birth = re.search(r"\b(?:nascimento|nasceu|nasci|idade|aniversario)\b", plain)
+    owner = re.search(r"\b(?:leo(?:nardo)?|gutierrez|sato|meu|minha|meus|minhas|mim|eu|nasci)\b", plain)
+    profile = re.search(r"\b(?:bio(?:grafia)?|perfil|carreira|curriculo|formacao|estudos|faculdade|formou|"
+                        r"certificad\w*|certificac\w*|experiencia|cargos?|empregos?|trabalh\w*)\b", plain)
+    personal_languages = re.search(r"\b(?:linguagens?|tecnologias?)\b.*\b(?:us\w*|conhec\w*|domin\w*)\b", plain)
+    if not (owner and (birth or profile or personal_languages)):
+        return None
+    try:
+        data = json.loads((config.HERMES_HOME / "private/owner-profile.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    fields = ("name", "website", "linkedin", "github", "bio", "skills", "experience",
+              "education", "certificates", "project_languages", "sources")
+    if birth:
+        fields += ("birth_date",)
+    return scrub({key: data[key] for key in fields if key in data})
+
+
+def _previous_repository(docs, previous):
+    known = {doc.get("repo") for doc in docs}
+    for turn in previous:
+        if turn.get("repository") in known and turn.get("repository"):
+            return turn["repository"]
+        question = turn["question"]
+        names = repository_names(docs, question)
+        if names:
+            return next(iter(names)) if len(names) == 1 else None
+        if _words(question) & {"repo", "repositorio"}:
+            summary, _ = _commit_context(docs, question)
+            target = summary.get("ranked_repository") or summary.get("earliest_indexed_commit")
+            if target:
+                return target["repo"]
+    return None
+
+
+def collect(snapshot, question, previous=()):
     context = {}
     words = _words(question)
+    if profile := _owner_profile(question):
+        context["owner_profile"] = profile
     repository_question = bool(words & {"git", "github", "satolg", "repo", "repos", "repositorio", "repositorios",
                                         "commit", "commits", "rag", "indexado", "indexados"})
-    if snapshot is None and not repository_question:
+    repo_details = bool(words & {"linguagem", "linguagens", "stack", "readme", "extensao", "extensoes",
+                                 "arquivos", "tecnologia", "tecnologias"})
+    follow_up = bool(re.search(
+        r"\b(?:des[st][ea]|nes[st][ea]|es[st][ea]|daquel[ea])\s+(?:reposit[oó]rio|repo|projeto)\b"
+        r"|\b(?:linguagem|linguagens|extens[oõ]es|arquivos|stack|readme)\b.*\b(?:del[ea]|nel[ea])\b",
+        question, re.I) or previous and re.fullmatch(
+            r"\s*(?:e\s+)?(?:(?:qual|quais)\s+)?(?:(?:a|o|as|os)\s+)?(?:linguagem|stack|extens[oõ]es|arquivos)[?.\s]*",
+            question, re.I))
+    if snapshot is None and not (repository_question or follow_up or repo_details and not profile):
         return context
 
     scope = (str(config.HERMES_HOME), str(config.RAG_PATH), str(Path.cwd()))
     if snapshot is not None:
-        context = _collect_telemetry(snapshot, words, scope)
+        context.update(_collect_telemetry(snapshot, words, scope))
     vector, rag_freshness = CACHE.get(('rag', scope), _rag_version(), 30, _rag_catalog)
     context.setdefault("freshness", {})["rag"] = rag_freshness
     all_docs = vector.get("docs", [])
     summary, commit_docs = _commit_context(all_docs, question)
+    if follow_up and not (summary["selected_repositories"] or "requested_rank" in summary
+                          or summary.get("earliest_indexed_commit")):
+        if repository := _previous_repository(all_docs, previous):
+            summary, commit_docs = _commit_context(all_docs, question, repository=repository)
     summary["counts_are_exact_for_indexed_data"] = not bool(vector.get("error"))
+    unresolved = follow_up and not (summary["selected_repositories"] or "requested_rank" in summary
+                                   or summary.get("earliest_indexed_commit"))
+    if unresolved:
+        context["rag"] = {"reference_unresolved": True}
+        return context
+    if snapshot is None and not (repository_question or summary["selected_repositories"]):
+        return context
     commit_question = bool(words & {"commit", "commits"})
     oldest = summary.get("earliest_indexed_commit")
     ranked = summary.get("ranked_repository")
@@ -164,7 +225,7 @@ def collect(snapshot, question):
         all_relevant = commit_docs
     else:
         all_relevant = all_docs
-    docs = sorted(all_relevant,
+    docs = sorted((doc for doc in all_relevant if doc.get("type") != "repository_metadata"),
                   key=lambda d: (bool(selected) and d.get("type") == "readme",
                                  len(words & _words(f"{d.get('title', '')} {d.get('preview', '')}")),
                                  str(d.get("updated", ""))), reverse=True)
@@ -174,6 +235,12 @@ def collect(snapshot, question):
                       "commit_summary": summary, "documents_are_partial": True,
                       "documents": [{key: item.get(key) for key in ("title", "repo", "type", "preview", "url", "updated")}
                                     for item in docs[:8]]}
+    if selected:
+        context["rag"]["target_repositories"] = sorted(selected)
+        context["rag"]["repository_metadata"] = [
+            {"repo": doc["repo"], **doc["repository_metadata"]}
+            for doc in all_relevant if isinstance(doc.get("repository_metadata"), dict)
+        ]
     context["limits"] = "O índice local contém amostras de documentos e commits. Ele não substitui uma leitura do código atual."
     cleaned = scrub(context)
     # Retain the VM readings and document excerpts when a busy host has many runs.

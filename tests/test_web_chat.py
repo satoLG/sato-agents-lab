@@ -136,3 +136,39 @@ def test_repository_question_uses_oldest_indexed_commit_without_vm_telemetry(pri
     assert rag['commit_summary']['earliest_indexed_commit']['repo'] == 'satoLG/older'
     assert {d['repo'] for d in rag['documents']} == {'satoLG/older'}
     assert web_chat._context('guide:hermes', question='Oi, tudo bem?') == {'vm_context': {}}
+
+
+def test_language_follow_up_reuses_verified_target_only_in_same_conversation(private_chat, monkeypatch):
+    docs = [
+        {"type": "commit", "repo": "satoLG/first", "url": f"first/{i}"}
+        for i in range(2)
+    ] + [
+        {"type": "commit", "repo": "satoLG/game", "url": "game/1"},
+        {"type": "readme", "repo": "satoLG/game", "preview": "Tower defense 3D"},
+        {"type": "repository_metadata", "repo": "satoLG/game",
+         "repository_metadata": {"primary_language": "JavaScript"}},
+    ]
+    monkeypatch.setattr(web_chat.chat_context.rag, "catalog", lambda **_: {"docs": docs, "total": len(docs)})
+    monkeypatch.setattr(web_chat.chat_context, "CACHE", web_chat.chat_context.SourceCache())
+    prompts = []
+    def run(payload, _):
+        prompts.append(payload["prompt"])
+        return "Resposta de teste sem nome de repositório."
+    monkeypatch.setattr(web_chat.RUNNER, "run", run)
+    headers = authorize(private_chat)
+    def send(question, conversation_id):
+        response = private_chat.post("/api/lab/hermes-chat/jobs", headers=headers, json={
+            "robot_id": "guide:hermes", "question": question, "conversation_id": conversation_id,
+        })
+        assert response.status_code == 202
+        row = web_chat._claim()
+        web_chat._finish(row, answer=web_chat._answer(row))
+    send("Me fala sobre o segundo repositório mais commitado", "a" * 32)
+    send("Qual a linguagem desse repositório aí?", "a" * 32)
+    send("Qual a linguagem desse repositório aí?", "b" * 32)
+    def rag_context(prompt):
+        return json.loads(prompt.split("Contexto JSON:\n")[1].split("\nPergunta JSON:")[0])["vm_context"]["rag"]
+    assert rag_context(prompts[1])["repository_metadata"] == [
+        {"repo": "satoLG/game", "primary_language": "JavaScript"}
+    ]
+    assert "repository_metadata" not in rag_context(prompts[2])
