@@ -26,7 +26,7 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const chat=await chatRoutes(page);
  await ready(page);await expect(page.locator('#home-scene canvas')).toHaveCount(1);await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#home-progress')).toHaveAttribute('value','100');
  expect(await page.locator('#home').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(17, 27, 33)');
- await page.screenshot({path:testInfo.outputPath('home-desktop.png')});
+
  await page.locator('#home-input').fill('O que a VM sabe sobre MCP?');await page.locator('#home-send').click();
  await expect(page.locator('#last-question')).toContainText('O que a VM sabe sobre MCP?');await expect(page.locator('#home-speech .thinking-dots circle')).toHaveCount(3);
  expect(await page.locator('#home-speech .thinking-indicator').evaluate(el=>el.lastChild.classList.contains('thinking-dots'))).toBe(true);
@@ -43,7 +43,7 @@ test('root starts empty with one robot, real chat protocol and a glass history',
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});
  await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText(chat.jobs[0].question);await expect(page.locator('#home-messages')).toContainText(chat.jobs[0].answer);
  const glass=await page.locator('#home-history').evaluate(el=>({blur:getComputedStyle(el).backdropFilter,background:getComputedStyle(el).backgroundColor}));expect(glass.blur).toContain('blur');expect(glass.background).toMatch(/^rgba/);
- await page.screenshot({path:testInfo.outputPath('home-history.png')});await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();expect(errors).toEqual([]);
+ await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();expect(errors).toEqual([]);
 });
 
 test('mobile research steps yield to a formatted Markdown answer',async({page},testInfo)=>{
@@ -73,7 +73,7 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  await expect(steps).toHaveCount(3);
  await expect(steps.nth(1)).toHaveCSS('border-top-style','solid');
  await expect(steps.nth(2)).toContainText('Analisando a pergunta');
- await page.screenshot({path:testInfo.outputPath('mobile-research-progress.png')});
+
 
  job.answer=[
   '## Commits mais antigos nos exemplos',
@@ -99,7 +99,7 @@ test('mobile research steps yield to a formatted Markdown answer',async({page},t
  await expect(answer.locator('tbody tr')).toHaveCount(2);
  await expect(answer.getByRole('link',{name:'Ver a fonte'})).toHaveAttribute('href','https://github.com/satoLG');
  expect(await answer.locator('.chat-table').evaluate(el=>el.scrollWidth>el.clientWidth&&el.getBoundingClientRect().right<=innerWidth)).toBe(true);
- await page.screenshot({path:testInfo.outputPath('mobile-markdown-table.png')});
+
  await page.locator('.history-answer').getByRole('button',{name:'Ver menos'}).click();
  await expect(answer).toBeHidden();
 });
@@ -114,12 +114,12 @@ test('touch reactions differ and the composer stays usable in a short viewport',
  const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,deviceScaleFactor:1,reducedMotion:'no-preference'}),page=await context.newPage();
  try{
   await chatRoutes(page);await ready(page);await page.waitForTimeout(900);
-  await page.screenshot({path:testInfo.outputPath('home-mobile.png')});
+
   const texts=[];for(const kind of ['wave','boop','dance','shy']){await page.locator('#robot-touch').tap();await expect(page.locator('#home-scene')).toHaveAttribute('data-reaction',kind);texts.push(await page.locator('#home-speech .speech-text').innerText());}expect(new Set(texts).size).toBe(4);
   await page.setViewportSize({width:393,height:500});await page.locator('#home-input').fill('Uma mensagem para Hermes em uma tela menor.');
   const bounds=await page.locator('#home-form').boundingBox();expect(bounds.y+bounds.height).toBeLessThan(500);expect(bounds.x).toBeGreaterThan(0);
   await page.locator('#home-send').tap();await expect(page.locator('#last-question')).toContainText('Uma mensagem para Hermes');
-  await page.screenshot({path:testInfo.outputPath('home-short.png')});
+
  }finally{await context.close();}
 });
 
@@ -148,10 +148,10 @@ test('long previews open full chat bubbles without spilling into the scene',asyn
  await ready(page);await resumeSeeded(page);await expect(page.locator('#speech-more')).toBeVisible({timeout:10000});
  expect((await page.locator('#home-speech .speech-text').innerText()).length).toBeLessThanOrEqual(421);
  const metrics=await page.locator('#home-speech .speech-text').evaluate(el=>({height:el.clientHeight,line:parseFloat(getComputedStyle(el).lineHeight),width:el.clientWidth,scrollWidth:el.scrollWidth}));expect(metrics.height).toBeLessThanOrEqual(metrics.line*5+1);expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.width);
- await page.screenshot({path:testInfo.outputPath('home-long-preview.png')});
+
  await page.locator('#speech-more').click();await expect(page.locator('#home-history')).toBeVisible();await expect(page.locator('.history-answer p')).toHaveText(answer);await expect(page.locator('#last-question')).toBeHidden();
  const chatGeometry=await page.locator('.history-answer').evaluate(el=>({width:el.clientWidth,scrollWidth:el.scrollWidth}));expect(chatGeometry.scrollWidth).toBeLessThanOrEqual(chatGeometry.width);
- await page.screenshot({path:testInfo.outputPath('home-long-chat.png')});await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();
+ await page.keyboard.press('Escape');await expect(page.locator('#home-history')).toBeHidden();
 });
 
 async function instrumentScene(page){
@@ -171,10 +171,10 @@ async function instrumentScene(page){
 
 test('settings lazily reuse miniature lab and forest with smooth scenario changes @scene',async({page},testInfo)=>{
  await page.setViewportSize({width:393,height:852});await chatRoutes(page);await instrumentScene(page);let environmentRequests=0;page.on('request',request=>{if(request.url().includes('/js/home-environments.js'))environmentRequests++;});const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await ready(page);expect(environmentRequests).toBe(0);await page.locator('#home-settings-toggle').click();await expect(page.getByRole('dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('home-settings.png')});
+ await ready(page);expect(environmentRequests).toBe(0);await page.locator('#home-settings-toggle').click();await expect(page.getByRole('dialog')).toBeVisible();
  await page.evaluate(()=>{const r=__companionQA.renderer,compile=r.compileAsync.bind(r);r.compileAsync=async(...args)=>{await new Promise(resolve=>{window.__releaseCompanionCompile=resolve;});return compile(...args);};window.__restoreCompanionCompile=()=>{r.compileAsync=compile;};});
  await page.locator('[name="home-scenario"][value="lab"]').check();await page.waitForFunction(()=>window.__releaseCompanionCompile);expect(await page.evaluate(()=>__companionQA.world.getObjectByName('companion-lab').visible)).toBe(false);await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');await page.evaluate(()=>{__releaseCompanionCompile();__restoreCompanionCompile();});
- for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();await page.screenshot({path:testInfo.outputPath(`home-${kind}.png`)});await page.locator('#home-settings-toggle').click();}
+ for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();await page.locator('#home-settings-toggle').click();}
  expect(environmentRequests).toBe(1);const memory=await page.evaluate(()=>({...__companionQA.renderer.info.memory}));
  for(const kind of ['lab','black','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);}await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
  const actual=await page.evaluate(()=>({memory:{...__companionQA.renderer.info.memory},calls:__companionQA.renderer.info.render.calls,sets:__companionQA.world.children.filter(o=>o.name.startsWith('companion-')).length,saved:localStorage.getItem('sato-home-scenario')}));expect(actual.memory).toEqual(memory);expect(actual.calls).toBeLessThan(220);expect(actual.sets).toBe(2);expect(actual.saved).toBe('forest');expect(errors).toEqual([]);
@@ -185,9 +185,9 @@ test('tube arrival lands, says ouch, rises and dance makes complete turns @scene
  const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,reducedMotion:'no-preference'}),page=await context.newPage();
  try{
   await chatRoutes(page);await instrumentScene(page);await page.addInitScript(()=>{window.__companionFrames=[];});await page.goto('/');
-  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','tube',{timeout:10000});await expect(page.locator('#home-loading')).toBeHidden();await page.waitForTimeout(1100);await page.screenshot({path:testInfo.outputPath('home-tube.png')});
-  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','fall',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-exit.png')});
-  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','ouch',{timeout:10000});await page.screenshot({path:testInfo.outputPath('home-ouch.png')});await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:15000});await expect(page.locator('#home-speech')).toBeHidden();
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','tube',{timeout:10000});await expect(page.locator('#home-loading')).toBeHidden();await page.waitForTimeout(1100);
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','fall',{timeout:10000});
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','ouch',{timeout:10000});await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:15000});await expect(page.locator('#home-speech')).toBeHidden();
   const stages=await page.evaluate(()=>[...new Set(__companionFrames.map(f=>f.stage))]);expect(stages).toEqual(expect.arrayContaining(['tube','fall','ouch','rise','settled']));
   const cameraRange=await page.evaluate(()=>{const frames=__companionFrames.filter(f=>['tube','fall','ouch','rise'].includes(f.stage));return Math.max(...frames.map(f=>f.cameraY))-Math.min(...frames.map(f=>f.cameraY));});expect(cameraRange).toBeLessThan(.001);
   const radius=await page.evaluate(()=>Math.max(...__companionFrames.map(f=>f.tubeArmRadius)));expect(radius).toBeGreaterThan(.5);expect(radius).toBeLessThan(1.08*.93);
@@ -235,14 +235,14 @@ test('themes are legible across skyboxes, scene is not selectable and sound SVG 
    });expect(Math.min(...ratios)).toBeGreaterThan(4.5);
   }
   await page.locator('[name="home-theme"][value="cyan"]').check();await page.locator('#settings-close').click();
-  await page.screenshot({path:testInfo.outputPath(`verified-${kind}.png`)});await page.locator('#home-settings-toggle').click();
+  await page.locator('#home-settings-toggle').click();
  }
  await page.locator('[name="home-theme"][value="violet"]').check();
  for(const active of [false,true]){
   if(active)await page.locator('#home-sound').click();
   const offset=await page.locator('#home-sound').evaluate(button=>{const b=button.getBoundingClientRect(),svg=[...button.querySelectorAll('svg')].find(svg=>svg.getBoundingClientRect().width),s=svg.getBoundingClientRect();return Math.hypot(b.x+b.width/2-s.x-s.width/2,b.y+b.height/2-s.y-s.height/2);});expect(offset).toBeLessThan(.5);
  }
- await page.screenshot({path:testInfo.outputPath('verified-settings.png')});await page.locator('#settings-close').click();await page.locator('#home-history-toggle').click();await page.screenshot({path:testInfo.outputPath('verified-history.png')});
+ await page.locator('#settings-close').click();await page.locator('#home-history-toggle').click();
  const blur=await page.locator('#home-history').evaluate(el=>getComputedStyle(el).backdropFilter);expect(blur).toBe('blur(1px)');
  const terrain=await page.evaluate(()=>{const mesh=__companionQA.world.getObjectByName('forest-terrain');const positions=mesh.geometry.getAttribute('position');return {texture:!!mesh.material.map,variation:Math.max(...Array.from({length:positions.count},(_,i)=>positions.getY(i)))-Math.min(...Array.from({length:positions.count},(_,i)=>positions.getY(i))),sky:__companionQA.world.getObjectByName('forest-skybox').visible};});expect(terrain.texture).toBe(true);expect(terrain.variation).toBeGreaterThan(.1);expect(terrain.sky).toBe(true);
  await page.reload();await expect(page.locator('#home')).toHaveAttribute('data-theme','violet');
@@ -254,7 +254,7 @@ test('history collapses long messages by default and keeps completed footers dur
  chat.jobs.push({id:'completed',question,answer,status:'done',created_at:Date.now()/1000},{id:'pending',question:'Outra pergunta',status:'running',created_at:Date.now()/1000});
  await ready(page);await page.locator('#home-history-toggle').click();await chooseSession(page);const completed=page.locator('[data-job="completed"]');
  for(const role of ['question','answer']){await expect(completed.locator(`.history-${role} .history-more`)).toHaveText('Ver mais');expect((await completed.locator(`.history-${role} p`).innerText()).length).toBeLessThan(role==='question'?question.length:answer.length);}
- await page.screenshot({path:testInfo.outputPath('history-collapsed.png')});
+
  await completed.locator('.history-answer .history-more').click();await expect(completed.locator('.history-answer p')).toHaveText(answer);
  await page.evaluate(()=>{const article=document.querySelector('[data-job="completed"]');window.__retainedFooterNodes=[...article.querySelectorAll('footer,footer *')];window.__completedChanges=[];window.__completedObserver=new MutationObserver(records=>__completedChanges.push(...records.map(record=>record.type)));__completedObserver.observe(article,{childList:true,subtree:true});const now=Date.now;Date.now=()=>now()+10000;});
  await page.waitForTimeout(2200);
@@ -276,7 +276,7 @@ test('full viewport backgrounds keep one canvas and resize only inside a rendere
  for(const kind of ['lab','forest']){
   await page.locator('#home-settings-toggle').click();await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();
   const background=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {same:__canvas===renderer.domElement,height:renderer.domElement.getBoundingClientRect().height,pixel:[...pixel]};});expect(background.same).toBe(true);expect(background.height).toBe(640);expect(background.pixel.slice(0,3).reduce((sum,n)=>sum+n,0)).toBeGreaterThan(100);
-  await page.screenshot({path:testInfo.outputPath(`full-background-${kind}.png`)});
+
  }
  await page.route('**/js/home-environments.js',async route=>{await new Promise(resolve=>setTimeout(resolve,600));await route.continue();});await page.reload();await expect(page.locator('#home-loading')).toBeVisible();await expect(page.locator('#home-scene')).toHaveCSS('opacity','0');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home')).toHaveAttribute('data-scenario','forest');
 });
@@ -287,8 +287,8 @@ test('robot touch never stretches the sphere or arms @scene',async({browser},tes
   await chatRoutes(page);await instrumentScene(page);await ready(page);
   await page.locator('#robot-touch').click();await page.waitForTimeout(400);await page.locator('#robot-touch').click();await page.waitForTimeout(650);
   const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(1);expect(scale[1]).toBeCloseTo(1);expect(scale[2]).toBeCloseTo(.56);}
-  await page.screenshot({path:testInfo.outputPath('rigid-boop.png')});
-  await page.locator('#robot-touch').click();await page.waitForTimeout(2100);await page.screenshot({path:testInfo.outputPath('robot-back.png')});
+
+  await page.locator('#robot-touch').click();await page.waitForTimeout(2100);
  }finally{await context.close();}
 });
 
@@ -325,10 +325,10 @@ test('sessions start empty, resume independently and keep their title after a re
  await page.locator('#home-history-toggle').click();await expect(page.locator('#history-thread')).toHaveJSProperty('hidden',false);await expect(page.locator('#home-messages')).toBeVisible();await expect(page.locator('#home-sessions')).toBeHidden();await expect(page.locator('#history-new')).toBeHidden();await expect(page.locator('#history-sessions')).toHaveText('Lista de sessões');await page.locator('#history-close').click();await expect(page.locator('#home-history')).toBeHidden();await page.locator('#home-history-toggle').click();await expect(page.locator('#history-title')).toHaveText('Planejamento da floresta');await page.locator('#history-sessions').click();await expect(page.locator('#home-sessions')).toBeVisible();await expect(page.locator('#history-sessions')).toBeHidden();await page.locator('#history-new').click();await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();
  await page.locator('#home-input').fill('Equipamentos do laboratório');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();const second=chat.jobs[1].conversation_id;expect(first).not.toBe(second);
  chat.jobs[0].status='done';chat.jobs[0].answer='Resposta sobre a floresta.';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(page.locator('#last-question')).toContainText('Equipamentos');await expect(page.locator('#home-speech')).not.toContainText('Resposta sobre a floresta');
- await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();await page.locator('#home-history-toggle').click();await expect(page.locator('.session-card')).toHaveCount(2);await page.screenshot({path:testInfo.outputPath('session-list-desktop.png')});
+ await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home-speech')).toBeHidden();await expect(page.locator('#last-question')).toBeHidden();await page.locator('#home-history-toggle').click();await expect(page.locator('.session-card')).toHaveCount(2);
  await page.locator(`[data-conversation="${first}"]`).click();await expect(page.locator('#history-title')).toHaveText('Planejamento da floresta');await expect(page.locator('#home-messages')).toContainText('Resposta sobre a floresta');await expect(page.locator('#home-messages')).not.toContainText('Equipamentos');
  await page.locator('#home-input').fill('Continue o plano');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();expect(chat.jobs[2].conversation_id).toBe(first);await expect(page.locator('#history-title')).toHaveText('Planejamento da floresta');
- await page.setViewportSize({width:393,height:852});await page.screenshot({path:testInfo.outputPath('session-thread-mobile.png')});
+ await page.setViewportSize({width:393,height:852});
 });
 
 test('copy and clock stay together at the right edge with and without Ver mais',async({page})=>{
@@ -378,11 +378,11 @@ test('latest messages fold above the robot, reopen and fold again without losing
   await expect(page.locator('#home-speech')).toContainText('Última resposta salva.');await expect(page.locator('#conversation-title')).toHaveCount(0);
   await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});await expect(page.locator('#chat-peek')).toHaveCSS('opacity','1');
   const head=await page.locator('#robot-touch').boundingBox(),peek=await page.locator('#chat-peek').boundingBox();expect(peek.y+peek.height/2).toBeLessThan(head.y);await expect(page.locator('#home-speech')).toHaveCSS('opacity','0');
-  await page.screenshot({path:testInfo.outputPath('collapsed-mobile.png')});
+
   // This control follows the floating head. Click its visible center instead
   // of waiting for an intentionally moving target to become stationary.
   const peekNow=await page.locator('#chat-peek').boundingBox();await page.mouse.click(peekNow.x+peekNow.width/2,peekNow.y+peekNow.height/2);await page.mouse.move(0,0);await expect(page.locator('#home-speech')).toHaveCSS('opacity','1');await expect(page.locator('#last-question')).toContainText('Última pergunta');
-  await page.screenshot({path:testInfo.outputPath('revealed-mobile.png')});await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});
+  await expect(page.locator('#home')).toHaveAttribute('data-preview-collapsed','true',{timeout:8000});
   await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).toContainText('Última resposta salva.');await page.locator('#history-sessions').click();await page.locator('#history-new').click();await expect(page.locator('#chat-peek')).toBeHidden();
  }finally{await context.close();}
 });
@@ -403,7 +403,7 @@ test('default wallpaper sits behind the transparent canvas and is absent in lab 
  const layer=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {art:Number(getComputedStyle(document.getElementById('home-art')).zIndex),scene:Number(getComputedStyle(document.getElementById('home-scene')).zIndex),alpha:pixel[3]};});expect(layer.scene).toBeGreaterThan(layer.art);expect(layer.alpha).toBe(0);
  for(const button of await page.locator('#home button,#home a').all()){if(await button.isVisible()){await button.evaluate(el=>el.focus());await expect(button).toHaveCSS('outline-style','none');}}
  await page.keyboard.press('Tab');expect(await page.evaluate(()=>getComputedStyle(document.activeElement).outlineStyle)).toBe('none');
- await page.screenshot({path:testInfo.outputPath('default-wallpaper.png')});await page.locator('#home-settings-toggle').click();await expect(page.locator('.scene-option').first()).toContainText('Padrão');
+ await page.locator('#home-settings-toggle').click();await expect(page.locator('.scene-option').first()).toContainText('Padrão');
  for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await expect(page.locator('#home-art')).toHaveCSS('opacity','0');}
 });
 

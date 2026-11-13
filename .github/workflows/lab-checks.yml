@@ -49,13 +49,22 @@ jobs:
   browser:
     needs: changes
     if: needs.changes.outputs.browser == 'true'
-    name: Browser tests (${{ matrix.suite }})
+    name: Browser tests (${{ matrix.label }})
     runs-on: ubuntu-latest
     timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
-        suite: [ui, scenes]
+        include:
+          - suite: ui
+            shard: 1/1
+            label: ui
+          - suite: scenes
+            shard: 1/2
+            label: scenes 1/2
+          - suite: scenes
+            shard: 2/2
+            label: scenes 2/2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -78,12 +87,12 @@ jobs:
           cat /tmp/sato-site.log
           exit 1
       - name: Run Playwright suite
-        run: npm run test:browser -- --project=${{ matrix.suite }} --reporter=list
+        run: npm run test:browser -- --project=${{ matrix.suite }} --shard=${{ matrix.shard }} --fully-parallel --reporter=list
         timeout-minutes: 10
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:
-          name: browser-test-results-${{ matrix.suite }}
+          name: browser-test-results-${{ strategy.job-index }}
           path: |
             test-results/
             /tmp/sato-site.log

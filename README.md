@@ -209,7 +209,7 @@ npm run test:browser
 
 Playwright separa a interface e o chat (`--project=ui`) das cenas WebGL da
 principal (`--project=scenes`). Os testes mantêm desenho e compilação reais,
-limitando a resolução e a frequência dos frames de teste para não saturar GPUs por software. O CI só executa navegador quando a alteração toca a aplicação web, templates, recursos, configuração ou testes de navegador; alterações isoladas nos coletores e no contexto do Hermes passam pelos testes Python.
+limitando a resolução, a frequência dos frames e a densidade de grama decorativa durante os testes para não saturar GPUs por software. As geometrias de colisão e os shaders continuam sendo exercitados. O CI só executa navegador quando a alteração toca a aplicação web, templates, recursos, configuração ou testes de navegador; alterações isoladas nos coletores e no contexto do Hermes passam pelos testes Python.
 Não há testes de páginas Orb, Lab ou estúdio de modelos: essas páginas foram removidas.
 
 ### Se algo nao aparecer ou der erro
