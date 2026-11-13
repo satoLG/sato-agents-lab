@@ -139,8 +139,94 @@ def test_profile_birth_date_only_attached_for_personal_date_questions(vm):
     directory.mkdir()
     (directory / 'owner-profile.json').write_text(json.dumps(
         {'name': 'Nome de teste', 'birth_date': '2000-01-01', 'experience': [{'role': 'Dev'}]}))
-    assert 'owner_profile' not in chat_context.collect(None, 'Oi')
+    basic = chat_context.collect(None, 'Oi')['owner_profile']
+    assert basic['name'] == 'Nome de teste'
+    assert 'birth_date' not in basic and 'experience' not in basic
     profile = chat_context.collect(None, 'Me fala da formação do Leonardo')['owner_profile']
     assert profile['experience'][0]['role'] == 'Dev'
     assert 'birth_date' not in profile
     assert chat_context.collect(None, 'Qual é a idade do Sato?')['owner_profile']['birth_date'] == '2000-01-01'
+
+
+def test_owner_identity_and_professional_follow_ups_need_no_magic_words(vm, monkeypatch):
+    directory = config.HERMES_HOME / 'private'
+    directory.mkdir()
+    (directory / 'owner-profile.json').write_text(json.dumps({
+        'name': 'Leonardo Sato', 'bio': 'Desenvolvedor back-end desde 2017.',
+        'experience': [{'organization': 'Empresa', 'role': 'Dev'}],
+        'education': [{'degree': 'Engenharia de Software'}],
+        'sources': {'owner': 'Informado pelo proprietário'},
+        'birth_date': '1996-06-05', 'password': 'never-send-this',
+    }))
+    def unexpected(**_):
+        raise AssertionError('Identity and career do not need the repository index')
+    monkeypatch.setattr(chat_context.rag, 'catalog', unexpected)
+    for question in ('quem é o dono desse site?', 'sobre o sato deveria ter, fala dele',
+                     'E a experiência dele?', 'Me fala da formação do Leonardo'):
+        context = chat_context.collect(None, question)
+        profile = context['owner_profile']
+        assert profile['name'] == 'Leonardo Sato'
+        assert 'rag' not in context
+        assert 'birth_date' not in profile and 'password' not in profile
+    assert chat_context.collect(None, 'E a experiência dele?')['owner_profile']['experience'][0]['role'] == 'Dev'
+    assert 'birth_date' not in chat_context.collect(None, 'Qual a idade da Terra?')['owner_profile']
+
+
+def test_project_overview_includes_readmes_metadata_and_changes_without_github_keyword(vm, monkeypatch):
+    docs = []
+    for repo in ('satoLG/game', 'satoLG/portfolio'):
+        docs += [
+            {'type': 'readme', 'repo': repo, 'title': repo + ' README',
+             'preview': 'Objetivo documentado de ' + repo, 'url': repo + '/README.md'},
+            {'type': 'repository_metadata', 'repo': repo, 'url': repo,
+             'repository_metadata': {'primary_language': 'JavaScript'}},
+            {'type': 'commit', 'repo': repo, 'title': 'Melhora controles',
+             'updated': '2026-11-12', 'url': repo + '/commit/1'},
+        ]
+    monkeypatch.setattr(chat_context.rag, 'catalog', lambda **_: {'docs': docs, 'total': len(docs)})
+    for question in ('Quais trabalhos ele fez até então?', 'E seus projetos?',
+                     'O que ele desenvolveu recentemente?'):
+        overview = chat_context.collect(None, question)['rag']['project_overview']
+        assert {item['repo'] for item in overview} == {'satoLG/game', 'satoLG/portfolio'}
+        for item in overview:
+            assert item['readme']['preview'] == 'Objetivo documentado de ' + item['repo']
+            assert item['repository_metadata']['primary_language'] == 'JavaScript'
+            assert item['recent_changes'][0]['url'] == item['repo'] + '/commit/1'
+
+
+def test_project_follow_up_keeps_target_and_explicit_project_switch_wins(vm, monkeypatch):
+    docs = [{'type': 'readme', 'repo': 'satoLG/' + name, 'preview': name}
+            for name in ('game', 'portfolio')]
+    monkeypatch.setattr(chat_context.rag, 'catalog', lambda **_: {'docs': docs})
+    previous = [{'question': 'Fala do repositório game', 'repository': 'satoLG/game'}]
+    assert chat_context.collect(None, 'Como ele funciona?', previous)['rag']['target_repositories'] == ['satoLG/game']
+    assert chat_context.collect(None, 'E o portfolio?', previous)['rag']['target_repositories'] == ['satoLG/portfolio']
+    switched = [{'question': 'Quem é Sato?'}] + previous
+    assert chat_context.collect(None, 'Como ele funciona?', switched)['rag'] == {'reference_unresolved': True}
+
+
+def test_project_overview_is_bounded_and_recent_queries_use_commit_dates(vm, monkeypatch):
+    docs = [{'type': 'readme', 'repo': f'satoLG/project-{i}', 'preview': 'Documentado'} for i in range(9)]
+    docs += [
+        {'type': 'commit', 'repo': 'satoLG/project-0', 'title': 'Antigo',
+         'updated': '2020-01-01', 'url': 'old/1'},
+        {'type': 'commit', 'repo': 'satoLG/project-1', 'title': 'Novo',
+         'updated': datetime.now(timezone.utc).isoformat(), 'url': 'new/1'},
+    ]
+    monkeypatch.setattr(chat_context.rag, 'catalog', lambda **_: {'docs': docs})
+    result = chat_context.collect(None, 'Quais projetos ele fez?')['rag']
+    assert len(result['project_overview']) == 6 and result['project_overview_is_partial']
+    assert result['documents'] == []
+    assert all(set(group) == {'repo', 'commit_count'} for group in result['commit_summary']['by_repo'])
+    recent = chat_context.collect(None, 'Quais projetos nos últimos 3 meses?')['rag']['project_overview']
+    assert [item['repo'] for item in recent] == ['satoLG/project-1']
+
+
+def test_missing_or_invalid_profile_does_not_break_context(vm):
+    assert chat_context.collect(None, 'Quem é Sato?') == {}
+    directory = config.HERMES_HOME / 'private'
+    directory.mkdir()
+    path = directory / 'owner-profile.json'
+    for content in ('not json', '[]'):
+        path.write_text(content)
+        assert chat_context.collect(None, 'Quem é Sato?') == {}

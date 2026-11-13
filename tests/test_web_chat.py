@@ -14,7 +14,7 @@ from hermes_dashboard import web_chat
 
 
 @pytest.fixture
-def private_chat(tmp_path, monkeypatch):
+def private_chat(vm, tmp_path, monkeypatch):
     monkeypatch.setattr(web_chat, "LOGIN_ATTEMPTS", defaultdict(deque))
     monkeypatch.setattr(web_chat, "ENABLED", True)
     monkeypatch.setattr(web_chat, "PASSWORD_HASH", generate_password_hash("senha-forte-de-teste"))
@@ -172,3 +172,45 @@ def test_language_follow_up_reuses_verified_target_only_in_same_conversation(pri
         {"repo": "satoLG/game", "primary_language": "JavaScript"}
     ]
     assert "repository_metadata" not in rag_context(prompts[2])
+
+
+def test_owner_and_project_evidence_reach_runner_in_conversation(private_chat, monkeypatch):
+    directory = web_chat.config.HERMES_HOME / 'private'
+    directory.mkdir()
+    (directory / 'owner-profile.json').write_text(json.dumps({
+        'name': 'Leonardo Sato', 'bio': 'Desenvolvedor de software.',
+        'experience': [{'organization': 'Empresa', 'role': 'Dev Python'}],
+        'birth_date': '1996-06-05',
+    }))
+    docs = [
+        {'type': 'readme', 'repo': 'satoLG/game', 'preview': 'Jogo de defesa 3D',
+         'url': 'https://github.com/satoLG/game'},
+        {'type': 'repository_metadata', 'repo': 'satoLG/game',
+         'repository_metadata': {'primary_language': 'JavaScript'}},
+        {'type': 'commit', 'repo': 'satoLG/game', 'title': 'Ajusta controles',
+         'updated': '2026-11-12', 'url': 'https://github.com/satoLG/game/commit/abc'},
+    ]
+    monkeypatch.setattr(web_chat.chat_context.rag, 'catalog', lambda **_: {'docs': docs})
+    payloads = []
+    def run(payload, _):
+        payloads.append(payload)
+        return 'Resposta apoiada no contexto.'
+    monkeypatch.setattr(web_chat.RUNNER, 'run', run)
+    headers = authorize(private_chat)
+    for question in ('Quem é o dono desse site?', 'E a experiência dele?', 'Quais trabalhos ele fez até então?'):
+        response = private_chat.post('/api/lab/hermes-chat/jobs', headers=headers, json={
+            'robot_id': 'guide:hermes', 'question': question, 'conversation_id': 'c' * 32,
+        })
+        assert response.status_code == 202
+        row = web_chat._claim()
+        web_chat._finish(row, answer=web_chat._answer(row))
+    contexts = [json.loads(payload['prompt'].split('Contexto JSON:\n')[1].split('\nPergunta JSON:')[0])['vm_context']
+                for payload in payloads]
+    assert all(context['owner_profile']['name'] == 'Leonardo Sato' for context in contexts)
+    assert all('birth_date' not in context['owner_profile'] for context in contexts)
+    assert contexts[1]['owner_profile']['experience'][0]['role'] == 'Dev Python'
+    project = contexts[2]['rag']['project_overview'][0]
+    assert project['readme']['preview'] == 'Jogo de defesa 3D'
+    assert project['repository_metadata']['primary_language'] == 'JavaScript'
+    assert project['recent_changes'][0]['url'].endswith('/commit/abc')
+    assert len(payloads[2]['history']) == 4

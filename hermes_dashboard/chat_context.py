@@ -131,22 +131,52 @@ def _owner_profile(question):
     plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
     birth = re.search(r"\b(?:nascimento|nasceu|nasci|idade|aniversario)\b", plain)
     owner = re.search(r"\b(?:leo(?:nardo)?|gutierrez|sato|meu|minha|meus|minhas|mim|eu|nasci)\b", plain)
-    profile = re.search(r"\b(?:bio(?:grafia)?|perfil|carreira|curriculo|formacao|estudos|faculdade|formou|"
+    details = re.search(r"\b(?:bio(?:grafia)?|perfil|carreira|curriculo|formacao|estudos|faculdade|formou|"
                         r"certificad\w*|certificac\w*|experiencia|cargos?|empregos?|trabalh\w*)\b", plain)
     personal_languages = re.search(r"\b(?:linguagens?|tecnologias?)\b.*\b(?:us\w*|conhec\w*|domin\w*)\b", plain)
-    if not (owner and (birth or profile or personal_languages)):
-        return None
     try:
         data = json.loads((config.HERMES_HOME / "private/owner-profile.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict):
         return None
-    fields = ("name", "website", "linkedin", "github", "bio", "skills", "experience",
-              "education", "certificates", "project_languages", "sources")
-    if birth:
+    # A small professional identity is always available in the private chat.
+    # Detailed career records are attached on demand, including pronoun follow-ups.
+    fields = ("name", "website", "linkedin", "github", "bio", "skills", "sources")
+    if details or personal_languages:
+        fields += ("experience", "education", "certificates", "project_languages")
+    if owner and birth:
         fields += ("birth_date",)
     return scrub({key: data[key] for key in fields if key in data})
+
+
+def _project_overview(docs, commits, question):
+    """Return bounded evidence per project, never infer a stack from its name."""
+    repos = sorted({doc['repo'] for doc in docs if doc.get('repo')})
+    recent = bool(_words(question) & {'recente', 'recentes', 'recentemente', 'ultimos', 'ultimas'})
+    overview = []
+    for repo in repos:
+        sources = [doc for doc in docs if doc.get('repo') == repo]
+        readmes = [doc for doc in sources if doc.get('type') == 'readme']
+        metadata = next((doc for doc in sources if isinstance(doc.get('repository_metadata'), dict)), {})
+        changes = sorted((doc for doc in commits if doc.get('repo') == repo),
+                         key=lambda doc: str(doc.get('updated') or ''), reverse=True)
+        if recent and not changes:
+            continue
+        readme = max(readmes, key=lambda doc: str(doc.get('updated') or ''), default={})
+        overview.append({
+            'repo': repo,
+            'readme': {key: readme.get(key) for key in ('title', 'preview', 'url', 'updated')} if readme else None,
+            'repository_metadata': metadata.get('repository_metadata', {}),
+            'metadata_source': metadata.get('url'),
+            'recent_changes': [{key: doc.get(key) for key in ('title', 'url', 'updated')} for doc in changes[:2]],
+        })
+    overview.sort(key=lambda item: (
+        bool(item['readme']) if not recent else True,
+        str(item['recent_changes'][0].get('updated') or '') if item['recent_changes'] else '',
+        item['repo'],
+    ), reverse=True)
+    return overview[:6]
 
 
 def _previous_repository(docs, previous):
@@ -163,25 +193,37 @@ def _previous_repository(docs, previous):
             target = summary.get("ranked_repository") or summary.get("earliest_indexed_commit")
             if target:
                 return target["repo"]
+        # An explicit change to the person's career ends the previous project
+        # reference; do not resurrect an older repository across that change.
+        if _words(question) & {'sato', 'leonardo', 'dono', 'carreira', 'experiencia', 'formacao'}:
+            return None
     return None
 
 
 def collect(snapshot, question, previous=()):
     context = {}
     words = _words(question)
+    plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
     if profile := _owner_profile(question):
         context["owner_profile"] = profile
     repository_question = bool(words & {"git", "github", "satolg", "repo", "repos", "repositorio", "repositorios",
                                         "commit", "commits", "rag", "indexado", "indexados"})
     repo_details = bool(words & {"linguagem", "linguagens", "stack", "readme", "extensao", "extensoes",
                                  "arquivos", "tecnologia", "tecnologias"})
+    project_question = bool(words & {"projeto", "projetos", "portfolio", "portifolio", "trabalhos"}
+                            or re.search(r"\b(?:fez|desenvolveu|construiu|criou)\b", plain))
     follow_up = bool(re.search(
         r"\b(?:des[st][ea]|nes[st][ea]|es[st][ea]|daquel[ea])\s+(?:reposit[oó]rio|repo|projeto)\b"
         r"|\b(?:linguagem|linguagens|extens[oõ]es|arquivos|stack|readme)\b.*\b(?:del[ea]|nel[ea])\b",
         question, re.I) or previous and re.fullmatch(
             r"\s*(?:e\s+)?(?:(?:qual|quais)\s+)?(?:(?:a|o|as|os)\s+)?(?:linguagem|stack|extens[oõ]es|arquivos)[?.\s]*",
-            question, re.I))
-    if snapshot is None and not (repository_question or follow_up or repo_details and not profile):
+            question, re.I) or previous and re.search(r"\b(?:ele|ela|dele|dela)\b", plain)
+            and words & {'funciona', 'funcionamento', 'faz', 'serve', 'objetivo', 'melhorias', 'mudou'})
+    # Explicit project names also work without a GitHub keyword. Avoid an index
+    # read for every greeting; known names are loaded only for project requests.
+    named_project = bool(re.search(r"\b(?:e o|e a|fala d[oa]|sobre [oa])\s+\S+", plain)
+                         and not words & {'sato', 'leonardo', 'leo', 'dono'})
+    if snapshot is None and not (repository_question or follow_up or repo_details or project_question or named_project):
         return context
 
     scope = (str(config.HERMES_HOME), str(config.RAG_PATH), str(Path.cwd()))
@@ -201,7 +243,7 @@ def collect(snapshot, question, previous=()):
     if unresolved:
         context["rag"] = {"reference_unresolved": True}
         return context
-    if snapshot is None and not (repository_question or summary["selected_repositories"]):
+    if snapshot is None and not (repository_question or summary["selected_repositories"] or project_question):
         return context
     commit_question = bool(words & {"commit", "commits"})
     oldest = summary.get("earliest_indexed_commit")
@@ -241,6 +283,15 @@ def collect(snapshot, question, previous=()):
             {"repo": doc["repo"], **doc["repository_metadata"]}
             for doc in all_relevant if isinstance(doc.get("repository_metadata"), dict)
         ]
+    elif project_question and 'requested_rank' not in summary:
+        context['rag']['project_overview'] = _project_overview(all_docs, commit_docs, question)
+        context['rag']['project_overview_is_partial'] = True
+        if not commit_question:
+            # The overview already carries each project's sources. Avoid
+            # duplicating snippets and unrelated commit examples in the prompt.
+            context['rag']['documents'] = []
+            summary['by_repo'] = [{key: group[key] for key in ('repo', 'commit_count')}
+                                  for group in summary['by_repo']]
     context["limits"] = "O índice local contém amostras de documentos e commits. Ele não substitui uma leitura do código atual."
     cleaned = scrub(context)
     # Retain the VM readings and document excerpts when a busy host has many runs.
