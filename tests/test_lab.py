@@ -19,10 +19,7 @@ def quiet_host(monkeypatch):
     lab._cache.clear()
 
 
-def test_lab_missing_sources_still_explorable(client):
-    page = client.get("/lab")
-    assert page.status_code == 200
-    assert b"js/lab.js" in page.data
+def test_dashboard_telemetry_handles_missing_sources(client):
     state = client.get("/api/lab/state").get_json()
     assert state["telemetry_available"] is False
     assert len(state["sectors"]) == 8
@@ -30,8 +27,8 @@ def test_lab_missing_sources_still_explorable(client):
     assert not any(w["status"] in ("running", "recent", "process") for w in state["workers"])
     assert state["metrics"]["cpu"] is None
     assert state["warnings"]
-    assert b'href="/lab"' in client.get("/dashboard").data
-    assert b'href="/lab"' in client.get("/").data
+    assert b'href="/lab"' not in client.get("/dashboard").data
+    assert b'href="/lab"' not in client.get("/").data
 
 
 def test_visual_instruments_expose_real_metrics_and_only_catalog_metadata(vm, client, monkeypatch):

@@ -3,17 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:navigation": "node --test tests/lab-navigation.test.mjs tests/lab-campus.test.mjs",
+    "test:unit": "node --test tests/*.test.mjs",
     "test:browser": "playwright test",
     "build:three": "node tools/build-three.mjs",
-    "build:sato": "node tools/build-sato.mjs",
-    "refine:sato": "node tools/refine-sato.mjs",
-    "style:sato": "node tools/style-sato.mjs",
     "build:typewriter": "node tools/build-typewriter.mjs",
-    "build:chat-markdown": "node tools/build-chat-markdown.mjs",
-    "test:avatar": "node --test tests/lab-avatar.test.mjs tests/sato-anatomy.test.mjs tests/sato-style.test.mjs tests/sato-polish.test.mjs",
-    "test:rigs": "node --test tests/lab-rigs.test.mjs tests/lab-batch.test.mjs tests/companion-model.test.mjs",
-    "test:controls": "node --test tests/lab-controls.test.mjs"
+    "build:chat-markdown": "node tools/build-chat-markdown.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

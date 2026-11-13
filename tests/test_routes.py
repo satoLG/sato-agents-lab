@@ -20,38 +20,13 @@ def test_maquina_limpa(client):
     check_all(client, "maquina limpa")
 
 
-def test_model_inspector_without_vm_or_navigation_link(client):
-    response = client.get('/models')
-    assert response.status_code == 200
-    assert 'Estúdio de modelos' in response.get_data(as_text=True)
-    for route in ['/', '/dashboard', '/lab']:
-        assert 'href="/models"' not in client.get(route).get_data(as_text=True)
-
-
-def test_orb_is_standalone_and_serves_versioned_local_assets(client):
-    from html.parser import HTMLParser
-
-    class Assets(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.urls = []
-
-        def handle_starttag(self, tag, attrs):
-            attrs = dict(attrs)
-            if tag == 'script' or (tag == 'link' and attrs.get('rel') == 'stylesheet'):
-                self.urls.append(attrs.get('src') or attrs.get('href'))
-
-    response = client.get('/orb')
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert 'Um mundo' in body and 'id="orb-scene"' in body
-    assets = Assets()
-    assets.feed(body)
-    assert len(assets.urls) == 4
-    for url in assets.urls:
-        assert url.startswith('/lab-assets/')
-        assert client.get(url).status_code == 200
-    assert 'js/home.js' not in body and 'js/lab.js' not in body
+def test_only_home_and_dashboard_remain(client):
+    for route in ('/lab', '/orb', '/models'):
+        assert client.get(route).status_code == 404
+    home = client.get('/').get_data(as_text=True)
+    assert 'href="/dashboard"' not in home
+    assert 'href="/lab"' not in home and 'href="/orb"' not in home
+    assert 'href="/"' in client.get('/dashboard').get_data(as_text=True)
 
 
 def test_banco_vazio_sem_tabelas(vm, client):

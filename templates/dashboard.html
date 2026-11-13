@@ -178,6 +178,6 @@
 {% block loading %}{{ loading('dashboard-loading','dashboard-progress','dashboard-loading-stage','Preparando dashboard…') }}{% endblock %}
 
 {% block scripts %}
-<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/app.js') }}"></script>
-<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/dashboard-live.js') }}"></script>
+<script type="module" src="{{ url_for('versioned_asset', version=asset_version, filename='js/app.js') }}"></script>
+<script type="module" src="{{ url_for('versioned_asset', version=asset_version, filename='js/dashboard-live.js') }}"></script>
 {% endblock %}

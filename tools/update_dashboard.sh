@@ -41,7 +41,7 @@ trap 'rm -rf -- "$candidate"' EXIT
 git archive "$new" | tar -x -C "$candidate" || die 'could not stage candidate'
 python="$repo/venv/bin/python"
 [[ -x $python ]] || die 'dashboard virtual environment is missing'
-(cd "$candidate" && "$python" -m compileall -q app.py hermes_dashboard && "$python" tools/check_html.py >/dev/null && "$python" -c 'from app import app; assert app.test_client().get("/lab").status_code == 200') || die 'candidate validation failed'
+(cd "$candidate" && "$python" -m compileall -q app.py hermes_dashboard && "$python" tools/check_html.py >/dev/null && "$python" -c 'from app import app; assert app.test_client().get("/").status_code == 200') || die 'candidate validation failed'
 
 git merge --ff-only "$new" || die 'fast-forward failed'
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
@@ -54,8 +54,8 @@ fi
 
 healthy=false
 for attempt in $(seq 1 20); do
-  if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/lab -o /dev/null 2>/dev/null &&
-     curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/api/lab/state -o /dev/null 2>/dev/null; then
+  if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/ -o /dev/null 2>/dev/null &&
+     curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/dashboard -o /dev/null 2>/dev/null; then
     healthy=true
     break
   fi
@@ -66,4 +66,4 @@ if [[ $healthy != true ]]; then
   systemctl --user restart "$service" || true
   die 'health check failed; restored previous revision'
 fi
-printf 'Dashboard updated: %s -> %s; /lab and /api/lab/state healthy.\n' "${old:0:8}" "${new:0:8}"
+printf 'Dashboard updated: %s -> %s; / and /dashboard healthy.\n' "${old:0:8}" "${new:0:8}"

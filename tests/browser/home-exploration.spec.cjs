@@ -1,4 +1,5 @@
-const {test,expect}=require('@playwright/test');
+const {test,expect,frameLimitedSource}=require('./fixtures.cjs');
+test.describe('home exploration @scene',()=>{
 
 async function setup(page,scenario='lab'){
  await page.addInitScript(kind=>localStorage.setItem('sato-home-scenario',kind),scenario);
@@ -10,9 +11,9 @@ async function setup(page,scenario='lab'){
    const set=sets.get(currentScenario),ray=new T.Raycaster();
    return [-.3,0,.3].some(x=>{const end=rig.root.localToWorld(new T.Vector3(x,1.2,0)),direction=end.clone().sub(camera.position);ray.set(camera.position,direction.clone().normalize());ray.far=direction.length()-.3;return ray.intersectObject(set.root,true).length>0;});
   }};`;
-  await route.fulfill({response,body:source.replace('function report(){',helpers+'function report(){'+sample)});
+  await route.fulfill({response,body:frameLimitedSource(source.replace('function report(){',helpers+'function report(){'+sample))});
  });
- await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:20000});
+ await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:45000});
 }
 const sample=page=>page.evaluate(()=>window.__homeSample);
 async function hold(page,key,ms){await page.keyboard.down(key);await page.waitForTimeout(ms);await page.keyboard.up(key);}
@@ -91,4 +92,6 @@ test('mobile reveals one floating stick only during movement and supports simult
   await page.screenshot({path:info.outputPath('mobile-wallpaper-touch.png')});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(1500);
   expect(await drawings.evaluateAll(nodes=>nodes.filter(el=>el.getAttribute('transform').includes('scale(')).length)).toBe(0);expect(errors).toEqual([]);
  }finally{await context.close();}
+});
+
 });

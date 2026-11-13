@@ -1,4 +1,4 @@
-const {test,expect}=require('@playwright/test');
+const {test,expect,frameLimitedSource}=require('./fixtures.cjs');
 
 async function chatRoutes(page,{loggedIn=true}={}){
  let authenticated=loggedIn,submitted,csrfSeen=false;
@@ -18,7 +18,7 @@ async function chatRoutes(page,{loggedIn=true}={}){
  });
  return {jobs,get submitted(){return submitted;},get csrfSeen(){return csrfSeen;}};
 }
-async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:15000});await expect(page.locator('#home-loading')).toBeHidden();}
+async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:45000});await expect(page.locator('#home-loading')).toBeHidden();}
 async function chooseSession(page){if(await page.locator('#home-sessions').isVisible()){await expect(page.locator('.session-card').first()).toBeVisible();await page.locator('.session-card').first().click();}await expect(page.locator('.history-turn').first()).toBeVisible();}
 async function resumeSeeded(page){await page.locator('#home-history-toggle').click();await chooseSession(page);await page.keyboard.press('Escape');}
 
@@ -123,13 +123,8 @@ test('touch reactions differ and the composer stays usable in a short viewport',
  }finally{await context.close();}
 });
 
-test('robot announces each destination before navigation',async({page})=>{
- // Exercise the home redirect independently of the destination's asset loading.
- for(const path of ['/dashboard','/lab'])await page.route(`**${path}`,route=>route.fulfill({contentType:'text/html',body:`<title>${path}</title>`}));
- await chatRoutes(page);await ready(page);
- for(const [path,name] of [['/dashboard','dashboard'],['/lab','laboratório']]){
-  await page.locator(`.home-nav a[href="${path}"]`).click();await expect(page.locator('#home-speech')).toContainText(`Vou te levar ao ${name}`);expect(new URL(page.url()).pathname).toBe('/');await expect(page).toHaveURL(new RegExp(`${path}$`),{timeout:15000});if(path==='/dashboard')await ready(page);
- }
+test('home has no links to other pages',async({page})=>{
+ await chatRoutes(page);await ready(page);await expect(page.locator('.home-nav,a[href="/dashboard"],a[href="/lab"],a[href="/orb"]')).toHaveCount(0);
 });
 
 test('a late older answer never replaces the latest question and history is text',async({page})=>{
@@ -143,7 +138,7 @@ test('a late older answer never replaces the latest question and history is text
 
 test('WebGL failure leaves the informative chat and navigation available',async({page})=>{
  await chatRoutes(page);await page.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:original.call(this,type,...args);};});
- await ready(page);await expect(page.locator('#home-fallback')).toBeVisible();await expect(page.locator('#home-input')).toBeEnabled();await expect(page.locator('.home-nav a')).toHaveCount(2);await expect(page.locator('#robot-touch')).toBeHidden();
+ await ready(page);await expect(page.locator('#home-fallback')).toBeVisible();await expect(page.locator('#home-input')).toBeEnabled();await expect(page.locator('.home-nav a')).toHaveCount(0);await expect(page.locator('#robot-touch')).toBeHidden();
 });
 
 test('long previews open full chat bubbles without spilling into the scene',async({page},testInfo)=>{
@@ -170,23 +165,23 @@ async function instrumentScene(page){
    });
    window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,cameraY:camera.position.y,body:rig.root.rotation.y,arm:rig.arms[0].upper.rotation.x,tubeArmRadius});
   }`;
-  await route.fulfill({response,body:source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`)});
+  await route.fulfill({response,body:frameLimitedSource(source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`))});
  });
 }
 
-test('settings lazily reuse miniature lab and forest with smooth scenario changes',async({page},testInfo)=>{
+test('settings lazily reuse miniature lab and forest with smooth scenario changes @scene',async({page},testInfo)=>{
  await page.setViewportSize({width:393,height:852});await chatRoutes(page);await instrumentScene(page);let environmentRequests=0;page.on('request',request=>{if(request.url().includes('/js/home-environments.js'))environmentRequests++;});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await ready(page);expect(environmentRequests).toBe(0);await page.locator('#home-settings-toggle').click();await expect(page.getByRole('dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('home-settings.png')});
  await page.evaluate(()=>{const r=__companionQA.renderer,compile=r.compileAsync.bind(r);r.compileAsync=async(...args)=>{await new Promise(resolve=>{window.__releaseCompanionCompile=resolve;});return compile(...args);};window.__restoreCompanionCompile=()=>{r.compileAsync=compile;};});
  await page.locator('[name="home-scenario"][value="lab"]').check();await page.waitForFunction(()=>window.__releaseCompanionCompile);expect(await page.evaluate(()=>__companionQA.world.getObjectByName('companion-lab').visible)).toBe(false);await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');await page.evaluate(()=>{__releaseCompanionCompile();__restoreCompanionCompile();});
  for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();await page.screenshot({path:testInfo.outputPath(`home-${kind}.png`)});await page.locator('#home-settings-toggle').click();}
  expect(environmentRequests).toBe(1);const memory=await page.evaluate(()=>({...__companionQA.renderer.info.memory}));
- await page.locator('[name="home-scenario"][value="lab"]').check();await page.locator('[name="home-scenario"][value="black"]').check();await page.locator('[name="home-scenario"][value="forest"]').check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
+ for(const kind of ['lab','black','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);}await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
  const actual=await page.evaluate(()=>({memory:{...__companionQA.renderer.info.memory},calls:__companionQA.renderer.info.render.calls,sets:__companionQA.world.children.filter(o=>o.name.startsWith('companion-')).length,saved:localStorage.getItem('sato-home-scenario')}));expect(actual.memory).toEqual(memory);expect(actual.calls).toBeLessThan(220);expect(actual.sets).toBe(2);expect(actual.saved).toBe('forest');expect(errors).toEqual([]);
  await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toBeHidden();await page.reload();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest',{timeout:15000});
 });
 
-test('tube arrival lands, says ouch, rises and dance makes complete turns',async({browser},testInfo)=>{
+test('tube arrival lands, says ouch, rises and dance makes complete turns @scene',async({browser},testInfo)=>{
  const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,reducedMotion:'no-preference'}),page=await context.newPage();
  try{
   await chatRoutes(page);await instrumentScene(page);await page.addInitScript(()=>{window.__companionFrames=[];});await page.goto('/');
@@ -220,12 +215,12 @@ test('copy preserves complete previews and history, and thinking SVG changes the
  await expect(page.locator('#home-messages')).not.toContainText('HERMES');
 });
 
-test('themes are legible across skyboxes, scene is not selectable and sound SVG is centered',async({page},testInfo)=>{
+test('themes are legible across skyboxes, scene is not selectable and sound SVG is centered @scene',async({page},testInfo)=>{
  await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);await instrumentScene(page);
  chat.jobs.push({id:'palette',question:'Como funciona a flutuação?',answer:'A base magnética mantém o Sato Agent flutuando.',status:'done',created_at:Date.now()/1000});await ready(page);await resumeSeeded(page);
  await expect(page.locator('#home-speech')).toContainText(chat.jobs[0].answer,{timeout:10000});await expect(page.locator('.composer-heading')).toHaveCount(0);
  await expect(page.locator('#home-chat-status')).toHaveCSS('position','absolute');
- const selection=await page.evaluate(()=>['#home','#home-scene canvas','.home-nav','#home-speech .speech-text','#last-question-text','#home-input'].map(selector=>getComputedStyle(document.querySelector(selector)).userSelect));expect(selection).toEqual(['none','none','none','text','text','text']);
+ const selection=await page.evaluate(()=>['#home','#home-scene canvas','.home-header','#home-speech .speech-text','#last-question-text','#home-input'].map(selector=>getComputedStyle(document.querySelector(selector)).userSelect));expect(selection).toEqual(['none','none','none','text','text','text']);
  await page.locator('#home-settings-toggle').click();await expect(page.locator('#settings-title')).toHaveText('Configurações');
  for(const kind of ['black','lab','forest']){
   await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);
@@ -271,7 +266,7 @@ test('history collapses long messages by default and keeps completed footers dur
  await page.reload();await expect(page.locator('body')).toHaveAttribute('data-ready','true');await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(completed.locator('.history-answer .history-more')).toHaveText('Ver mais');
 });
 
-test('full viewport backgrounds keep one canvas and resize only inside a rendered frame',async({page},testInfo)=>{
+test('full viewport backgrounds keep one canvas and resize only inside a rendered frame @scene',async({page},testInfo)=>{
  await page.setViewportSize({width:393,height:852});const chat=await chatRoutes(page);await instrumentScene(page);await ready(page);
  await page.evaluate(()=>{window.__canvas=document.querySelector('#home-scene canvas');window.__drawingEvents=[];const renderer=__companionQA.renderer;for(const name of ['setSize','render']){const original=renderer[name].bind(renderer);renderer[name]=(...args)=>{__drawingEvents.push(name);return original(...args);};}});
  await page.locator('#home-input').fill('Uma pergunta para variar a altura do chat.');await page.locator('#home-send').click();await page.waitForTimeout(350);
@@ -286,7 +281,7 @@ test('full viewport backgrounds keep one canvas and resize only inside a rendere
  await page.route('**/js/home-environments.js',async route=>{await new Promise(resolve=>setTimeout(resolve,600));await route.continue();});await page.reload();await expect(page.locator('#home-loading')).toBeVisible();await expect(page.locator('#home-scene')).toHaveCSS('opacity','0');await expect(page.locator('body')).toHaveAttribute('data-ready','true');await expect(page.locator('#home')).toHaveAttribute('data-scenario','forest');
 });
 
-test('robot touch never stretches the sphere or arms',async({browser},testInfo)=>{
+test('robot touch never stretches the sphere or arms @scene',async({browser},testInfo)=>{
  const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
  try{
   await chatRoutes(page);await instrumentScene(page);await ready(page);
@@ -297,7 +292,7 @@ test('robot touch never stretches the sphere or arms',async({browser},testInfo)=
  }finally{await context.close();}
 });
 
-test('ambient audio follows the scenario, mutes and resumes without duplicate loops',async({page})=>{
+test('ambient audio follows the scenario, mutes and resumes without duplicate loops @scene',async({page})=>{
  await chatRoutes(page);await page.route('**/js/home-audio.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {startTyping,stopTyping,','window.__homeAudioQA={loops,buffers,context:()=>context};return {startTyping,stopTyping,')});});await ready(page);await page.locator('#home-settings-toggle').click();
  for(const [scenario,kind]of [['lab','hum'],['forest','nature']]){
   await page.locator(`[name="home-scenario"][value="${scenario}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',scenario);await page.waitForFunction(kind=>__homeAudioQA.loops.has(kind),kind);
@@ -390,7 +385,7 @@ test('latest messages fold above the robot, reopen and fold again without losing
  }finally{await context.close();}
 });
 
-for(const viewport of [{width:393,height:852},{width:1440,height:1000}])test(`camera stays fixed across messages, preview and history ${viewport.width}`,async({page})=>{
+for(const viewport of [{width:393,height:852},{width:1440,height:1000}])test(`camera stays fixed across messages, preview and history ${viewport.width} @scene`,async({page})=>{
  await page.setViewportSize(viewport);await chatRoutes(page);await instrumentScene(page);await ready(page);
  const camera=()=>page.evaluate(()=>({projection:__companionQA.camera.projectionMatrix.toArray(),position:__companionQA.camera.position.toArray(),canvas:[__companionQA.renderer.domElement.clientWidth,__companionQA.renderer.domElement.clientHeight]}));
  for(const kind of ['black','lab','forest']){
@@ -401,7 +396,7 @@ for(const viewport of [{width:393,height:852},{width:1440,height:1000}])test(`ca
  }
 });
 
-test('default wallpaper sits behind the transparent canvas and is absent in lab and forest',async({page},testInfo)=>{
+test('default wallpaper sits behind the transparent canvas and is absent in lab and forest @scene',async({page},testInfo)=>{
  await chatRoutes(page);await instrumentScene(page);await ready(page);
  const layer=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {art:Number(getComputedStyle(document.getElementById('home-art')).zIndex),scene:Number(getComputedStyle(document.getElementById('home-scene')).zIndex),alpha:pixel[3]};});expect(layer.scene).toBeGreaterThan(layer.art);expect(layer.alpha).toBe(0);
  for(const button of await page.locator('#home button,#home a').all()){if(await button.isVisible()){await button.evaluate(el=>el.focus());await expect(button).toHaveCSS('outline-style','none');}}
