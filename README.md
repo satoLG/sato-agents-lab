@@ -1,7 +1,7 @@
 # Flask + HTMX Dashboard for Sato Agents
 
 Sato Agent 3D e chat na raiz, dashboard de observabilidade
-em abas e laboratório interativo.
+em abas.
 
 ## Rodando
 
@@ -10,54 +10,15 @@ pip install flask pyyaml       # lancedb e fastembed so para a aba de RAG
 python3 app.py                 # http://127.0.0.1:8080
 ```
 
-Abra `/` para conversar, `/dashboard` para os indicadores ou `/lab` para explorar.
-
-## orb
-
-`/orb` é uma cena independente e sem painéis: um núcleo esférico sob água azul
-com transmissão em 100% e ondulação em 90%, uma ilha maior e mais plana no topo
-e estrelas ao redor. O shader de vértices deforma a água e recalcula suas normais;
-o material físico mantém refração e um brilho branco. A ilha usa as mesmas árvores da
-floresta e sua grama procedural, com maior densidade e volume. A referência
-visual da água é a aula
-[Wobbly Sphere](https://threejs-journey.com/lessons/wobbly-sphere-shader) do Three.js
-Journey; a implementação é local, sem dependências de CDN ou da telemetria.
-
-A espuma acompanha interseções com geometria opaca, usando o shader de
-profundidade do portfólio. O loading replica seu círculo preenchido por ondas,
-percentual, blur e celebração; o botão de entrada libera a cena pronta.
-Fontes e adaptações estão em [docs/orb.md](docs/orb.md).
-
-Arraste para orbitar; use a roda ou dois dedos para zoom. Com foco na cena, setas
-giram, `+`/`-` ajustam o zoom, `0` restaura a vista e espaço pausa/retoma.
-O Play inicia um som suave de mar; o botão de som e `M` permitem silenciar.
-A lua rochosa orbita e gira lentamente, orientando a maré. Junto à ilha, a água
-cobre mais a areia existente e mantém uma faixa de praia exposta ao redor da grama.
-Essa faixa tem um vai e vem suave, e a água mantém apenas o brilho de uma luz
-branca, sem sombras ou imagens da lua e das árvores na refração.
-
-Sato começa dormindo, sentado no centro da ilha. Um ícone circular discreto,
-com o mesmo estilo do controle de mensagens da home, o acorda. Os controles
-usam os ícones, cores, superfícies e fonte compartilhados do site.
-A adaptação usa o casco, os braços,
-a antena e o estilo de olho do modelo original; as pernas seguem os braços,
-mais curtas. O display preto acompanha a esfera do corpo. Clique nele ou pressione `E`
-com foco na cena para controlar. `WASD`/setas andam pelo planeta acompanhando
-a gravidade; espaço ou Pular permitem pulo duplo. Arraste para olhar e use
-`Esc` ou Voltar à órbita para sair. No celular, use o direcional e Pular com
-dois dedos. Há colisões com ilha, pedras e troncos, pegadas na areia e espuma,
-partículas e ondulações ao caminhar e pular no mar. Os sons dos movimentos
-mudam entre grama, areia, rocha e água, com efeitos próprios para pulos e pousos.
-Movimento reduzido começa com a animação pausada e a câmera interativa. Sem
-WebGL 2, a página apresenta uma mensagem e opção de recarregar.
+Abra `/` para conversar ou `/dashboard` para os indicadores. A principal não contém links para o Dashboard. As páginas `/lab`, `/orb` e `/models` foram removidas, assim como seus recursos exclusivos. Os cenários opcionais da principal continuam disponíveis.
 
 ## UI e telemetria compartilhadas
 
 `fragments/site-ui.html` e `sato-ui.css` definem navegação, superfícies e loading
-nas três páginas. Cada aba do Dashboard apresenta diretamente os indicadores
-da sua estação, recebidos pelo mesmo `/api/lab/stream` que alimenta o Lab.
+na principal e no Dashboard. Cada aba do Dashboard apresenta diretamente os indicadores
+recebidos por `/api/lab/stream`. O endpoint de telemetria e a API privada de chat conservam seus endereços por compatibilidade.
 `telemetry-indicators.js` e `telemetry-ui.js` compartilham indicadores, históricos
-e a tabela de modelos entre Dashboard e os modais dos equipamentos.
+e a tabela de modelos do Dashboard.
 
 A aba Providers agrega por modelo **e provider**, incluindo tokens e custo,
 sem consultar APIs de um provedor específico. A fonte é `session_model_usage`
@@ -205,215 +166,6 @@ gerais, declara lacunas e não pode executar ferramentas. Esse contexto contém
 leituras selecionadas das fontes do dashboard, não acesso arbitrário em tempo
 real a qualquer arquivo da VM.
 
-## Laboratório 3D
-
-Abra `/lab` pelo link **Laboratório 3D** no dashboard ou na página inicial.
-É uma segunda visualização do mesmo host e das mesmas fontes do Hermes: não
-precisa de outro serviço, Node.js em produção ou conexão com CDN. Three.js
-0.180.0 e sua licença MIT estão em `static/vendor/`; o cenário e os personagens
-são locais. O avatar e os robôs usam o mesmo modelo flutuante procedural da página inicial,
-com casco esférico, olho, braços rígidos e propulsor. Bancadas e racks usam
-`scene-equipment.js`; árvores, água e grama compartilham as bases da página inicial.
-
-- Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
-  memória/skills, EVENTS (cron jobs e webhooks) e infraestrutura. As linhas do piso representam a
-  arquitetura conceitual, não tráfego de rede capturado.
-- A cena Three.js ocupa toda a tela; mapa, telemetria e conversa são overlays.
-  WASD/setas movem; Shift ou **Correr** alterna para corrida. Clique esquerdo/F dá um soco e Espaço/**Pular** salta. Clique direito no piso
-  escolhe um destino; arraste com o botão direito para girar e use a roda para zoom.
-  No celular, arrastar a área inferior esquerda anda; o analógico aparece durante
-  o toque e as ações aparecem no canto inferior direito enquanto ele se move.
-  Correr, pular e socar usam ícones locais do Game-icons.net (CC BY 3.0), e o som fica junto das câmeras no topo. A interação usa um
-  botão flutuante, sem seleção de texto, com ícone de toque ou tecla E conforme
-  o dispositivo usado. Ele escolhe uma posição acima/abaixo do personagem que
-  evita cobrir o objeto. O personagem gira na direção do movimento. **Seguir** acompanha o personagem;
-  **Sala** enquadra o laboratório. Placas físicas identificam as estações.
-- O som é opcional. O soco usa uma amostra local do Portal 2;
-  o salto usa um efeito arcade sintetizado, com subida imediata e altura de 1,65 m.
-  robôs têm servos, terminais têm teclas e feedback, equipamentos têm
-  mecanismos e as linhas iluminadas têm pulsos elétricos. O volume e o estéreo
-  seguem a distância e a câmera, com silêncio fora do alcance. Motores, ventiladores e água têm loops locais atenuados por distância;
-  até quatro fontes próximas tocam juntas, com natureza no exterior e um fundo
-  contínuo de equipamentos no salão. A recepção permanece mais silenciosa. A origem e os recortes estão em `static/audio/portal2/`.
-- A lista de estações/robôs escolhe um destino e o personagem flutua até ele,
-  contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
-  dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
-  mantendo balões e formulário dentro da tela; Escape encerra a conversa.
-  Sem WebGL 2, o painel de telemetria e o dashboard continuam disponíveis.
-- Guias explicam cada setor. Robôs individuais representam processos detectados,
-  registros em `agent_runs`/`subagent_runs`, servidores MCP e jobs. O laboratório
-  lê até 48 registros por tabela de agentes. Mostra até quatro robôs por setor:
-  responsável e três trabalhadores que compartilham uma única bancada por setor. Selecionar outro robô na lista reserva
-  uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
-  Cada setor tem uma fileira com painel numerado, seis monitores e um painel
-  de histórico do mesmo tamanho do numerado, com espaço entre eles. O grid
-  reserva células de 2 m no chão e na parede; detalhes em [docs/lab-grid.md](docs/lab-grid.md). O gateway fica na parede da recepção, atrás do robô. O responsável do
-  núcleo usa a mesma carcaça esférica, em escala maior, com óptica laranja.
-- O avatar usa `lab-avatar.js`, `lab-rigs.js` e `scene-art.js`, a mesma base do
-  robô inicial. O corpo inclina na direção local do impulso; os braços ficam
-  neutros durante o deslocamento, sem passos ou clipes de caminhada. O salto
-  continua como impulso vertical e as ações explícitas continuam disponíveis.
-
-- Dados ausentes aparecem como **sem telemetria**, nunca como uma execução
-  fictícia. **Atividade recente** significa um evento nos últimos 180 segundos;
-  **processo detectado** não confirma trabalho. Registros `running` sem um
-  timestamp recente aparecem como **último estado sem confirmação**. Identidade
-  e parentesco vêm de `id`/`run_id`/`agent_id` e `parent_id`/`parent_run_id`.
-- A VM tem dois corredores entre armários de servidor. Seus monitores mostram
-  CPU/RAM/disco em barras de progresso e os processos por uso de CPU, a cada
-  snapshot (5 s). Falhas preservam a última leitura identificada; sem leitura
-  anterior aparece um traço. Os tubos dos providers ficam no corredor lateral,
-  com conexões alinhadas ao percurso e circulação ilustrativa de líquido por
-  entrada superior e retorno inferior; o painel mantém os dados reais da amostra recente.
-- A oficina de skills tem pilhas de livros e exibe o catálogo no sexto monitor.
-  MCP tem caixas de ferramentas e uma blueprint; o núcleo tem um cérebro em
-  água; EVENTS tem relógios de fusos reais que apitam nos horários dos crons
-  próximos quando o som está ativado.
-  O mural na parede mostra o calendário real de atividades (365 dias, UTC),
-  atualizado a cada 15 s. O catálogo de skills usa o cache existente de 30 s.
-- Exterior e recepção escurecem nas passagens das portas e são retirados da
-  renderização ao avançar; perto de paredes opacas só o ambiente atual fica
-  visível. Retornam ao sair pelas passagens. Portas e mural acompanham as paredes nos recortes da câmera.
-  As árvores internas e externas compartilham folhagem e casca texturizada, com
-  uma árvore maior e cipós num espaço livre à direita. O riacho usa reflexos e
-  ondulações suaves, e as pedras têm variação mineral e musgo.
-- Dentro de RAG, **Explorar rede RAG** aproxima a cúpula menor, montada sobre seu projetor: clique nos pontos ou
-  na lista para abrir repositórios/categorias/documentos. A busca usa o mesmo
-  `/api/rag/search` do dashboard (LanceDB/fastembed), mostra trechos e distâncias
-  reais e anima as conexões dos resultados. O layout 3D é ilustrativo: não
-  representa coordenadas originais dos embeddings nem o caminho interno do
-  índice. São até 180 nós e 12 resultados por busca; falhas preservam o último
-  grafo. O catálogo da cúpula atualiza a cada minuto fora do explorador.
-- Com `HERMES_WEB_CHAT_PASSWORD_HASH` e `HERMES_WEB_CHAT_SESSION_SECRET`
-  configurados, a conversa privada enfileira perguntas para o **Hermes real**.
-  A pergunta e o estado ficam em SQLite (`~/.hermes/web-chat.sqlite3`, WAL), e
-  a interface consulta o resultado periodicamente sem manter uma conexão longa
-  com o túnel. O worker tenta novamente até três vezes e recupera trabalhos
-  interrompidos após o prazo de processamento. O histórico permanece ao fechar
-  a página. Sem a configuração privada, a prévia local mantém as respostas
-  determinísticas de telemetria usadas antes.
-- O chat web é limitado a respostas informativas. Pedidos de ação recebem
-  explicações, usa dados e documentos selecionados da VM e inicia uma
-  sessão Hermes separada com o toolset vazio `context_engine`. Antes
-  de cada chamada, verifica no Hermes instalado que esse toolset resolve para
-  **zero ferramentas**; se isso mudar, falha fechado. O texto da pergunta vai
-  pela entrada padrão do runner JSON, sem shell. Assim o Hermes não recebe
-  terminal, escrita de arquivos, MCP, navegador nem ferramentas de delegação.
-  O bloqueio de execução é estrutural; o modelo ainda pode produzir uma resposta
-  imprecisa, então estados e métricas continuam atribuídos à telemetria.
-- O acesso ao chat exige senha própria, sessão assinada em cookie HttpOnly,
-  Secure e SameSite Strict, token CSRF, origem coincidente e limite de tentativas
-  de login. Isso protege o chat; as outras rotas do dashboard permanecem com a
-  política de acesso anterior.
-- `/api/lab/state` atualiza a cada 5 segundos; os catálogos têm cache de 30
-  segundos por processo Flask. `/api/lab/chat` aceita JSON com `robot_id` e
-  `question` (até 500 caracteres). Falhas isoladas de coleta não derrubam os
-  demais setores. Polling e animação param quando a página fica oculta.
-
-Para habilitar o chat privado na VM, defina no ambiente do serviço Flask
-`HERMES_WEB_CHAT_PASSWORD_HASH` (hash gerado por
-`werkzeug.security.generate_password_hash`) e
-`HERMES_WEB_CHAT_SESSION_SECRET` (segredo aleatório longo). Mantenha ambos fora
-do Git e preserve os valores entre reinícios. O processo Flask único da VM
-executa o worker em segundo plano. O Hermes instalado deve estar em
-`~/.hermes/hermes-agent`; o worker usa a configuração de provider desse Hermes.
-Quando o provider falha, a pergunta continua no banco para nova tentativa.
-
-### Campus e identidade visual
-
-A identidade compartilhada usa a imagem fornecida pelo proprietário (`static/sato-logo.png`)
-como logo e favicon e a Nunito local em todas as páginas e textos da cena.
-O campus usa escala visual 0,7, com navegação em coordenadas lógicas, fachada mais baixa,
-letreiro arredondado e enquadramento inicial responsivo. Os materiais CC0 de 1K e o céu
-HDR da Poly Haven estão em `static/textures/polyhaven/`, com fontes e licença no README.
-Nenhum desses recursos depende de CDN em produção.
-
-A recepção tem um atendimento GATEWAY unificado, mapa físico numerado e divisória
-com passagem central para visitantes e um vão de esteira. O salão é pré-compilado
-em preto durante o loading; piso, equipamentos e luzes aparecem gradualmente ao
-atravessar a porta, sem recriar os setores. A transição termina mesmo com movimento
-reduzido. As paredes entre a câmera e o interior são recortadas suavemente.
-
-O layout agrupa GATEWAY (00), INFRA / VM (01), CORE / HERMES (02),
-INTEGRATIONS / PROVIDERS e MCP (03–04), DATA / MEMORY e RAG (05–06) e SCHEDULE / CRON (07).
-O CORE tem duas sequências de degraus e patamar intermediário; a navegação e os robôs
-usam as mesmas alturas da geometria. Pisos e rodapés têm afastamentos explícitos para
-evitar planos coplanares. As áreas têm contornos retangulares arredondados, indicadores
-verticais claros e visores digitais. Os SVGs locais são do Lucide (licença em
-`static/icons/lucide/LICENSE`); o mapa usa a mesma numeração e posições físicas.
-Pontos azuis no piso animam o fluxo entre o CORE e as áreas. Tubos largos transportam
-pacotes ilustrativos, e o painel de atividades ocupa a parede de fundo.
-
-O exterior segue a composição da referência do Nintendo Museum: painéis modulares
-com juntas, faixas contínuas de vidro, marquise longa e painel escuro junto à quina.
-A cápsula em relevo contorna somente “Sato Agents”, com “LAB” separado abaixo.
-A calçada tem contorno arredondado, meios-fios, grelhas de drenagem e canteiros com
-árvores e forrações; uma faixa de asfalto distingue a rua da área de pedestres.
-
-A clareira é cercada por floresta instanciada, com menos cartões de folhagem nas
-árvores distantes. O relevo usa ruído em múltiplas escalas e a mesma interpolação
-dos triângulos para apoiar troncos e personagens. Um shader mistura grama e solo
-Forest Floor da Poly Haven, com borda irregular. O terreno distante desvanece
-sobre o céu real por alfa, eliminando a faixa sólida da fog no limite do plano.
-
-O interior usa uma linguagem de câmara de testes inspirada nas referências de Portal 2:
-placas cinza com juntas, painéis de parede, carcaças brancas, bases grafite e luzes ciano.
-As texturas procedurais de 512 px acrescentam granulação, parafusos e desgaste leve,
-sem texturas extraídas do jogo. Ao atravessar a entrada, o exterior e o céu escurecem
-gradualmente; ao sair, recuperam a luminosidade. O multiplicador atua após a iluminação
-e a mistura do terreno, sem modificar os materiais internos. A posição lateral ao
-prédio não dispara essa transição. `tests/browser/chamber.spec.cjs` verifica entrada,
-saída, preservação da cor interna e compilação dos materiais.
-
-Pacotes reutilizáveis percorrem as esteiras, caem com aceleração, quicam e se acomodam
-em uma bandeja de triagem com caixas acumuladas. Sete entregadores percorrem rotas que
-desviam de equipamentos e posições de trabalhadores, param para coleta/depósito e
-voltam sem carga. Isso continua sendo uma ilustração da arquitetura, não telemetria de tarefas.
-
-O áudio é ativado pelo visitante: passos, portas, chegada ao salão, painéis, conversa,
-coleta/queda de caixas e ambiente usam amostras locais da biblioteca indicada.
-Fontes e créditos estão em `static/audio/portal2/README.md`. O som das caixas diminui
-com a distância; ocultar a página pausa o áudio.
-
-Validação: `npm run test:navigation` verifica colisões, degraus e queda de pacotes.
-`tests/browser/lab-layout.spec.cjs` verifica o atendimento único, rotas, entrega,
-transição reversível com movimento reduzido e decodificação das amostras de áudio.
-
-### Plataformas e jardim interno
-
-Os setores internos ficam em plataformas metálicas a 1,86 m, ligados por passarelas
-retas e corrimãos. Uma rampa liga a recepção ao nível elevado; o CORE preserva seus
-degraus acima desse nível. Geometria e navegação compartilham a mesma planta: o
-personagem e os entregadores permanecem nas plataformas, e as rotas azuis seguem
-somente segmentos ortogonais. Abaixo há vegetação instanciada, rochas e um riacho
-com ondulação de superfície. As paredes internas têm 16 m; o calendário de atividade
-fica na metade superior, com centro a 12 m, acima dos equipamentos.
-
-Carcaças e equipamentos mantêm mapas de acabamento, relevos e reflexos metálicos
-após o agrupamento de geometria. Robôs compartilham o casco, a óptica e o
-propulsor da página inicial. Flutuação, piscar e respostas usam poses distintas. Os sons de personalidade e piscada,
-ventiladores, motores e água vêm da biblioteca Portal 2 indicada pelo proprietário;
-pequenos gestos de áudio procedurais complementam os samples. Os créditos e a
-revisão exata da fonte estão em `static/audio/portal2/botanical-sources.json`.
-
-### Interações e EVENTS
-
-O botão contextual **E** aparece perto dos robôs (**Conversar**), no RAG
-(**Explorar vetores**) e nas demais estações (**Ver indicadores**). No celular,
-toque no botão. O acesso adicional **Explorar rede RAG** continua disponível
-na área RAG, inclusive perto de seu robô. Balões e histórico têm rolagem e
-reservam espaço para o formulário de conversa dentro da tela.
-
-O setor e a aba **EVENTS** reúnem cron jobs e webhooks via `/api/events`.
-Os jobs preservam as fontes de `/api/cronjobs`. Webhooks são lidos do formato
-oficial do Hermes: `platforms.webhook.extra.routes` no `HERMES_CONFIG_PATH` e
-`webhook_subscriptions.json` dentro de `HERMES_HOME`. Rotas estáticas têm
-precedência sobre subscriptions com o mesmo nome. A API publica apenas
-metadados (nome, eventos, perfil, associação a cron e estado configurado),
-sem segredos, headers de autenticação ou prompts. Essa leitura não comprova
-que a VM está recebendo eventos. Se a instalação usar outro formato, a fonte
-aparece indisponível e será necessário adaptar o leitor ao arquivo da VM.
-
 ### Atualizar a VM
 
 O job Hermes `update-dashboard` roda a cada 30 minutos em modo `no_agent`.
@@ -422,8 +174,8 @@ Sua cópia instalada em `~/.hermes/scripts/update-dashboard.sh` corresponde a
 `main` de `satoLG/sato-agents-lab` por Git, tenta novamente em falhas de rede,
 e só aceita avanço linear com os arquivos versionados locais intactos. Antes
 de trocar a versão em `/home/leona/projects/hermes-dashboard`, valida Python,
-templates e a rota `/lab` em uma cópia temporária. Depois reinicia
-`hermes-dashboard.service` e verifica `/lab` e `/api/lab/state`. Se o serviço
+templates e a rota `/` em uma cópia temporária. Depois reinicia
+`hermes-dashboard.service` e verifica `/` e `/dashboard`. Se o serviço
 não voltar saudável, restaura a revisão anterior. Sem commit novo, não reinicia
 nem envia notificação. Para alterar o próprio procedimento de atualização,
 atualize também a cópia instalada no Hermes após integrar o PR.
@@ -444,34 +196,21 @@ As variáveis `HERMES_*` continuam sendo as mesmas documentadas abaixo. O
 processo precisa ler os arquivos reais do Hermes para mostrar atividade real;
 rodar em outra máquina mostra os recursos dessa outra máquina.
 
-### Validar o laboratório
+### Validar o site
 
 ```bash
 python -m pytest tests/ -q
 python tools/check_html.py
-# Em outro terminal, mantenha python app.py rodando.
-npm ci                       # ferramentas de desenvolvimento, não de produção
-npx playwright install chromium
-npm run test:navigation
+npm ci
+npm run test:unit
+# Com python app.py rodando em outro terminal:
 npm run test:browser
 ```
 
-`LAB_TEST_URL` pode apontar os testes de navegador para outro endereço local.
-Os testes cobrem dados ausentes, eventos Unix/ISO, subagentes e parentesco,
-estados antigos, isolamento de coletores, validação da conversa, renderização
-WebGL em tela cheia, colisão e caminhos, acesso aos sete setores, proximidade
-para conversar, subagentes, texto não confiável, reconexão, mobile e fallback sem GPU.
-Em Windows sem privilégio de symlink, o teste preexistente
-`test_symlink_quebrado_na_memoria` precisa ser executado em Linux ou excluído
-localmente com `-k 'not symlink_quebrado'`.
-
-Para reconstruir a dependência 3D: `npm ci && npm run build:three`. O arquivo
-gerado é versionado; preserve `static/vendor/THREE-LICENSE.txt` nas atualizações.
-
-> **Sem autenticacao.** O dashboard e as rotas `/api/*` estao abertos a quem
-> alcancar a porta, e expoem processos, disco, memoria e o config (redigido) da
-> VM. Rode atras de tunel SSH, firewall ou basic auth do nginx enquanto a auth
-> de verdade nao existe.
+Playwright separa a interface e o chat (`--project=ui`) das cenas WebGL da
+principal (`--project=scenes`). Os testes mantêm desenho e compilação reais,
+limitando a resolução, a frequência dos frames e a densidade de grama decorativa durante os testes para não saturar GPUs por software. As geometrias de colisão e os shaders continuam sendo exercitados. O CI só executa navegador quando a alteração toca a aplicação web, templates, recursos, configuração ou testes de navegador; alterações isoladas nos coletores e no contexto do Hermes passam pelos testes Python.
+Não há testes de páginas Orb, Lab ou estúdio de modelos: essas páginas foram removidas.
 
 ### Se algo nao aparecer ou der erro
 
@@ -532,7 +271,7 @@ static/
   js/                      um modulo ES por aba + core/charts compartilhados
   vendor/                  htmx e cytoscape servidos localmente, sem CDN
 templates/
-  base.html                shell; dashboard.html; home.html; lab.html
+  base.html                shell; dashboard.html; home.html
   fragments/live.html      fragmento trocado pelo HTMX
 ```
 

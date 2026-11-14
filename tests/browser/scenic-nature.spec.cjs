@@ -1,10 +1,10 @@
-const {test,expect}=require('@playwright/test');
+const {test,expect,frameLimitedSource}=require('./fixtures.cjs');
 
-test('leaf and water shaders compile, animate on the GPU and honor reduced motion',async({page})=>{
+test('leaf and water shaders compile, animate on the GPU and honor reduced motion @scene',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
- await page.route('**/js/home-scene.js*',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {arrive,react,setScenario,','window.natureQA={world,renderer};return {arrive,react,setScenario,')});});
+ await page.route('**/js/home-scene.js*',async route=>{const response=await route.fetch();await route.fulfill({response,body:frameLimitedSource((await response.text()).replace('return {arrive,react,setScenario,','window.natureQA={world,renderer};return {arrive,react,setScenario,'))});});
  await page.addInitScript(()=>localStorage.setItem('sato-home-scenario','forest'));
- await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true');
+ await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:45000});
  const initial=await page.evaluate(async()=>{
   const {ShaderLib}=await import('/static/vendor/three.module.min.js'),{world,renderer}=natureQA;
   const foliage=world.getObjectByName('wind-canopies'),water=world.getObjectByName('forest-river');

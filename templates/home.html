@@ -1,5 +1,5 @@
-{% from 'fragments/site-ui.html' import navigation, loading %}
-{% macro icon(name) -%}<svg aria-hidden="true" focusable="false"><use href="{{ url_for('lab_asset', version=lab_asset_version, filename='icons/lucide.svg') }}#{{ name }}"/></svg>{%- endmacro %}
+{% from 'fragments/site-ui.html' import loading %}
+{% macro icon(name) -%}<svg aria-hidden="true" focusable="false"><use href="{{ url_for('versioned_asset', version=asset_version, filename='icons/lucide.svg') }}#{{ name }}"/></svg>{%- endmacro %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -8,19 +8,18 @@
   <meta name="theme-color" content="#111b21">
   <meta name="color-scheme" content="dark">
   <title>Sato Agent</title>
-  <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" type="image/png">
-  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/identity.css') }}">
-  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/scene-ui.css') }}">
-  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home.css') }}">
-  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/home-appearance.css') }}">
-  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/sato-ui.css') }}">
+  <link rel="icon" href="{{ url_for('versioned_asset', version=asset_version, filename='sato-logo.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('versioned_asset', version=asset_version, filename='css/identity.css') }}">
+  <link rel="stylesheet" href="{{ url_for('versioned_asset', version=asset_version, filename='css/scene-ui.css') }}">
+  <link rel="stylesheet" href="{{ url_for('versioned_asset', version=asset_version, filename='css/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('versioned_asset', version=asset_version, filename='css/home-appearance.css') }}">
+  <link rel="stylesheet" href="{{ url_for('versioned_asset', version=asset_version, filename='css/sato-ui.css') }}">
 </head>
 <body data-page="home" data-ready="false">
 <main id="home" data-theme="cyan" data-scenario="black" aria-label="Converse com o Sato Agent">
   <svg class="logo-filters" aria-hidden="true"><defs><filter id="home-logo-ink" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -.3333 -.3333 -.3333 1 0"/></filter></defs></svg>
   <header class="home-header">
-    <a class="brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('lab_asset', version=lab_asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="30" height="30"></a>
-    {{ navigation('home') }}
+    <a class="brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('versioned_asset', version=asset_version, filename='sato-logo.png') }}" alt="Sato Agents" width="30" height="30"></a>
   </header>
   <div id="home-scene" aria-hidden="true"></div>
   <div id="home-art" aria-hidden="true"></div>
@@ -63,8 +62,8 @@
     </div></fieldset>
     <div class="settings-sound"><strong>Som do robô</strong><button id="home-sound" class="icon-button" type="button" aria-pressed="false" aria-label="Ativar som do robô" title="Som do robô"><span class="sound-waves">{{ icon('volume-2') }}</span><span class="sound-muted">{{ icon('volume-x') }}</span></button></div>
   </dialog>
-  <noscript><div class="home-noscript glass"><p>Ative JavaScript para conversar com o Sato Agent.</p><a href="/dashboard">{{ icon('layout-dashboard') }} Dashboard</a> · <a href="/lab">{{ icon('flask-conical') }} Lab</a></div></noscript>
+  <noscript><div class="home-noscript glass"><p>Ative JavaScript para conversar com o Sato Agent.</p></div></noscript>
 </main>
-<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/home.js') }}"></script>
+<script type="module" src="{{ url_for('versioned_asset', version=asset_version, filename='js/home.js') }}"></script>
 </body>
 </html>

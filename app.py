@@ -1,4 +1,4 @@
-"""Sato Agent companion, Hermes dashboard and laboratory.
+"""Sato Agent companion and Hermes dashboard.
 
 A coleta de dados mora no pacote hermes_dashboard/; aqui ficam so as rotas.
 Rodar com: python3 app.py  (ou gunicorn app:app)
@@ -17,16 +17,16 @@ from hermes_dashboard import config, lab_feed, streaming
 app = Flask(__name__)
 web_chat.configure(app)
 
-# A version in the path also versions relative ES-module imports and GLB URLs.
-# Reusing /static/js/lab.js can pair cached pre-immersive JS with today's HTML.
+# A version in the path also versions relative ES-module imports and assets.
+# Reusing an unversioned module can pair cached JavaScript with today's HTML.
 _static_root = Path(app.static_folder)
-_lab_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
-_lab_digest = hashlib.sha256()
-for _path in [Path(app.root_path) / 'templates/lab.html', Path(app.root_path) / 'templates/home.html', Path(app.root_path) / 'templates/orb.html', *_lab_files]:
-    _lab_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
-    _lab_digest.update(b'\0')
-    _lab_digest.update(_path.read_bytes())
-LAB_ASSET_VERSION = _lab_digest.hexdigest()[:16]
+_asset_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
+_asset_digest = hashlib.sha256()
+for _path in [Path(app.root_path) / 'templates/home.html', Path(app.root_path) / 'templates/dashboard.html', *_asset_files]:
+    _asset_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
+    _asset_digest.update(b'\0')
+    _asset_digest.update(_path.read_bytes())
+ASSET_VERSION = _asset_digest.hexdigest()[:16]
 
 # O dashboard de observabilidade existente continua público. O novo chat Hermes
 # tem autenticação própria; não confundir essa proteção com a das demais rotas.
@@ -75,7 +75,7 @@ def json_guard(producer, empty):
 
 @app.route("/")
 def home():
-    return render_template("home.html", lab_asset_version=LAB_ASSET_VERSION)
+    return render_template("home.html", asset_version=ASSET_VERSION)
 
 
 @app.route("/api/stats")
@@ -87,31 +87,16 @@ def api_stats():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html", lab_asset_version=LAB_ASSET_VERSION, stats=stats.public_stats(),
+    return render_template("dashboard.html", asset_version=ASSET_VERSION, stats=stats.public_stats(),
                            models=stats.models_config(),
                            paths={"db": str(config.DB_PATH), "rag": str(config.RAG_PATH)})
 
 
 # --- aba: atividade ---
 
-@app.route("/lab")
-def laboratory():
-    return render_template("lab.html", lab_asset_version=LAB_ASSET_VERSION)
-
-
-@app.get("/models")
-def model_inspector():
-    return render_template("models.html", lab_asset_version=LAB_ASSET_VERSION)
-
-
-@app.get("/orb")
-def orb():
-    return render_template("orb.html", lab_asset_version=LAB_ASSET_VERSION)
-
-
-@app.route("/lab-assets/<version>/<path:filename>")
-def lab_asset(version, filename):
-    if version != LAB_ASSET_VERSION:
+@app.route("/assets/<version>/<path:filename>")
+def versioned_asset(version, filename):
+    if version != ASSET_VERSION:
         abort(404)
     return app.send_static_file(filename)
 
