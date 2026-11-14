@@ -6,7 +6,7 @@ async function setup(page,scenario='lab'){
  await page.route('**/api/lab/hermes-chat/session',route=>route.fulfill({json:{available:false,authenticated:false}}));
  await page.route('**/js/home-scene.js',async route=>{
   const response=await route.fetch(),source=await response.text();
-  const sample=`window.__homeSample={position:rig.root.position.toArray(),heading:rig.root.rotation.y,camera:camera.position.toArray(),eye:rig.pupil.position.toArray(),head:rig.head.rotation.toArray(),scenario:currentScenario,active:navigation.active,draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,center:rig.root.localToWorld(new T.Vector3(0,1.2,0)).project(camera).toArray(),fov:camera.fov};`;
+  const sample=`window.__homeSample={position:rig.root.position.toArray(),heading:rig.root.rotation.y,camera:camera.position.toArray(),eye:[rig.face.gaze.x,rig.face.gaze.y],head:rig.head.rotation.toArray(),scenario:currentScenario,active:navigation.active,draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,center:rig.root.localToWorld(new T.Vector3(0,1.2,0)).project(camera).toArray(),fov:camera.fov};`;
   const helpers=`window.__homeQA={place(x,z){rig.root.position.set(x,0,z);},occluded(){
    const set=sets.get(currentScenario),ray=new T.Raycaster();
    return [-.3,0,.3].some(x=>{const end=rig.root.localToWorld(new T.Vector3(x,1.2,0)),direction=end.clone().sub(camera.position);ray.set(camera.position,direction.clone().normalize());ray.far=direction.length()-.3;return ray.intersectObject(set.root,true).length>0;});
@@ -53,14 +53,14 @@ test('forest works all around, stops at shore/hedges and returns to the robot',a
  await scenario(page,'Padrão','black');await expect(page.locator('#home-explore')).toBeHidden();expect((await sample(page)).position[0]).toBeCloseTo(0,2);expect(errors).toEqual([]);
 });
 
-test('iris follows all pointer quadrants while the optic stays inside its socket',async({page},info)=>{
+test('LED eyes follow all pointer quadrants and stay on the visor',async({page},info)=>{
  await setup(page);
  const views=[];
  for(const [x,y]of [[120,150],[1300,150],[1300,850],[120,850]]){
-  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.hypot(s.eye[0],s.eye[1]-.015)).toBeLessThanOrEqual(.0251);expect(s.eye[2]).toBe(.611);expect(s.head.slice(0,3)).toEqual([0,0,0]);
+  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.abs(s.eye[0])).toBeLessThanOrEqual(34*.27+.5);expect(Math.abs(s.eye[1])).toBeLessThanOrEqual(19*.2+.5);expect(s.head.slice(0,3)).toEqual([0,0,0]);
 
  }
- expect(views[0][0]).toBeLessThan(0);expect(views[1][0]).toBeGreaterThan(0);expect(views[0][1]).toBeGreaterThan(.015);expect(views[2][1]).toBeLessThan(.015);
+ expect(views[0][0]).toBeLessThan(0);expect(views[1][0]).toBeGreaterThan(0);expect(views[0][1]).toBeGreaterThan(0);expect(views[2][1]).toBeLessThan(0);
 });
 
 test('wallpaper bounces, displaces neighbors, restores and ignores composer input',async({page},info)=>{

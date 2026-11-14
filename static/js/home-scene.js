@@ -1,5 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
-import {createRigFactory,poseRig,setRigBlink} from './lab-rigs.js';
+import {createCompanionBot,poseCompanion} from './companion-bot.js';
 import {createDeliveryChute} from './lab-chute.js';
 import {updateNature} from './nature-motion.js';
 import {createSceneArt} from './scene-art.js';
@@ -18,9 +18,10 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const fill=new T.DirectionalLight('#95ceff',2.2);fill.position.set(4,2,1);world.add(fill);
  const rim=new T.DirectionalLight('#79c6ff',3);rim.position.set(1,3,-4);world.add(rim);
  const camera=new T.PerspectiveCamera(42,1,.1,160),art=createSceneArt();
- const rig=createRigFactory(art).robot({floating:true});rig.root.name='sato-companion';rig.root.rotation.y=.12;rig.root.visible=false;world.add(rig.root);
+ const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ const rig=createCompanionBot(art,{reduced:()=>reducedMotion.matches});rig.root.name='sato-companion';rig.root.rotation.y=.12;rig.root.visible=false;world.add(rig.root);
  const chute=createDeliveryChute(world,art,{height:8,radius:1.08});chute.visible=false;
- const reduced=matchMedia('(prefers-reduced-motion: reduce)'),sets=new Map(),pendingSets=new Map();
+ const reduced=reducedMotion,sets=new Map(),pendingSets=new Map();
  let width=1,height=1,frame=0,last=0,time=0,speakingUntil=0,reaction=null,disposed=false,lookYaw=0,body,resizePending=true;
  let bufferWidth=0,bufferHeight=0,lookPitch=0,frontFov=42;
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
@@ -60,30 +61,26 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(age<1.85){rig.root.visible=false;return;}
   rig.root.visible=true;
   if(age<2.6){
-   stage('fall');const p=(age-1.85)/.75;rig.root.position.y=3.05*(1-p*p);rig.root.rotation.z=-.25*p;rig.root.rotation.y=.12+.25*Math.sin(p*Math.PI);
+   stage('fall');rig.face.mood('wide',.9);const p=(age-1.85)/.75;rig.root.position.y=3.05*(1-p*p);rig.root.rotation.z=-.25*p;rig.root.rotation.y=.12+.25*Math.sin(p*Math.PI);
    // Unfold only after the entire shell clears the mouth; never widen inside it.
    const clearance=smooth((3.05-(rig.root.position.y+1.84))/.65);
    rig.root.rotation.z=-.18*clearance;
    for(const arm of rig.arms){arm.upper.rotation.set(-.15*clearance,0,arm.side*(.025+.9*clearance));}
   }else if(age<3.35){
-   stage('ouch');const p=smooth((age-2.6)/.75);rig.root.position.y=-.05;rig.hips.position.y=.42;rig.root.rotation.z=-.18*(1-p);rig.spine.rotation.x=.18;setRigBlink(rig,.8);rig.spine.rotation.z=-.13;
+   stage('ouch');const p=smooth((age-2.6)/.75);rig.root.position.y=-.05;rig.hips.position.y=.42;rig.root.rotation.z=-.18*(1-p);rig.spine.rotation.x=.18;rig.face.mood('ouch',.8);rig.spine.rotation.z=-.13;
    for(const arm of rig.arms){arm.upper.rotation.x=-.7;arm.lower.rotation.x=-.5;}
    for(const leg of rig.legs){leg.upper.rotation.x=-.7;leg.lower.rotation.x=1.05;leg.ankle.rotation.x=-.35;}
   }else if(age<4.6){
-   stage('rise');const p=smooth((age-3.35)/1.25),crouch=1-p;rig.root.position.y=-.05*crouch;rig.hips.position.y=.54-.12*crouch;rig.spine.rotation.x=.18*crouch;rig.spine.rotation.z=-.13*crouch;
+   if(container.dataset.arrival!=='rise')rig.face.mood('happy',1.4);stage('rise');const p=smooth((age-3.35)/1.25),crouch=1-p;rig.root.position.y=-.05*crouch;rig.hips.position.y=.54-.12*crouch;rig.spine.rotation.x=.18*crouch;rig.spine.rotation.z=-.13*crouch;
    for(const leg of rig.legs){leg.upper.rotation.x=-.7*crouch;leg.lower.rotation.x=1.05*crouch;leg.ankle.rotation.x=-.35*crouch;}
    for(const arm of rig.arms){arm.upper.rotation.x=-.7*crouch;arm.lower.rotation.x=-.5*crouch;}
   }else{arrival=null;chute.visible=false;stage('settled');arrivalResolve?.();return;}
   if(age>2.65)chute.position.y=3.05+5*smooth((age-2.65)/1.9);
  }
  function pose(dt){
-  poseRig(rig,reduced.matches?0:time,dt,{speed:navigation.speed,travelAngle:navigation.travelAngle,attention:1,talk:time<speakingUntil,lookYaw,reduced:reduced.matches});
-  // The complete optic remains fixed in its recess. Only the iris translates,
-  // with radial clearance inside the .183 opening around the .151 iris.
-  const eyeX=navigation.active?0:lookYaw*.09,eyeY=navigation.active?0:lookPitch*.09;
-  const eyeLength=Math.hypot(eyeX,eyeY),eyeLimit=.025/Math.max(.025,eyeLength),eyeEase=1-Math.exp(-dt*12);
-  rig.pupil.position.x+=(eyeX*eyeLimit-rig.pupil.position.x)*eyeEase;
-  rig.pupil.position.y+=(.015+eyeY*eyeLimit-rig.pupil.position.y)*eyeEase;
+  // While exploring, the LED eyes lead into the travel direction.
+  const travel=navigation.active?{x:-Math.sin(navigation.travelAngle)*Math.min(1,navigation.speed/2.2),y:0}:null;
+  poseCompanion(rig,reduced.matches?0:time,dt,{speed:navigation.speed,travelAngle:navigation.travelAngle,talk:time<speakingUntil,reduced:reduced.matches,travel});
   if(!navigation.active&&!navigation.returning)rig.root.rotation.y=navigation.facingYaw;
   rig.root.rotation.x=rig.root.rotation.z=0;rig.root.scale.setScalar(1);rig.head.rotation.z=0;
   if(arrival){arrivalPose();return;}
@@ -108,7 +105,6 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
    }
    case 'shy':rig.spine.rotation.z=.22*envelope;rig.spine.rotation.x=.1*envelope;left.upper.rotation.x=-1.2*envelope;left.lower.rotation.x=-.65*envelope;right.upper.rotation.z=.4*envelope+.2;break;
   }
-  if(reaction.kind==='boop'||reaction.kind==='shy')setRigBlink(rig,Math.sin(Math.min(1,p*3)*Math.PI));
  }
  function updateScenario(dt){
   const out=currentScenario!==desiredScenario;level=Math.max(0,Math.min(1,level+(out?-dt/ .28:dt/.48)));
@@ -143,10 +139,11 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(++qualityFrames>=60){if(qualityElapsed/qualityFrames>.055&&pixelRatio>1){pixelRatio=Math.max(1,pixelRatio-.25);renderer.setPixelRatio(pixelRatio);}qualityFrames=0;qualityElapsed=0;}
   renderer.render(world,camera);report();
  }
- function react(kind='wave'){if(reaction?.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};container.dataset.reaction=kind;}
- function look(event){if(navigation.active||event.target.closest('dialog'))return;const bounds=container.getBoundingClientRect(),head=project(0,1.2,.4);lookYaw=T.MathUtils.clamp((event.clientX-bounds.left-head.x)/Math.max(100,bounds.width*.4),-.3,.3);lookPitch=T.MathUtils.clamp((head.y-event.clientY+bounds.top)/Math.max(100,bounds.height*.4),-.3,.3);}
+ const reactionFaces={wave:['happy',1.6],hello:['happy',2.2],boop:['ouch',.45],dance:['happy',4.2],shy:['happy',1.8]};
+ function react(kind='wave'){const [face,duration]=reactionFaces[kind]||['happy',1.4];rig.face.mood(face,duration);if(kind==='boop')setTimeout(()=>{if(!disposed)rig.face.mood('wide',.7);},450);if(reaction?.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};container.dataset.reaction=kind;}
+ function look(event){if(navigation.active||event.target.closest('dialog'))return;const bounds=container.getBoundingClientRect(),head=project(0,1.2,.4);lookYaw=T.MathUtils.clamp((event.clientX-bounds.left-head.x)/Math.max(100,bounds.width*.4),-.3,.3);lookPitch=T.MathUtils.clamp((head.y-event.clientY+bounds.top)/Math.max(100,bounds.height*.4),-.3,.3);rig.face.look(lookYaw/.3,lookPitch/.3);}
  function disposeSet(set){for(const root of [set.root,set.skybox]){root.traverse(o=>{o.geometry?.dispose();for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){for(const value of Object.values(m))if(value?.isTexture)value.dispose();m.dispose();}});root.removeFromParent();}}
- const leave=()=>{lookYaw=lookPitch=0;};const home=container.closest('#home');home.addEventListener('pointermove',look);home.addEventListener('pointerdown',look);home.addEventListener('pointerleave',leave);
+ const leave=()=>{lookYaw=lookPitch=0;rig.face.look(null);};const home=container.closest('#home');home.addEventListener('pointermove',look);home.addEventListener('pointerdown',look);home.addEventListener('pointerleave',leave);
  onProgress?.(75,'Acendendo as luzes…');rig.root.visible=true;chute.visible=true;await renderer.compileAsync(world,camera);rig.root.visible=false;chute.visible=false;renderer.render(world,camera);report();frame=requestAnimationFrame(render);
  return {arrive,react,setScenario,resize,setExploring(value){if(arrival||currentScenario!==desiredScenario)return false;return navigation.setActive(value);},get exploring(){return navigation.active;},speak(duration=2){speakingUntil=time+duration;},dispose(){
   disposed=true;arrivalResolve?.();cancelAnimationFrame(frame);observer.disconnect();navigation.dispose();home.removeEventListener('pointermove',look);home.removeEventListener('pointerdown',look);home.removeEventListener('pointerleave',leave);
