@@ -58,6 +58,11 @@ export function createCompanionAudio(onState){
   click(at,p){grit(at,.02,'bandpass',2300*p,.9,3.2);blip(at,210*p,110*p,.035,.6,'square',true);},
   thunk(at,p){grit(at,.034,'bandpass',1700*p,.8,4.2);blip(at,170*p,70*p,.07,.85,'square',true);blip(at,480*p,820*p,.08,.55);},
   toggle(at,p){grit(at,.018,'bandpass',2800*p,1,2.8);blip(at+.01,700*p,1050*p,.06,.55);},
+  // Scenario rift: a stutter of crushed tones under a rising sweep, a falling
+  // zap with a noise whoosh on the way in, and a soft thud with a chime after.
+  portalOpen(at,p){[220,880,330,1320,440,1760].forEach((f,i)=>blip(at+i*.045,f*p,f*p*(i%2?1.6:.55),.04,.5,'square',true));blip(at+.08,110*p,640*p,.5,.5,'sawtooth',true);grit(at,.3,'bandpass',2600,.8,1.4);},
+  portalEnter(at,p){grit(at,.5,'bandpass',900,.6,2.4);grit(at+.1,.35,'highpass',3200,.7,1.2);blip(at,1400*p,90*p,.42,.55,'sawtooth',true);},
+  portalArrive(at,p){blip(at,170*p,48*p,.24,.95);[1568,1175,1976].forEach((f,i)=>blip(at+.03+i*.04,f*p,f*p*.8,.035,.35,'square',true));blip(at+.1,660*p,1320*p,.2,.5);},
   key(at,p){const pitch=p*(.9+Math.random()*.25);grit(at,.012+Math.random()*.01,'bandpass',(2500+Math.random()*1600)*pitch,1.5,3);blip(at,160*pitch,90*pitch,.022,.4,'sine',true);},
  };
  function playUi(kind,pitch,delay){

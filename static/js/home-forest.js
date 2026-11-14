@@ -69,7 +69,8 @@ export async function createHomeForest(root,art){
  const resources=createGroveResources(true);
  createTreeGrove(root,trees,{seed:627,detail:true,shadows:false,resources});
  createContactShadows(root,trees);
- const grass=createHomeGrass(root,{heightAt:forestGroundHeight,waterAt:forestWaterProfile});
+ // Sparse, broad blades read as chunky tufts at the scene's pixel size.
+ const grass=createHomeGrass(root,{heightAt:forestGroundHeight,waterAt:forestWaterProfile,density:150,widthScale:2.6,heightScale:1.15});
  const shrubs=[];
  for(let i=0;i<54;i++){
   const z=-2-random()*25,p=forestWaterProfile(z),x=i%3===0?-4-random()*8:p.center+(i%2?1:-1)*(p.width+1.3+random()*2.2);

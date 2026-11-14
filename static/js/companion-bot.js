@@ -1,20 +1,34 @@
 import * as T from '../vendor/three.module.min.js';
 
 // The home companion: a plain white ball with a curved black visor. Its eyes
-// are drawn by a shader as a grid of blue LED dots, so they can sit anywhere
+// are drawn by a shader as a grid of blue LED cells, so they can sit anywhere
 // on the visor, blink, glance around and morph between expressions without
-// any extra geometry. Two half-size paddle arms orbit the ball like moons.
-const RADIUS=.54,VISOR={radius:.5465,width:2.2,height:1.22,lift:.04},GRID=[34,19];
+// any extra geometry. Two small arms orbit the ball like moons; each one can
+// sit anywhere around it, point any way, spin, and reshape between a ball and
+// a long paddle.
+const RADIUS=.54,VISOR={radius:.5465,width:2.2,height:1.22,lift:.04},GRID=[26,15];
+export const GAZE_RANGE=[GRID[0]*.2,GRID[1]*.2];
 const MOODS=['normal','happy','ouch','wide'];
 const ORBIT=.76,v=(x,y,z)=>new T.Vector3(x,y,z).normalize();
-// Arm spots as directions in body space: x right, y up, z towards the viewer.
+const SIDES=[v(-1,-.25,.15),v(1,-.25,.15)];
+// Arm styles. spots: orbit directions in body space (x right, y up, z towards
+// the viewer). shape: 0 ball … 1 paddle. aim: where the long axis points
+// ('hang' down, 'out' away from the ball, 'in', or a vector). reach scales the
+// orbit radius; spin turns the arm on its own axis and tumble end over end
+// (radians per second). A value may be a [left,right] pair.
 const POSES={
- sides:[v(-1,-.25,.15),v(1,-.25,.15)],front:[v(-.55,-.5,.9),v(.55,-.5,.9)],
- frontRight:[v(-1,-.25,.15),v(.5,-.45,.95)],frontLeft:[v(-.5,-.45,.95),v(1,-.25,.15)],
- up:[v(-.75,.7,.25),v(.75,.7,.25)],tuck:[v(-1,-.7,0),v(1,-.7,0)],shy:[v(-.3,.1,1),v(.3,.1,1)],
- back:[v(-.6,-.2,-.9),v(.6,-.2,-.9)],high:[v(-1,-.25,.15),v(.6,.85,.3)],
+ sides:{spots:SIDES},front:{spots:[v(-.55,-.5,.9),v(.55,-.5,.9)]},
+ frontRight:{spots:[SIDES[0],v(.5,-.45,.95)]},frontLeft:{spots:[v(-.5,-.45,.95),SIDES[1]]},
+ up:{spots:[v(-.75,.7,.25),v(.75,.7,.25)],aim:'out'},tuck:{spots:[v(-1,-.7,0),v(1,-.7,0)],shape:0},
+ shy:{spots:[v(-.3,.1,1),v(.3,.1,1)]},back:{spots:[v(-.6,-.2,-.9),v(.6,-.2,-.9)]},
+ high:{spots:[SIDES[0],v(.6,.85,.3)],aim:['hang','out']},
+ point:{spots:[SIDES[0],v(.3,-.05,1)],aim:['hang','out'],reach:[1,1.3]},
+ wings:{spots:[v(-1,.2,-.15),v(1,.2,-.15)],aim:'out',reach:1.15},
+ moons:{spots:SIDES,shape:0},
+ props:{spots:[v(-1,.05,0),v(1,.05,0)],aim:'out',tumble:[9,-9],reach:1.1},
 };
-const IDLE=['sides','sides','frontRight','frontLeft','front','back','high','wander','orbit'];
+const IDLE=['sides','sides','frontRight','frontLeft','front','back','high','point','wings','moons','props','wander','orbit','moonOrbit'];
+const pick=(value,i,fallback)=>value===undefined?fallback:Array.isArray(value)?value[i]:value;
 
 const vertexShader=`
 varying vec2 vUv;varying vec3 vNormal;
@@ -51,13 +65,15 @@ void main(){
  float alpha=1.-smoothstep(-.004,.002,edge);
  if(alpha<=0.)discard;
  float lit=step(face(cell),0.)*uPower;
- float d=length(fract(p)-.5),core=smoothstep(.40,.16,d),hot=smoothstep(.22,0.,d);
- float glow=exp(-max(face(p),0.)*1.1)*.28*uPower;
+ // Round LEDs up close; at chunky-pixel sizes each cell fills as one block.
+ float solid=smoothstep(.16,.32,max(fwidth(p.x),fwidth(p.y)));
+ float d=length(fract(p)-.5),core=mix(smoothstep(.40,.16,d),.8,solid),hot=mix(smoothstep(.22,0.,d),.3,solid);
+ float glow=exp(-max(face(p),0.)*1.1)*.28*uPower*(1.-solid*.5);
  vec3 n=normalize(vNormal);
  float fresnel=pow(1.-max(n.z,0.),3.);
  float streak=smoothstep(.55,.62,n.y+n.x*.35)*smoothstep(.82,.66,n.y+n.x*.35)*.22;
  vec3 color=vec3(.012,.018,.026)+vec3(.13,.17,.2)*fresnel+vec3(streak);
- color+=vec3(.03,.06,.09)*smoothstep(.34,.2,d);
+ color+=vec3(.03,.06,.09)*mix(smoothstep(.34,.2,d),.4,solid);
  color+=uLed*(core*lit*1.5+glow)+vec3(.75,.9,1.)*hot*lit*.55;
  color+=vec3(.25,.3,.34)*smoothstep(.0,-.02,edge)*smoothstep(-.03,-.012,edge);
  gl_FragColor=vec4(color,alpha);
@@ -66,7 +82,7 @@ void main(){
 function createFace(material,{reduced}){
  const u=material.uniforms,weights=new Float32Array([1,0,0,0]);
  const state={gaze:new T.Vector2(),target:new T.Vector2(),velocity:new T.Vector2(),nextGlance:.8,nextBlink:2.2,blinkAt:-1,doubleBlink:false,mood:'normal',moodUntil:0,talk:0,power:0,squash:new T.Vector2(1,1),time:0,pointer:null};
- const range=new T.Vector2(GRID[0]*.27,GRID[1]*.2);
+ const range=new T.Vector2(...GAZE_RANGE);
  function mood(kind,duration=0){if(!MOODS.includes(kind))kind='normal';state.mood=kind;state.moodUntil=duration?state.time+duration:0;}
  function blink(double=false){state.blinkAt=state.time;state.doubleBlink=double;}
  function look(x,y){state.pointer=x===null?null:new T.Vector2(x,y);}
@@ -103,70 +119,110 @@ function createFace(material,{reduced}){
  return {update,mood,blink,look,get gaze(){return state.gaze;},get expression(){return state.mood;},reset(){state.power=0;}};
 }
 
+// Chunky texels on the shell: a tiny grain map with nearest filtering.
+function grainTexture(){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=16;const ctx=canvas.getContext('2d');let seed=7;
+ for(let y=0;y<16;y++)for(let x=0;x<16;x++){seed=(seed*16807)%2147483647;const shade=232+Math.floor(seed/2147483647*4)*7;ctx.fillStyle=`rgb(${shade},${shade},${shade})`;ctx.fillRect(x,y,1,1);}
+ const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.wrapS=map.wrapT=T.RepeatWrapping;map.repeat.set(6,3);map.magFilter=T.NearestFilter;map.minFilter=T.LinearMipmapLinearFilter;return map;
+}
+// One arm mesh: a flat paddle whose morph target is a ball of the same vertex
+// grid, so a single influence reshapes it smoothly.
+function armGeometry(){
+ const profile=[[0,-.77],[.04,-.73],[.075,-.63],[.105,-.48],[.125,-.30],[.12,-.15],[.09,-.035],[.045,.02],[0,.03]].map(([x,y])=>new T.Vector2(x,y));
+ const segments=20,geometry=new T.LatheGeometry(profile,segments),position=geometry.attributes.position,normal=geometry.attributes.normal,rows=profile.length;
+ const ball=new Float32Array(position.count*3),ballNormal=new Float32Array(position.count*3),scale=new T.Vector3(.5,.5,.28),n=new T.Vector3(),radius=.105;
+ for(let i=0;i<position.count;i++){
+  position.setXYZ(i,position.getX(i)*scale.x,position.getY(i)*scale.y+.185,position.getZ(i)*scale.z);
+  n.set(normal.getX(i)/scale.x,normal.getY(i)/scale.y,normal.getZ(i)/scale.z).normalize();normal.setXYZ(i,n.x,n.y,n.z);
+  const theta=Math.PI*(1-(i%rows)/(rows-1)),phi=Math.floor(i/rows)/segments*Math.PI*2;
+  n.set(Math.sin(theta)*Math.sin(phi),Math.cos(theta),Math.sin(theta)*Math.cos(phi));
+  ball.set([n.x*radius,n.y*radius,n.z*radius],i*3);ballNormal.set([n.x,n.y,n.z],i*3);
+ }
+ geometry.morphAttributes.position=[new T.Float32BufferAttribute(ball,3)];geometry.morphAttributes.normal=[new T.Float32BufferAttribute(ballNormal,3)];
+ geometry.computeBoundingSphere();return geometry;
+}
+
 export function createCompanionBot(art,{reduced=()=>false}={}){
- const {mesh,mat,geo}=art;
+ const {mesh,geo}=art;
  const bone=(parent,name,x,y,z)=>{const b=new T.Bone();b.name=name;b.position.set(x,y,z);parent.add(b);return b;};
  const root=new T.Group(),hips=bone(root,'hips',0,.54,0),spine=bone(hips,'spine',0,.66,0),head=bone(spine,'head',0,0,0);
  const rig={type:'robot',floating:true,root,hips,spine,head,arms:[],legs:[],eyes:[],move:0};
- const shell=mat('#f1f3f0',.06,.33);
- const ball=mesh(spine,geo('companion-ball',()=>new T.SphereGeometry(RADIUS,64,40)),shell);ball.name='companion-ball';
+ const shell=new T.MeshStandardMaterial({color:'#f4f6f3',metalness:.06,roughness:.33,map:grainTexture()});
+ const ball=mesh(spine,geo('companion-ball',()=>new T.SphereGeometry(RADIUS,32,20)),shell);ball.name='companion-ball';
  const visorMaterial=new T.ShaderMaterial({vertexShader,fragmentShader,transparent:true,toneMapped:false,uniforms:{
   uGrid:{value:new T.Vector2(...GRID)},uSize:{value:new T.Vector2(VISOR.radius*VISOR.width,VISOR.radius*VISOR.height)},uLook:{value:new T.Vector2()},uSquash:{value:new T.Vector2(1,1)},
-  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uLed:{value:new T.Color('#2aa8ff')}}});
- const visor=mesh(head,geo('companion-visor',()=>new T.SphereGeometry(VISOR.radius,56,28,Math.PI/2-VISOR.width/2,VISOR.width,Math.PI/2-VISOR.height/2-VISOR.lift,VISOR.height)),visorMaterial);
+  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.2},uLed:{value:new T.Color('#2aa8ff')}}});
+ const visor=mesh(head,geo('companion-visor',()=>new T.SphereGeometry(VISOR.radius,40,20,Math.PI/2-VISOR.width/2,VISOR.width,Math.PI/2-VISOR.height/2-VISOR.lift,VISOR.height)),visorMaterial);
  visor.name='led-visor';visor.castShadow=false;
  rig.visor=visor;rig.face=createFace(visorMaterial,{reduced});
- // Arms are half-size paddles that orbit the ball like moons: each keeps a
- // direction on a sphere around the body and glides to new spots freely.
- const shape=geo('smooth-flipper',()=>new T.LatheGeometry([
-  new T.Vector2(0,-.77),new T.Vector2(.04,-.73),new T.Vector2(.075,-.63),new T.Vector2(.105,-.48),new T.Vector2(.125,-.30),new T.Vector2(.12,-.15),new T.Vector2(.09,-.035),new T.Vector2(.045,.02),new T.Vector2(0,.03)
- ],24));
+ const shape=geo('morphing-arm',armGeometry);
  for(const side of [-1,1]){
   const upper=bone(spine,side<0?'moon_L':'moon_R',0,0,0),lower=bone(upper,'moon',side*ORBIT,0,0);
-  const flipper=mesh(lower,shape,shell);flipper.scale.set(.5,.5,.28);flipper.position.y=.185;flipper.name='smooth-arm';
-  const rest=POSES.sides[side<0?0:1].clone();
-  rig.arms.push({upper,lower,side,rest,dir:rest.clone(),target:rest.clone(),travel:0,phase:side<0?1.7:0});
+  const arm=mesh(lower,shape,shell);arm.name='smooth-arm';arm.morphTargetInfluences[0]=0;
+  const rest=SIDES[side<0?0:1].clone();
+  rig.arms.push({upper,lower,mesh:arm,side,rest,dir:rest.clone(),target:rest.clone(),travel:0,phase:side<0?1.7:0,
+   shape:1,shapeGoal:1,reach:1,reachGoal:1,aim:'hang',axis:new T.Vector3(0,-1,0),spin:0,spinAngle:0,tumble:0,tumbleAngle:0});
  }
  rig.motion={pose:'sides',gesture:null,until:0,next:2.5,clock:0};
- rig.gesture=(name,duration=0)=>{const m=rig.motion;if(POSES[name]){m.pose=name;m.gesture=null;m.until=duration?m.clock+duration:0;}else{m.gesture=name;m.gestureAt=m.clock;m.until=duration?m.clock+duration:0;}m.next=m.clock+(duration||0)+2.5+Math.random()*4;};
+ // A named style or gesture, optionally for a limited time.
+ rig.gesture=(name,duration=0)=>{const m=rig.motion;if(POSES[name]){m.pose=name;m.gesture=null;}else{m.gesture=name;m.gestureAt=m.clock;}m.until=duration?m.clock+duration:0;m.next=m.clock+(duration||0)+2.5+Math.random()*4;};
+ // Free control of one arm ('left', 'right', 0, 1) or 'both':
+ // {spot, shape, aim, reach, spin, tumble}; omitted fields keep their value.
+ rig.setArms=(which,{spot,shape,aim,reach,spin,tumble}={},duration=0)=>{
+  const m=rig.motion;m.pose='free';m.gesture=null;m.until=duration?m.clock+duration:0;m.next=m.clock+(duration||1e9);
+  for(const [i,arm]of rig.arms.entries()){
+   if(!(which==='both'||which===i||which===(i?'right':'left')))continue;
+   if(spot)arm.target.copy(spot.isVector3?spot:new T.Vector3(...spot)).normalize();
+   if(shape!==undefined)arm.shapeGoal=shape;if(aim!==undefined)arm.aim=aim;if(reach!==undefined)arm.reachGoal=reach;if(spin!==undefined)arm.spin=spin;if(tumble!==undefined)arm.tumble=tumble;
+  }
+ };
+ rig.armStyles=Object.keys(POSES);
  root.rotation.y=Math.PI;
  return rig;
 }
 
 const damp=(a,b,dt,rate=6)=>a+(b-a)*(1-Math.exp(-rate*dt));
-const randomSpot=avoid=>{for(let i=0;i<12;i++){const d=v(Math.random()*2-1,Math.random()*1.3-.65,Math.random()*2-1);if(!(d.z>.55&&Math.abs(d.x)<.45&&d.y>-.35)&&(!avoid||d.angleTo(avoid)>.9))return d;}return POSES.sides[1].clone();};
-const spin=new T.Quaternion(),aim=new T.Quaternion(),down=new T.Vector3(0,-1,0),axis=new T.Vector3(),hang=new T.Vector3(),wobble=new T.Euler();
+const randomSpot=avoid=>{for(let i=0;i<12;i++){const d=v(Math.random()*2-1,Math.random()*1.3-.65,Math.random()*2-1);if(!(d.z>.55&&Math.abs(d.x)<.45&&d.y>-.35)&&(!avoid||d.angleTo(avoid)>.9))return d;}return SIDES[1].clone();};
+const turn=new T.Quaternion(),aim=new T.Quaternion(),twist=new T.Quaternion(),down=new T.Vector3(0,-1,0),up=new T.Vector3(0,1,0),axis=new T.Vector3(),goalAxis=new T.Vector3(),wobble=new T.Euler();
+const unwind=(angle,dt)=>{const rest=Math.round(angle/(Math.PI*2))*Math.PI*2;return rest+(angle-rest)*Math.exp(-dt*7);};
 function moveArms(rig,dt,{talk,reduced,moving}){
  const m=rig.motion;m.clock+=dt;const t=m.clock;
  if(m.until&&t>m.until){m.until=0;m.gesture=null;m.pose='sides';}
  // Idle: every few seconds pick a new arrangement, sometimes free spots.
  if(!reduced&&!moving&&!m.gesture&&!m.until&&t>m.next){
   const choice=IDLE[Math.floor(Math.random()*IDLE.length)];
-  if(choice==='wander'){m.pose='wander';for(const arm of rig.arms)arm.target.copy(randomSpot(arm.side<0?rig.arms[1].target:rig.arms[0].target));}
-  else if(choice==='orbit'){m.gesture='orbit';m.gestureAt=t;m.until=t+3.2;}
+  if(choice==='wander'){m.pose='wander';for(const arm of rig.arms){arm.target.copy(randomSpot(arm.side<0?rig.arms[1].target:rig.arms[0].target));arm.shapeGoal=Math.random()<.35?0:1;arm.aim=Math.random()<.4?'out':'hang';arm.reachGoal=.95+Math.random()*.35;arm.spin=arm.tumble=0;}}
+  else if(choice==='orbit'||choice==='moonOrbit'){m.pose=choice==='orbit'?'sides':'moons';m.gesture='orbit';m.gestureAt=t;m.until=t+3.4;}
   else m.pose=choice;
   m.next=t+3.5+Math.random()*4.5;
  }
- if(moving&&!m.gesture)m.pose='sides';
+ if(moving&&!m.gesture&&m.pose!=='free')m.pose='sides';
  for(const [i,arm]of rig.arms.entries()){
-  const g=m.gesture,age=t-(m.gestureAt||0);
-  if(m.pose!=='wander'&&POSES[m.pose])arm.target.copy(POSES[m.pose][i]);
-  let goal=arm.target,rate=reduced?60:4.2;
-  if(g==='wave'&&arm.side>0){goal=v(.62+Math.sin(age*9)*.32,.75,.35);rate=12;}
-  else if(g==='wave'){goal=POSES.sides[0];}
+  const g=m.gesture,age=t-(m.gestureAt||0),style=POSES[m.pose];
+  if(style){arm.target.copy(style.spots[i]);arm.shapeGoal=pick(style.shape,i,1);arm.aim=pick(style.aim,i,'hang');arm.reachGoal=pick(style.reach,i,1);arm.spin=pick(style.spin,i,0);arm.tumble=pick(style.tumble,i,0);}
+  let goal=arm.target,rate=reduced?60:4.2,shape=arm.shapeGoal,pointing=arm.aim,tumble=arm.tumble,reach=arm.reachGoal;
+  if(g==='wave'&&arm.side>0){goal=v(.62+Math.sin(age*9)*.32,.75,.35);rate=12;pointing='out';shape=1;}
+  else if(g==='wave'){goal=SIDES[0];}
   else if(g==='dance'||g==='orbit'){
-   const speed=g==='dance'?5:2.2,length=(m.until||t+1)-(m.gestureAt||0),settle=Math.min(1,Math.max(0,(age-(length-.7))/.6)),angle=age*speed+(arm.side<0?Math.PI:0);
-   goal=v(Math.cos(angle),.25*Math.sin(age*3+arm.phase),Math.sin(angle)).lerp(arm.rest,settle*settle*(3-2*settle)).normalize();rate=g==='dance'?18:9;
+   const dance=g==='dance',speed=dance?5:2.2,length=(m.until||t+1)-(m.gestureAt||0),settle=Math.min(1,Math.max(0,(age-(length-.7))/.6)),eased=settle*settle*(3-2*settle),angle=age*speed+(arm.side<0?Math.PI:0);
+   goal=v(Math.cos(angle),.25*Math.sin(age*3+arm.phase),Math.sin(angle)).lerp(arm.rest,eased).normalize();rate=dance?18:9;
+   // Dancing arms pulse between ball and paddle and tumble as they fly.
+   if(dance){shape=settle>0?1:.5+.5*Math.sin(age*6+arm.phase);tumble=settle>0?0:arm.side*8;reach=1.1;pointing='out';}
   }
   // Slerp the orbit direction towards its goal; talking adds small loops.
-  const before=arm.dir.clone();aim.setFromUnitVectors(arm.dir,goal);spin.identity().slerp(aim,1-Math.exp(-dt*rate));arm.dir.applyQuaternion(spin).normalize();
+  const before=arm.dir.clone();aim.setFromUnitVectors(arm.dir,goal);turn.identity().slerp(aim,1-Math.exp(-dt*rate));arm.dir.applyQuaternion(turn).normalize();
   arm.travel+=before.angleTo(arm.dir);
   const loop=reduced?0:talk?.22:.07;wobble.set(Math.sin(t*1.3+arm.phase)*loop,Math.sin(t*1.7+arm.phase*2)*loop,0);
-  const dir=arm.dir.clone().applyEuler(wobble).normalize();
-  arm.upper.quaternion.setFromUnitVectors(axis.set(arm.side,0,0),dir);
-  // The paddle hangs mostly down, tipped a little away from the ball.
-  hang.copy(dir).multiplyScalar(.45).add(down).normalize();
-  arm.lower.quaternion.copy(arm.upper.quaternion).invert().multiply(aim.setFromUnitVectors(down,hang));
+  const dir=arm.dir.clone().applyEuler(wobble).normalize(),ease=reduced?1:1-Math.exp(-dt*8);
+  arm.shape+=(shape-arm.shape)*ease;arm.reach+=(reach-arm.reach)*ease;arm.mesh.morphTargetInfluences[0]=1-arm.shape;
+  arm.upper.quaternion.setFromUnitVectors(axis.set(arm.side,0,0),dir);arm.lower.position.x=arm.side*ORBIT*arm.reach;
+  // Long axis: hanging arms tip a little away from the ball.
+  if(pointing==='out')goalAxis.copy(dir);else if(pointing==='in')goalAxis.copy(dir).negate();else if(pointing?.isVector3)goalAxis.copy(pointing).normalize();else goalAxis.copy(dir).multiplyScalar(.45).add(down).normalize();
+  aim.setFromUnitVectors(arm.axis,goalAxis);turn.identity().slerp(aim,ease);arm.axis.applyQuaternion(turn).normalize();
+  arm.spinAngle=arm.spin&&!reduced?arm.spinAngle+arm.spin*dt:unwind(arm.spinAngle,dt);arm.tumbleAngle=tumble&&!reduced?arm.tumbleAngle+tumble*dt:unwind(arm.tumbleAngle,dt);
+  // Body-space orientation: tumble about the orbit direction, aim, then spin.
+  twist.setFromAxisAngle(dir,arm.tumbleAngle).multiply(aim.setFromUnitVectors(down,arm.axis)).multiply(turn.setFromAxisAngle(up,arm.spinAngle));
+  arm.lower.quaternion.copy(arm.upper.quaternion).invert().multiply(twist);
  }
 }
 // Hover, bank into travel, orbiting arms, then the LED face.

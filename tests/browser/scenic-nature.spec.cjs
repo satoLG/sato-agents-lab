@@ -10,9 +10,9 @@ test('leaf and water shaders compile, animate on the GPU and honor reduced motio
   const foliage=world.getObjectByName('wind-canopies'),water=world.getObjectByName('forest-river');
   const compile=material=>{const shader={uniforms:{},vertexShader:ShaderLib.basic.vertexShader,fragmentShader:ShaderLib.basic.fragmentShader};material.onBeforeCompile(shader,renderer);return shader.uniforms;};
   window.natureUniforms={leaf:compile(foliage.material),water:compile(water.material)};
-  return {cards:foliage.geometry.attributes.position.count/4,texture:foliage.material.alphaMap.image.src,calls:renderer.info.render.calls,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false),waterTransparent:water.material.transparent};
+  return {cards:foliage.geometry.attributes.position.count/4,texture:foliage.material.alphaMap.userData.original,pixels:Math.max(foliage.material.alphaMap.image.width,foliage.material.alphaMap.image.height),calls:renderer.info.render.calls,programs:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false),waterTransparent:water.material.transparent};
  });
- expect(initial.cards).toBe(80);expect(initial.texture).toContain('folio-2025/foliageSDF.png');expect(initial.calls).toBeLessThan(80);expect(initial.programs).toBe(true);expect(initial.waterTransparent).toBe(false);
+ expect(initial.cards).toBe(80);expect(initial.texture).toContain('folio-2025/foliageSDF.png');expect(initial.pixels).toBeLessThanOrEqual(64);expect(initial.calls).toBeLessThan(80);expect(initial.programs).toBe(true);expect(initial.waterTransparent).toBe(false);
  const times=()=>page.evaluate(()=>[natureUniforms.leaf.natureTime.value,natureUniforms.water.waterTime.value]);
  expect(await times()).toEqual([0,0]);
  await page.emulateMedia({reducedMotion:'no-preference'});await expect.poll(async()=>Math.min(...await times())).toBeGreaterThan(.1);
