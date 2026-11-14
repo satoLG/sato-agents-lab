@@ -31,6 +31,14 @@ export function createForestTerrain(){
  return geometry;
 }
 
+// The floor shader multiplies by mix(1, photo, .23); the grass uses the
+// photo's average colour (linear) in the same proportion.
+function floorAverage(map){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=8;const ctx=canvas.getContext('2d');ctx.drawImage(map.image,0,0,8,8);
+ const data=ctx.getImageData(0,0,8,8).data,sum=[0,0,0];for(let i=0;i<data.length;i+=4)for(let c=0;c<3;c++)sum[c]+=data[i+c]/255;
+ const average=new T.Color().setRGB(sum[0]/64,sum[1]/64,sum[2]/64,T.SRGBColorSpace);
+ return new T.Color(1,1,1).lerp(average,.23);
+}
 export async function createHomeForest(root,art){
  await loadFoliageTexture();
  const map=await new T.TextureLoader().loadAsync(new URL('../textures/polyhaven/forest-floor.jpg',import.meta.url).href);
@@ -69,8 +77,14 @@ export async function createHomeForest(root,art){
  const resources=createGroveResources(true);
  createTreeGrove(root,trees,{seed:627,detail:true,shadows:false,resources});
  createContactShadows(root,trees);
- // Sparse, broad blades read as chunky tufts at the scene's pixel size.
- const grass=createHomeGrass(root,{heightAt:forestGroundHeight,waterAt:forestWaterProfile,density:150,widthScale:2.6,heightScale:1.15});
+ // Round-topped tufts in the ground's own colour: the same tint, soil photo
+ // average and dappled shade, lit with the terrain's normal, so the grass
+ // reads as the floor rising into blades.
+ const floorTint=floorAverage(map),base=new T.Color('#838340').multiply(new T.Color('#d1d5b0')).multiply(floorTint),tuft=new T.Color();
+ const dapple=(x,z)=>{const shade=Math.sin(x*1.2+Math.sin(z*.8))*Math.sin(z*1.5-x*.5);return .78+.22*T.MathUtils.smoothstep(shade,-.6,.6);};
+ const groundNormal=(x,z)=>new T.Vector3(forestGroundHeight(x-.05,z)-forestGroundHeight(x+.05,z),.1,forestGroundHeight(x,z-.05)-forestGroundHeight(x,z+.05)).normalize();
+ const grass=createHomeGrass(root,{heightAt:forestGroundHeight,waterAt:forestWaterProfile,density:150,widthScale:2.6,heightScale:1.15,rounded:true,velvet:true,tipShade:[1,1.06],
+  colorAt:(x,z)=>tuft.copy(base).multiplyScalar(dapple(x,z)),normalAt:groundNormal});
  const shrubs=[];
  for(let i=0;i<54;i++){
   const z=-2-random()*25,p=forestWaterProfile(z),x=i%3===0?-4-random()*8:p.center+(i%2?1:-1)*(p.width+1.3+random()*2.2);
