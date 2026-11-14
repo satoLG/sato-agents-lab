@@ -47,12 +47,16 @@ export function createCompanionAudio(onState){
   volume.gain.setValueAtTime(level,at);volume.gain.exponentialRampToValueAtTime(.0001,at+length);
   source.connect(filter).connect(volume).connect(crunchIn);source.onended=()=>{source.disconnect();filter.disconnect();volume.disconnect();};source.start(at,Math.random()*.3);source.stop(at+length+.01);
  }
+ // One onset per sound so a tick always reads as one item. Clicks are graded:
+ // tap (copy, back, close) < click (toggles) < thunk (send, open, new chat).
  const recipes={
   pop(at,p){blip(at,380*p,920*p,.09,.9);grit(at,.028,'bandpass',3300*p,1.3,2.4);},
-  message(at,p){blip(at,420*p,880*p,.08,.8);blip(at+.075,620*p,1320*p,.1,.7);grit(at,.03,'bandpass',3000*p,1.2,2.2);grit(at+.075,.026,'bandpass',4200*p,1.4,1.8);},
-  send(at,p){blip(at,300*p,1050*p,.12,.75);grit(at,.07,'highpass',3600,.7,1.4);grit(at+.08,.025,'bandpass',3800*p,1.4,2);},
+  message(at,p){blip(at,300*p,760*p,.11,.95);blip(at,600*p,1240*p,.07,.35);grit(at,.034,'bandpass',2900*p,1.2,2.8);},
+  send(at,p){blip(at,280*p,1100*p,.14,.8);grit(at,.06,'highpass',3600,.7,1.6);grit(at,.03,'bandpass',3600*p,1.4,2.2);},
   out(at,p){blip(at,760*p,240*p,.11,.55,'triangle');grit(at+.02,.06,'lowpass',2200*p,.8,2.6);},
+  tap(at,p){grit(at,.009,'bandpass',4600*p,2.2,1.6);blip(at,1500*p,1150*p,.028,.18);},
   click(at,p){grit(at,.02,'bandpass',2300*p,.9,3.2);blip(at,210*p,110*p,.035,.6,'square',true);},
+  thunk(at,p){grit(at,.034,'bandpass',1700*p,.8,4.2);blip(at,170*p,70*p,.07,.85,'square',true);blip(at,480*p,820*p,.08,.55);},
   toggle(at,p){grit(at,.018,'bandpass',2800*p,1,2.8);blip(at+.01,700*p,1050*p,.06,.55);},
   key(at,p){const pitch=p*(.9+Math.random()*.25);grit(at,.012+Math.random()*.01,'bandpass',(2500+Math.random()*1600)*pitch,1.5,3);blip(at,160*pitch,90*pitch,.022,.4,'sine',true);},
  };
@@ -60,7 +64,7 @@ export function createCompanionAudio(onState){
   const recipe=recipes[kind];if(!recipe)return;uiGraph();
   const at=context.currentTime+.005+delay/1000,recent=uiRecent.get(kind)||[];
   // Sounds scheduled at the same instant (duplicate pops) collapse into one.
-  if(recent.some(time=>Math.abs(time-at)<(kind==='key'?.018:.03)))return;
+  if(recent.some(time=>Math.abs(time-at)<(kind==='key'?.018:.025)))return;
   uiRecent.set(kind,[...recent.filter(time=>time>context.currentTime-.2),at]);recipe(at,pitch);
  }
  function ui(kind,{pitch=1,delay=0}={}){
