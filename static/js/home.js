@@ -22,7 +22,7 @@ const questionCopy=copyMessageButton(()=>currentQuestion,'Copiar pergunta');ques
 const audio=createCompanionAudio(active=>{$('home-sound').setAttribute('aria-pressed',String(active));$('home-sound').setAttribute('aria-label',active?'Silenciar robô':'Ativar som do robô');});
 // Every hidden toggle on the home page pops in with a bounce or shrinks out with particles.
 const juice=createHomeJuice($('home'),audio);
-const juiceOptions={'home-loading':{shrink:'.loading-core',burst:'.loading-core'},'home-chat':{stagger:'.composer-row>button:not([hidden]),#home-send'},'home-history':{stagger:'.session-card,.history-turn'},'history-thread':{stagger:'.history-turn'},'home-sessions':{stagger:'.session-card'},'home-speech':{sound:'message'},'last-question':{sound:'message'},'chat-peek':{fade:false}};
+const juiceOptions={'home-loading':{shrink:'.loading-core',burst:'.loading-core'},'home-chat':{stagger:'.composer-row>button:not([hidden]),#home-send'},'home-history':{stagger:'.session-card,.history-question,.history-answer'},'history-thread':{stagger:'.history-question,.history-answer'},'home-sessions':{stagger:'.session-card'},'home-speech':{sound:'message'},'last-question':{sound:'message'},'chat-peek':{fade:false}};
 for(const el of document.querySelectorAll('#home [id]'))if(el.id!=='robot-touch')juice.watch(el,juiceOptions[el.id]);
 juice.watch(bubble.copy);
 createHomeWallpaper($('home'),$('home-art')).then(value=>{if(disposed)value.dispose();else wallpaper=value;}).catch(error=>console.warn('Wallpaper animation unavailable',error));
@@ -234,7 +234,7 @@ speechMore.addEventListener('click',()=>historyOpen(true,'answer'));$('question-
 $('home-messages').addEventListener('scroll',historyScroll);$('history-bottom').addEventListener('click',()=>{$('home-messages').scrollTo({top:$('home-messages').scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
 $('home-history-toggle').addEventListener('click',()=>historyOpen($('home-history').hidden));$('history-close').addEventListener('click',()=>historyOpen(false));$('history-sessions').addEventListener('click',()=>{typing.finishAll();setHistoryView('sessions');loadConversations().catch(error=>status(error.message,true));});$('history-new').addEventListener('click',newConversation);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('home-history').hidden)historyOpen(false);});
 $('history-earlier').addEventListener('click',async()=>{const revision=conversationRevision,id=conversationId,button=$('history-earlier');button.disabled=true;try{const data=await api(`history?robot_id=${encodeURIComponent(ROBOT)}&conversation_id=${id}&before=${jobs[0].id}`);if(revision!==conversationRevision)return;mergeJobs(data.jobs||[]);loadedEarlier=true;hasEarlier=!!data.has_more;button.hidden=!hasEarlier;renderHistory();}catch(error){status(error.message,true);}finally{button.disabled=false;}});
-juice.list($('home-messages'),{selector:'.history-turn',key:node=>node.dataset.job});juice.list($('home-sessions'),{selector:'.session-card',key:node=>node.dataset.conversation});
+juice.list($('home-messages'),{selector:'.history-turn',key:node=>node.dataset.job,parts:'.history-question,.history-answer'});juice.list($('home-sessions'),{selector:'.session-card',key:node=>node.dataset.conversation});
 $('home-input').addEventListener('input',event=>{if(event.inputType?.startsWith('insert')&&$('home-input').value.trim().length===1)juice.pop($('home-send'),{fade:false});$('home-input').style.height='auto';$('home-input').style.height=`${Math.min(144,$('home-input').scrollHeight)}px`;});
 $('home-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('home-form').requestSubmit();}});
 $('home-form').addEventListener('submit',async event=>{
@@ -287,7 +287,7 @@ async function start(){
  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(disposed)return;$('home-loading').hidden=true;$('home').dataset.sceneReady='true';
  // The interface waits for the robot to land, then everything pops in together.
  if(scene){await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
- $('home-chat').hidden=false;layoutComposer();juice.reveal();
+ $('home-chat').hidden=false;layoutComposer();juice.reveal($('home-chat'));
  await chatReady;if(disposed)return;document.body.dataset.ready='true';audio.cue('hello');juice.endIntro();
 }
 window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(previewTimer);typing.dispose();scene?.dispose();wallpaper?.dispose();audio.dispose();juice.dispose();});

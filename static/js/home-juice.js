@@ -47,16 +47,26 @@ export function createHomeJuice(root,audio){
  const visible=el=>el.isConnected&&(el.checkVisibility?el.checkVisibility({checkVisibilityCSS:true}):el.getClientRects().length>0);
  const isBig=rect=>rect.width*rect.height>120000;
  function sound(kind,options){if(kind)audio.ui?.(kind,options);}
- function pop(el,{sound:kind,pitch=1,delay=0,fade=true}={}){
+ // A sound fires on the first frame its element is actually on screen
+ // animating, so ticks follow the bubbles even when the page stutters.
+ function cue(animation,delay,kind,pitch){
+  if(!kind)return;if(!animation){sound(kind,{pitch,delay});return;}
+  const check=()=>{if(disposed||animation.playState==='idle')return;const time=animation.currentTime;if(time!==null&&time>=delay-4){sound(kind,{pitch});return;}requestAnimationFrame(check);};
+  requestAnimationFrame(check);
+ }
+ const springs={normal:{small:[.5,1.13,.94,1.03,1],big:[.94,1.025,.995,1,1],duration:520},intro:{small:[.25,1.2,.9,1.05,1],big:[.6,1.08,.96,1.015,1],duration:700}};
+ function pop(el,{sound:kind,pitch=1,delay=0,fade=true,strength='normal'}={}){
   if(!el||disposed)return false;const now=performance.now();if(now-(lastPop.get(el)||-1e9)<90||!visible(el))return false;lastPop.set(el,now);
-  sound(kind,{pitch,delay});if(still())return true;
-  const big=isBig(el.getBoundingClientRect()),scales=big?[.94,1.025,.995,1,1]:[.5,1.13,.94,1.03,1];
-  el.animate(scales.map((value,index)=>({transform:`scale(${value})`,offset:[0,.42,.66,.84,1][index]})),{duration:big?380:520,delay,easing:'cubic-bezier(.25,.8,.35,1)',composite:'add',fill:'backwards'});
-  if(fade)el.animate([{opacity:0},{opacity:1,offset:.32},{opacity:1}],{duration:big?380:520,delay,fill:'backwards'});
+  if(still()){sound(kind,{pitch});return true;}
+  const spring=springs[strength],big=isBig(el.getBoundingClientRect()),scales=big?spring.big:spring.small,duration=big&&strength==='normal'?380:spring.duration;
+  const animation=el.animate(scales.map((value,index)=>({transform:`scale(${value})`,offset:[0,.42,.66,.84,1][index]})),{duration,delay,easing:'cubic-bezier(.25,.8,.35,1)',composite:'add',fill:'backwards'});
+  if(fade)el.animate([{opacity:0},{opacity:1,offset:.3},{opacity:1}],{duration,delay,fill:'backwards'});
+  cue(animation,delay,kind,pitch);
   return true;
  }
- function press(el){if(still()||!el)return;el.getAnimations().forEach(animation=>{if(animation.id==='juice-press')animation.cancel();});const animation=el.animate([{transform:'scale(1)'},{transform:'scale(.86)'}],{duration:90,easing:'ease-out',composite:'add',fill:'forwards'});animation.id='juice-press';}
- function release(el){if(!el)return;el.getAnimations().forEach(animation=>{if(animation.id==='juice-press')animation.cancel();});if(still())return;el.animate([{transform:'scale(.86)'},{transform:'scale(1.09)',offset:.45},{transform:'scale(.97)',offset:.75},{transform:'scale(1)'}],{duration:340,easing:'ease-out',composite:'add'});}
+ const depths={tap:.93,click:.88,toggle:.9,thunk:.82};
+ function press(el,kind='click'){if(still()||!el)return;el.getAnimations().forEach(animation=>{if(animation.id==='juice-press')animation.cancel();});const animation=el.animate([{transform:'scale(1)'},{transform:`scale(${depths[kind]})`}],{duration:90,easing:'ease-out',composite:'add',fill:'forwards'});animation.id='juice-press';}
+ function release(el,kind='click'){if(!el)return;el.getAnimations().forEach(animation=>{if(animation.id==='juice-press')animation.cancel();});if(still())return;const depth=depths[kind],over=1+(1-depth)*.65;el.animate([{transform:`scale(${depth})`},{transform:`scale(${over})`,offset:.45},{transform:`scale(${2-over*.5-.5})`,offset:.75},{transform:'scale(1)'}],{duration:kind==='tap'?260:360,easing:'ease-out',composite:'add'});}
  // Light shrink: a small anticipation swell, then a quick ease-in collapse.
  function shrink(el,rect,{target=el,burstAt='middle',burstRect=rect}={}){
   const big=isBig(rect),end=big?.95:.76,duration=big?240:210;
@@ -97,6 +107,7 @@ export function createHomeJuice(root,audio){
  // Swaps run in sequence: whatever leaves the same spot finishes its exit
  // before the newcomer pops in, so the two never overlap.
  function enter(el,state){
+  if(root.dataset.juiceIntro==='pending')return; // the opening choreography owns these
   if(pop(el,{sound:intro?'pop':state.options.sound,fade:state.options.fade??true}))stagger(el,state.options.stagger);
  }
  function flush(){
@@ -127,18 +138,18 @@ export function createHomeJuice(root,audio){
  function inView(el){const rect=el.getBoundingClientRect();return rect.bottom>0&&rect.top<innerHeight&&rect.width>0;}
  function stagger(container,selector,{sounds=true}={}){
   if(!selector)return;
-  const items=[...container.querySelectorAll(selector)].filter(el=>visible(el)&&inView(el)).slice(0,10);
-  items.forEach((el,index)=>pop(el,{sound:sounds&&index<6?'pop':null,pitch:1+index*.07,delay:70+index*48}));
+  const items=[...container.querySelectorAll(selector)].filter(el=>visible(el)&&inView(el)).slice(-10);
+  items.forEach((el,index)=>pop(el,{sound:sounds?'pop':null,pitch:1+Math.min(index,8)*.06,delay:80+index*90}));
  }
 
  // Lists: animate only items whose key is new while the list is on screen.
- function list(container,{selector,key,sound='message'}){
+ function list(container,{selector,key,parts,sound='message'}){
   const seen=new Set([...container.children].filter(node=>node.matches?.(selector)).map(key));
   const observer=new MutationObserver(records=>{
    const added=[];for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches(selector)){const id=key(node);if(!seen.has(id)){seen.add(id);added.push(node);}}
-   if(!added.length||!visible(container))return;const shown=added.filter(node=>inView(node));
-   if(shown.length===1)pop(shown[0],{sound:intro?'pop':sound});
-   else shown.slice(-10).forEach((node,index)=>pop(node,{sound:index<6?'pop':null,pitch:1+index*.07,delay:index*48}));
+   if(!added.length||!visible(container))return;
+   const targets=added.flatMap(node=>parts?[...node.querySelectorAll(parts)]:[node]).filter(node=>visible(node)&&inView(node)).slice(-10);
+   targets.forEach((node,index)=>pop(node,{sound:targets.length===1?sound:'pop',pitch:1+Math.min(index,8)*.06,delay:index*90}));
   });
   observer.observe(container,{childList:true});return observer;
  }
@@ -160,17 +171,20 @@ export function createHomeJuice(root,audio){
  // ---- input feedback -------------------------------------------------------
  const pressable='button,a[href],.scene-option,.theme-option';
  const pressTarget=el=>el.querySelector(':scope>.scene-preview,:scope>.theme-swatch')||el;
+ const SOFT='.copy-button,#history-close,#settings-close,#chat-peek,#history-bottom,.history-more,#question-more,#speech-more,#history-earlier';
+ const STRONG='#home-send,.session-card,#history-new,#home-login button';
+ const clickKind=el=>el.matches('.scene-option,.theme-option')?'toggle':el.matches(SOFT)?'tap':el.matches(STRONG)?'thunk':'click';
  let pressed=null,lastPointer=0;
  function pointerDown(event){
   const el=event.target.closest?.(pressable);if(!el||!root.contains(el)||el.id==='robot-touch'||el.disabled||event.button>0)return;
-  pressed=pressTarget(el);lastPointer=performance.now();press(pressed);sound(el.matches('.scene-option,.theme-option')?'toggle':'click');
+  const kind=clickKind(el);pressed={el:pressTarget(el),kind};lastPointer=performance.now();press(pressed.el,kind);sound(kind);
  }
- function pointerUp(){if(pressed){release(pressed);pressed=null;}}
+ function pointerUp(){if(pressed){release(pressed.el,pressed.kind);pressed=null;}}
  function click(event){
   if(event.detail!==0)return;const el=event.target.closest?.('button,a[href]');if(!el||!root.contains(el)||el.id==='robot-touch')return;
-  sound('click');release(el);
+  const kind=clickKind(el);sound(kind);release(el,kind);
  }
- function radioChange(event){if(event.target.type==='radio'&&performance.now()-lastPointer>350){sound('toggle');const option=event.target.closest('.scene-option,.theme-option');if(option)release(pressTarget(option));}}
+ function radioChange(event){if(event.target.type==='radio'&&performance.now()-lastPointer>350){sound('toggle');const option=event.target.closest('.scene-option,.theme-option');if(option)release(pressTarget(option),'toggle');}}
  const typingKeys=new Set(['Backspace','Delete','Enter',' ']);
  function keydown(event){
   if(!event.target.matches?.('#home-input,#home-password')||event.isComposing||event.ctrlKey||event.metaKey)return;
@@ -180,9 +194,18 @@ export function createHomeJuice(root,audio){
  root.addEventListener('click',click);root.addEventListener('change',radioChange);root.addEventListener('keydown',keydown);
 
  // ---- intro ----------------------------------------------------------------
- function reveal(){
-  clearTimeout(introFallback);if(root.dataset.juiceIntro!=='pending')return;delete root.dataset.juiceIntro;
-  [...root.querySelectorAll('.home-header>*')].forEach((el,index)=>pop(el,{sound:'pop',pitch:1+index*.12,delay:index*80}));
+ // Waits for frames to come back to a steady cadence (the 3D scene compiles
+ // shaders right after landing), so the opening bounces are actually seen.
+ function calm(){return new Promise(resolve=>{let previous=performance.now(),steady=0;const started=previous;const step=now=>{steady=now-previous<34?steady+1:0;previous=now;if(steady>=4||now-started>900)resolve();else requestAnimationFrame(step);};requestAnimationFrame(step);});}
+ // Opening: the logo, then the empty bar, then each control inside the bar.
+ async function reveal(chat){
+  clearTimeout(introFallback);if(root.dataset.juiceIntro!=='pending')return;
+  if(!still())await calm();if(disposed)return;
+  const controls=chat?[...chat.querySelectorAll('.composer-row>button,#home-input,#home-send,#home-login label,#home-password,#home-login button')].filter(visible):[];
+  delete root.dataset.juiceIntro;
+  [...root.querySelectorAll('.home-header>*')].forEach((el,index)=>pop(el,{sound:'pop',pitch:1+index*.12,delay:index*120,strength:'intro'}));
+  if(chat)pop(chat,{sound:'pop',pitch:.85,delay:260,strength:'intro'});
+  controls.forEach((el,index)=>pop(el,{sound:'pop',pitch:1.05+index*.08,delay:560+index*120,strength:'intro'}));
  }
 
  return {watch,pop,burst,list,dialog,stagger,reveal,text,settled,
