@@ -6,8 +6,8 @@ import * as T from '../vendor/three.module.min.js';
 // any extra geometry. Two small arms orbit the ball like moons; each one can
 // sit anywhere around it, point any way, spin, and reshape between a ball and
 // a long paddle.
-const RADIUS=.54,VISOR={radius:.5465,width:2.2,height:1.22,lift:.04},GRID=[26,15];
-export const GAZE_RANGE=[GRID[0]*.2,GRID[1]*.2];
+const RADIUS=.54,VISOR={radius:.5465,width:2.2,height:1.22,lift:.04},GRID=[34,19];
+export const GAZE_RANGE=[GRID[0]*.27,GRID[1]*.2];
 const MOODS=['normal','happy','ouch','wide'];
 const ORBIT=.76,v=(x,y,z)=>new T.Vector3(x,y,z).normalize();
 const SIDES=[v(-1,-.25,.15),v(1,-.25,.15)];
@@ -65,8 +65,8 @@ void main(){
  float alpha=1.-smoothstep(-.004,.002,edge);
  if(alpha<=0.)discard;
  float lit=step(face(cell),0.)*uPower;
- // Round LEDs up close; at chunky-pixel sizes each cell fills as one block.
- float solid=smoothstep(.16,.32,max(fwidth(p.x),fwidth(p.y)));
+ // Round LED dots; only when a cell shrinks under ~2 pixels it fills as a block.
+ float solid=smoothstep(.5,.75,max(fwidth(p.x),fwidth(p.y)));
  float d=length(fract(p)-.5),core=mix(smoothstep(.40,.16,d),.8,solid),hot=mix(smoothstep(.22,0.,d),.3,solid);
  float glow=exp(-max(face(p),0.)*1.1)*.28*uPower*(1.-solid*.5);
  vec3 n=normalize(vNormal);
@@ -151,7 +151,7 @@ export function createCompanionBot(art,{reduced=()=>false}={}){
  const ball=mesh(spine,geo('companion-ball',()=>new T.SphereGeometry(RADIUS,32,20)),shell);ball.name='companion-ball';
  const visorMaterial=new T.ShaderMaterial({vertexShader,fragmentShader,transparent:true,toneMapped:false,uniforms:{
   uGrid:{value:new T.Vector2(...GRID)},uSize:{value:new T.Vector2(VISOR.radius*VISOR.width,VISOR.radius*VISOR.height)},uLook:{value:new T.Vector2()},uSquash:{value:new T.Vector2(1,1)},
-  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.2},uLed:{value:new T.Color('#2aa8ff')}}});
+  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uLed:{value:new T.Color('#2aa8ff')}}});
  const visor=mesh(head,geo('companion-visor',()=>new T.SphereGeometry(VISOR.radius,40,20,Math.PI/2-VISOR.width/2,VISOR.width,Math.PI/2-VISOR.height/2-VISOR.lift,VISOR.height)),visorMaterial);
  visor.name='led-visor';visor.castShadow=false;
  rig.visor=visor;rig.face=createFace(visorMaterial,{reduced});

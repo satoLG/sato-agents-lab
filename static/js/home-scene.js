@@ -12,12 +12,12 @@ const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 const GAP=1.15,DEPTH=1.8,ENTER=.5,DIVE=1.25,ARRIVE=2,UP=new T.Vector3(0,1,0);
 
 export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario,onExplore,onPortal}={}){
- // Nintendo 64 look: the scene draws into a small buffer (about 450 lines)
- // that CSS scales up with hard pixel edges. No MSAA, no device pixel ratio.
- // Sustained slow frames coarsen the pixels by up to two more steps.
+ // Nintendo 64 era textures at close to native resolution: the buffer uses
+ // up to 1.25 device pixels per CSS pixel and no MSAA. Sustained slow frames
+ // shrink it by up to two more steps of 30%.
  const renderer=new T.WebGLRenderer({antialias:false,alpha:true,powerPreference:'low-power'});
  let coarseness=0,qualityFrames=0,qualityElapsed=0;
- renderer.domElement.style.imageRendering='pixelated';renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+ renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  container.append(renderer.domElement);onProgress?.(40,'Montando o robô…');
  const world=new T.Scene();renderer.setClearColor('#111b21',0);
  const hemisphere=new T.HemisphereLight('#e3f4ff','#536775',1.9);world.add(hemisphere);
@@ -31,6 +31,12 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const reduced=reducedMotion,sets=new Map(),pendingSets=new Map();
  let width=1,height=1,frame=0,last=0,time=0,speakingUntil=0,reaction=null,disposed=false,lookYaw=0,body,resizePending=true;
  let bufferWidth=0,bufferHeight=0,lookPitch=0,frontFov=42,transition=null;
+ // While diving, a plane sweeps from the rift to the camera and cuts away the
+ // world being left, so nothing of it remains once the rift is gone.
+ // The plane stays installed (keeping everything when idle) so no program
+ // ever recompiles for it mid-crossing.
+ const sweep=new T.Plane(),sweepPoint=new T.Vector3(),keepAll=()=>sweep.set(T.Object3D.DEFAULT_UP,1e6);
+ keepAll();renderer.clippingPlanes=[sweep];
  const portal=createPortal(world);
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
  let arrival=null,arrivalResolve,arrivalPromise,currentScenario='black',desiredScenario='black',scenarioRevision=0;
@@ -52,7 +58,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   frontPosition.set(.45,aim+.6,7);frontTarget.set(0,aim,0);
   if(navigation.active){camera.clearViewOffset();camera.fov=55;camera.aspect=width/height;}else navigation.frameFront(frontPosition,frontTarget,.033,frontFov);
   camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
-  const pixel=Math.min(5,Math.max(2,Math.round(height/480))+coarseness),columns=Math.ceil(width/pixel),lines=Math.ceil(height/pixel);
+  const scale=Math.min(devicePixelRatio,1.25)*Math.pow(.7,coarseness),columns=Math.ceil(width*scale),lines=Math.ceil(height*scale);
   if(bufferWidth!==columns||bufferHeight!==lines){renderer.setSize(columns,lines,false);bufferWidth=columns;bufferHeight=lines;}
   const neutral=new T.Matrix4().makeRotationY(.12),corners=bodyCorners.map(v=>v.clone().applyMatrix4(neutral).project(camera)),xs=corners.map(p=>(p.x+1)*width/2),ys=corners.map(p=>(1-p.y)*height/2);
   body={left:Math.max(0,Math.min(...xs)),top:Math.max(0,Math.min(...ys)),right:Math.min(width,Math.max(...xs)),bottom:Math.min(height,Math.max(...ys))};report();
@@ -154,6 +160,9 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   // Each world draws the companion while any part of it is on its side.
   tr.inNext=depth>GAP-.95;tr.inFrom=depth<GAP+.95;
   camera.position.copy(tr.camera).addScaledVector(tr.back,DEPTH*dive);camera.position.y+=(tr.floorTo-tr.floorFrom)*dive;camera.updateMatrixWorld(true);
+  // The cut starts just past the rift and reaches beyond the camera as the dive ends.
+  const rift=portal.group.position,reach=tr.camera.clone().sub(rift).dot(tr.back)*-1+1.5,cut=smooth((age-DIVE+.1)/(ARRIVE-DIVE-.05));
+  tr.cut=cut;tr.sweepAt=rift.clone().addScaledVector(tr.back,.2-(reach+.2)*cut);
  }
  function arrivePortal(){
   const tr=transition,next=sets.get(tr.to);sets.get(currentScenario)?.setLevel(0);
@@ -164,12 +173,12 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  // Two passes while a rift is open: the next world, then the current one
  // around the rift. The second pass is the frame's regular draw.
  function drawPortal(){
-  renderer.autoClear=true;if(!transition)return;
+  renderer.autoClear=true;keepAll();if(!transition)return;
   const tr=transition,from=sets.get(currentScenario),next=sets.get(tr.to);
   applyLook(tr.to);from?.setLevel(0);next?.setLevel(1);portal.group.visible=portal.eraser.visible=false;portal.glitch.visible=false;rig.root.visible=tr.inNext;
   renderer.render(world,camera);
   applyLook(currentScenario);next?.setLevel(0);from?.setLevel(1);portal.group.visible=true;portal.eraser.visible=currentScenario==='black';portal.glitch.visible=portal.flash>.001;rig.root.visible=tr.inFrom;
-  renderer.autoClear=false;renderer.clearDepth();
+  renderer.autoClear=false;renderer.clearDepth();if(tr.cut>0)sweep.setFromNormalAndCoplanarPoint(sweepPoint.copy(tr.back).negate(),tr.sweepAt);
  }
  function activateScenario(kind){navigation.setActive(false);navigation.resetFront();rig.root.position.set(0,0,0);rig.root.rotation.y=.12;currentScenario=kind;applyLook(kind);container.dataset.scenario=kind;home.dataset.scenario=kind;resizePending=true;onScenario?.(kind);}
  async function setScenario(kind,{immediate=false}={}){
@@ -184,7 +193,9 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
     const fog=world.fog;world.fog=looks[kind].fog;const compiled=renderer.compileAsync(set.root,camera,world);world.fog=fog;
     await compiled;if(disposed){disposeSet(set);return;}sets.set(kind,set);
    })().finally(()=>pendingSets.delete(kind)));
-   await pendingSets.get(kind);
+   // While the scenario loads the robot spins its arms like propellers.
+   if(!reduced.matches&&!arrival&&!transition){rig.gesture('props',30);rig.face.mood('wide',30);}
+   try{await pendingSets.get(kind);}finally{if(!transition){rig.gesture('sides');rig.face.mood('normal');}}
   }
   if(disposed||revision!==scenarioRevision)return false;
   desiredScenario=kind;

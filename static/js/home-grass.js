@@ -3,7 +3,7 @@ import {seededRandom} from './scene-grove.js';
 
 // folio-2025's Grass.js: jittered grid, one camera-facing triangle per blade,
 // terrain-dependent height and wind only at the tip. Adapted to WebGL/GLSL.
-export function createHomeGrass(root,{heightAt,waterAt,size=56,centerZ=-4,exclude=null,density=null,heightScale=1,widthScale=1,colorAt=null,normalAt=null,velvet=false}){
+export function createHomeGrass(root,{heightAt,waterAt,size=56,centerZ=-4,exclude=null,density=null,heightScale=1,widthScale=1,colorAt=null,normalAt=null,velvet=false,rounded=false,tipShade=[.88,1.02]}){
  const random=seededRandom(6109),positions=[],heights=[],widths=[],colors=[],normals=[],color=new T.Color();
  const subdivisions=density??(matchMedia('(pointer:coarse)').matches?300:420),cell=size/subdivisions;
  for(let row=0;row<subdivisions;row++)for(let column=0;column<subdivisions;column++){
@@ -16,8 +16,17 @@ export function createHomeGrass(root,{heightAt,waterAt,size=56,centerZ=-4,exclud
   if(velvet){const n=normalAt?normalAt(x,z):new T.Vector3(0,1,0);normals.push(n.x,n.y,n.z);}
  }
  const geometry=new T.InstancedBufferGeometry();
- geometry.setAttribute('position',new T.Float32BufferAttribute([-1,0,0,1,0,0,0,1,0],3));
- geometry.setAttribute('normal',new T.Float32BufferAttribute([0,1,0,0,1,0,0,1,0],3));
+ // A pointed blade, or a tuft with a round top: straight sides, then a
+ // half-circle fan closing over them.
+ if(rounded){
+  const points=[[-1,0],[1,0]];for(let i=0;i<=8;i++){const a=i/8*Math.PI;points.push([Math.cos(a),.62+Math.sin(a)*.38]);}
+  const index=[0,1,2];for(let i=2;i<points.length-1;i++)index.push(0,i,i+1);
+  geometry.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(([x,y])=>[x,y,0]),3));
+  geometry.setAttribute('normal',new T.Float32BufferAttribute(points.flatMap(()=>[0,1,0]),3));geometry.setIndex(index);
+ }else{
+  geometry.setAttribute('position',new T.Float32BufferAttribute([-1,0,0,1,0,0,0,1,0],3));
+  geometry.setAttribute('normal',new T.Float32BufferAttribute([0,1,0,0,1,0,0,1,0],3));
+ }
  geometry.setAttribute('bladeCenter',new T.InstancedBufferAttribute(new Float32Array(positions),3));
  geometry.setAttribute('bladeHeight',new T.InstancedBufferAttribute(new Float32Array(heights),1));
  geometry.setAttribute('bladeWidth',new T.InstancedBufferAttribute(new Float32Array(widths),1));
@@ -39,9 +48,12 @@ export function createHomeGrass(root,{heightAt,waterAt,size=56,centerZ=-4,exclud
    transformed.xz+=vec2(gust,sin(grassTime*.73+phase)*.4)*position.y*bladeHeight*.32;
    bladeTip=position.y;grassColor=bladeColor;`);
   shader.fragmentShader='varying float bladeTip;\nvarying vec3 grassColor;\n'+shader.fragmentShader;
-  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',velvet?'#include <color_fragment>\ndiffuseColor.rgb*=grassColor*mix(.88,1.02,smoothstep(0.,1.,bladeTip));':'#include <color_fragment>\ndiffuseColor.rgb*=grassColor*mix(vec3(.43,.49,.34),vec3(1.24,1.2,.85),smoothstep(0.,1.,bladeTip));');
+  // Velvet blades take the ground's normal on both faces, so they light
+  // exactly like the soil they stand on.
+  if(velvet)shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>','#include <normal_fragment_begin>\nnormal=normalize(vNormal);nonPerturbedNormal=normal;');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',velvet?`#include <color_fragment>\ndiffuseColor.rgb*=grassColor*mix(${tipShade[0].toFixed(3)},${tipShade[1].toFixed(3)},smoothstep(0.,1.,bladeTip));`:'#include <color_fragment>\ndiffuseColor.rgb*=grassColor*mix(vec3(.43,.49,.34),vec3(1.24,1.2,.85),smoothstep(0.,1.,bladeTip));');
  };
- material.customProgramCacheKey=()=>velvet?'home-velvet-grass-v1':'home-folio-grass-v1';
+ material.customProgramCacheKey=()=>velvet?`home-velvet-grass-v2-${tipShade.join(':')}`:'home-folio-grass-v1';
  const mesh=new T.Mesh(geometry,material);mesh.name='camera-facing-procedural-grass';mesh.userData.dynamic=true;mesh.receiveShadow=velvet;root.add(mesh);
  return {tick(t){time.value=t;}};
 }

@@ -165,5 +165,7 @@ html,body,#home{background:#111b21}
 @keyframes home-loading-breathe{50%{opacity:.55}}
 #home[data-juice-intro=pending] #home-chat{opacity:0}
 /* Chunky scene pixels, and the page wallpaper seen through a rift to the default scenario. */
-#home-scene canvas{image-rendering:pixelated}
+#home-scene canvas{image-rendering:auto}
 #home[data-portal=black] #home-art{opacity:.16}
+/* A status line of fixed height so loading text never resizes the dialog. */
+#settings-status{height:16px;min-height:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
