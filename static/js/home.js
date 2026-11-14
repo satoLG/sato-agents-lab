@@ -8,6 +8,7 @@ import {fitChatPreview} from './chat-preview.js';
 import {createHomeWallpaper} from './home-wallpaper.js';
 import {createHomeJuice} from './home-juice.js';
 import {planMimic} from './robot-mimic.js';
+import {createQuestionBubbles} from './question-bubbles.js';
 
 const $=id=>document.getElementById(id),API='/api/lab/hermes-chat',ROBOT='guide:hermes';
 const bubble=createSpeechBubble();$('home-speech').append(bubble.el);
@@ -18,7 +19,8 @@ const answerPreview=text=>{const lines=text.split('\n').slice(0,5).join('\n'),va
 let wallpaper,scene,pose,csrf=null,authenticated=false,available=false,jobs=[],pollTimer,requesting=false,refreshing=null,disposed=false,lastSpoken='',reactionIndex=0;
 let currentQuestion='',speechPending=false,previewTimer;
 let conversations=[],conversationId=null,conversationTitle='',conversationRevision=0,historyView='sessions',hasEarlier=false,loadedEarlier=false,retryMessage=null;
-const awaitingAnswers=new Set(),animatedAnswers=new Set();
+const awaitingAnswers=new Set(),animatedAnswers=new Set(),playedMimics=new Set(),mimicReports=new Map();
+const questions=createQuestionBubbles($('robot-questions'),$('robot-question-toggle'));
 const suggestedAnswers=new Map([
  ['about',{question:'Quem é Sato?',answer:'Léo Sato é desenvolvedor de software. Conheça sua trajetória no portfólio: https://leosato.dev.br.'}],
  ['work',{question:'No que ele tem trabalhado?',answer:'Conheça os trabalhos do Léo no GitHub: https://github.com/satoLG.'}],
@@ -31,7 +33,7 @@ const audio=createCompanionAudio(active=>{$('home-sound').setAttribute('aria-pre
 // Every hidden toggle on the home page pops in with a bounce or shrinks out with particles.
 const juice=createHomeJuice($('home'),audio);
 const juiceOptions={'home-loading':{shrink:'.loading-core',burst:'.loading-core'},'home-chat':{stagger:'.composer-row>button:not([hidden]),#home-send'},'home-history':{stagger:'.session-card,.history-question,.history-answer'},'history-thread':{stagger:'.history-question,.history-answer'},'home-sessions':{stagger:'.session-card'},'home-speech':{sound:'message'},'last-question':{sound:'message'},'chat-peek':{fade:false}};
-for(const el of document.querySelectorAll('#home [id]'))if(el.id!=='robot-touch')juice.watch(el,juiceOptions[el.id]);
+for(const el of document.querySelectorAll('#home [id]'))if(el.id!=='robot-touch'&&el.id!=='robot-questions')juice.watch(el,juiceOptions[el.id]);
 juice.watch(bubble.copy);
 createHomeWallpaper($('home'),$('home-art')).then(value=>{if(disposed)value.dispose();else wallpaper=value;}).catch(error=>console.warn('Wallpaper animation unavailable',error));
 const typing=createChatTypewriter(audio,()=>{measurePreviews();placeSpeech();historyScroll();schedulePreviewCollapse();});
@@ -62,7 +64,7 @@ for(const id of ['home-speech','last-question']){
 function status(text,error=false){$('home-chat-status').textContent=text;$('home-chat-status').dataset.error=String(error);$('home-chat-status').dataset.busy=String(/Enviando|preparando|Reconectando/.test(text));}
 function inputState(){const canSend=authenticated&&!requesting;$('home-input').disabled=!canSend;$('home-send').disabled=!canSend;$('history-new').disabled=requesting;document.querySelectorAll('.session-card').forEach(button=>button.disabled=requesting);}
 function layoutViewport(){
- const viewport=window.visualViewport;document.documentElement.style.setProperty('--viewport-height',`${viewport?.height||innerHeight}px`);document.documentElement.style.setProperty('--viewport-top',`${viewport?.offsetTop||0}px`);layoutComposer();
+ const viewport=window.visualViewport;document.documentElement.style.setProperty('--viewport-height',`${viewport?.height||innerHeight}px`);document.documentElement.style.setProperty('--viewport-top',`${viewport?.offsetTop||0}px`);layoutComposer();if(questions.open)questions.position();
 }
 function layoutComposer(){const chat=$('home-chat');if(chat.hidden)return;const height=`${document.querySelector('.home-composer').offsetHeight+parseFloat(getComputedStyle(chat).bottom)}px`;if(document.documentElement.style.getPropertyValue('--composer-height')!==height)document.documentElement.style.setProperty('--composer-height',height);placeSpeech();}
 function placeSpeech(){
@@ -70,9 +72,9 @@ function placeSpeech(){
  const {head,body} = pose,root=$('home').getBoundingClientRect(),touch=$('robot-touch');
  touch.style.left=`${body.left}px`;touch.style.top=`${body.top}px`;touch.style.width=`${body.right-body.left}px`;touch.style.height=`${body.bottom-body.top}px`;
  const speech=$('home-speech'),navBottom=document.querySelector('.home-header').getBoundingClientRect().bottom-root.top+16;
- const curiosity=$('robot-curiosity');curiosity.style.left=`${Math.max(42,Math.min(root.width-42,head.x+52))}px`;curiosity.style.top=`${Math.max(navBottom,head.y-48)}px`;
+ const curiosity=$('robot-curiosity');curiosity.style.left=`${Math.max(42,Math.min(root.width-42,head.x+52))}px`;curiosity.style.top=`${Math.max(navBottom,head.y-48)}px`;if(questions.open)questions.position();
  const chatTop=$('home-chat').hidden?root.height:$('home-chat').getBoundingClientRect().top-root.top;
- const top=Math.max(navBottom,Math.min(head.y-speech.offsetHeight-27,chatTop-speech.offsetHeight-20));
+ const top=Math.max(navBottom,Math.min((pose.speechAnchor||head).y-speech.offsetHeight-27,chatTop-speech.offsetHeight-20));
  speech.style.left=`${Math.max(speech.offsetWidth/2+15,Math.min(root.width-speech.offsetWidth/2-15,head.x))}px`;speech.style.top=`${top}px`;
  const peek=$('chat-peek'),peekY=Math.max(navBottom+24,head.y-36);peek.style.left=`${head.x}px`;peek.style.top=`${peekY}px`;
  speech.style.setProperty('--collapse-y',`${peekY-top-speech.offsetHeight/2}px`);
@@ -210,6 +212,11 @@ function showLatest(){
  const latest=jobs.at(-1);if(!latest){setPreviewCollapsed(false);showQuestion('');$('home-speech').hidden=true;renderHistory();return;}
  for(const job of jobs){if(['queued','running'].includes(job.status))awaitingAnswers.add(job.id);else if(awaitingAnswers.delete(job.id)&&job.status==='done')animatedAnswers.add(job.id);}
  const incoming=animatedAnswers.has(latest.id);
+ if(incoming&&latest.mimic_plan&&!playedMimics.has(latest.id)&&(!latest.mimic_result||latest.mimic_result.status==='planned')){
+  playedMimics.add(latest.id);
+  const played=scene?.mimic(latest.mimic_plan,{onState:state=>reportMimic(latest.id,state)});
+  if(!played?.ok){latest.answer=played?.answer||'Não consegui mostrar essa imitação agora.';reportMimic(latest.id,'unavailable');}
+ }
  showQuestion(latest.question,latest.created_at);
  if(latest.status==='done'&&latest.answer){forgetThinking(latest.id);status('Chat conectado.');if((speechPending||lastSpoken!==latest.answer))say(latest.answer,{sound:false,animate:incoming&&$('home-history').hidden,timestamp:latest.updated_at||latest.created_at,formatted:formatChatAnswer(latest.answer)});}
  else if(latest.status==='failed'){forgetThinking(latest.id);const error=latest.error||'Não consegui responder. Tente enviar novamente.';status(error,true);if((speechPending||lastSpoken!==error))say(error,{sound:false});}
@@ -275,18 +282,25 @@ $('home-login').addEventListener('submit',async event=>{
 const reactions=[{kind:'wave',text:'Oi! Que bom te ver por aqui.'},{kind:'boop',text:'Bip-bip! Acho que você achou meu botão de cócegas.'},{kind:'dance',text:'Um passinho de robô pra alegrar o dia!'}, {kind:'shy',text:'Hehe… agora fiquei tímido.'}];
 function instantReply(question,answer){
  conversationId ||=crypto.randomUUID().replaceAll('-','');conversationTitle ||=question;
- const now=Date.now()/1000,id=crypto.randomUUID().replaceAll('-','');
+ const now=Math.max(Date.now()/1000,(jobs.at(-1)?.created_at||0)+.001),id=crypto.randomUUID().replaceAll('-','');
  mergeJobs([{id,conversation_id:conversationId,robot_id:ROBOT,question,answer,status:'done',created_at:now,updated_at:now,local:true}]);
  animatedAnswers.add(id);showLatest();status('Pronto!');
 }
 function performMimic(question){
- const result=planMimic(question);if(!result)return false;
+ const result=planMimic(question);if(!result||result.needsPlanning)return false;
+ if(result.stop){const stopped=scene?.stopMimic();instantReply(question,stopped?'Pronto, parei a imitação.':'Não há uma imitação em andamento.');return true;}
  if(!result.ok){instantReply(question,result.answer);return true;}
  const played=scene?.mimic(result.plan);
  instantReply(question,played?.ok?result.answer:played?.answer||'Não consegui mostrar a imitação agora. Tente novamente quando o robô estiver visível.');return true;
 }
-function toggleQuestions(open){$('robot-questions').hidden=!open;$('robot-question-toggle').setAttribute('aria-expanded',String(open));if(open){$('robot-questions').style.setProperty('--question-shift','0px');$('robot-questions').style.setProperty('--question-y','0px');const bounds=$('robot-questions').getBoundingClientRect(),shift=Math.max(12-bounds.left,Math.min(0,innerWidth-12-bounds.right));$('robot-questions').style.setProperty('--question-shift',`${shift}px`);const height=visualViewport?.height||innerHeight,offset=visualViewport?.offsetTop||0,shiftY=Math.max(offset+12-bounds.top,Math.min(0,offset+height-12-bounds.bottom));$('robot-questions').style.setProperty('--question-y',`${shiftY}px`);}}
-$('robot-question-toggle').addEventListener('click',()=>toggleQuestions($('robot-questions').hidden));
+function reportMimic(id,state){
+ if(!authenticated||!csrf)return;
+ const previous=mimicReports.get(id)||Promise.resolve();
+ const pending=previous.catch(()=>{}).then(()=>api(`jobs/${id}/mimic-result`,{method:'POST',keepalive:true,headers:{'X-Chat-CSRF':csrf},body:JSON.stringify({status:state})})).then(data=>{if(disposed)return;const existing=jobs.find(job=>job.id===id);if(existing){mergeJobs([data.job]);showLatest();}}).catch(()=>{});
+ mimicReports.set(id,pending);
+}
+function toggleQuestions(open){questions.set(open);}
+$('robot-question-toggle').addEventListener('click',()=>toggleQuestions(!questions.open));
 $('robot-question-toggle').addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();toggleQuestions(true);$('robot-questions').querySelector('button').focus();}});
 $('robot-curiosity').addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();toggleQuestions(false);$('robot-question-toggle').focus();}});
 document.addEventListener('pointerdown',event=>{if(!event.target.closest('#robot-curiosity'))toggleQuestions(false);});
@@ -295,6 +309,7 @@ $('robot-questions').addEventListener('click',event=>{
  if(item.command)performMimic(item.question);else instantReply(item.question,item.answer);
  $('robot-question-toggle').focus({preventScroll:true});
 });
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('dialog[open]')&&$('home-history').hidden)scene?.stopMimic();});
 $('robot-touch').addEventListener('click',()=>{if(scene?.exploring)return;const reaction=reactions[reactionIndex++%reactions.length];say(reaction.text,{reaction:reaction.kind});});
 $('home-sound').addEventListener('click',()=>audio.toggle());
 function explorationChanged(active){const button=$('home-explore');button.setAttribute('aria-pressed',String(active));button.setAttribute('aria-label',active?'Parar exploração':'Explorar cenário');button.title=active?'Parar exploração':'Explorar cenário';$('home-explore-hint').hidden=!active;}
@@ -326,6 +341,6 @@ async function start(){
  $('home-chat').hidden=false;layoutComposer();juice.reveal($('home-chat'));
  await chatReady;if(disposed)return;document.body.dataset.ready='true';audio.cue('hello');juice.endIntro();
 }
-window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(previewTimer);typing.dispose();scene?.dispose();wallpaper?.dispose();audio.dispose();juice.dispose();});
+window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(previewTimer);typing.dispose();questions.dispose();scene?.dispose();wallpaper?.dispose();audio.dispose();juice.dispose();});
 window.addEventListener('pageshow',event=>{if(event.persisted){inputState();layoutViewport();refresh();}});
 start();

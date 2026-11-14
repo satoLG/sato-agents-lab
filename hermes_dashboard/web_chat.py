@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from flask import jsonify, request, session
 from werkzeug.security import check_password_hash
 
-from . import config, lab, streaming, chat_context, sato_agent
+from . import config, lab, streaming, chat_context, sato_agent, mimic
 from .warm_runner import WarmRunner
 
 LOG = logging.getLogger(__name__)
@@ -210,6 +210,13 @@ def submit():
 
 def _public_job(row, conn=None):
     value = {key: row[key] for key in ("id", "robot_id", "conversation_id", "question", "status", "answer", "error", "attempts", "created_at", "updated_at")}
+    try:
+        action = json.loads(row['context'])
+        if row['status'] == 'done' and mimic.valid_plan(action.get('mimic_plan')):
+            value['mimic_plan'] = action['mimic_plan']
+            value['mimic_result'] = action.get('mimic_result', {'status': 'planned'})
+    except (ValueError, TypeError, AttributeError):
+        pass
     owned = conn is None
     conn = conn or _connection()
     try:
@@ -218,6 +225,42 @@ def _public_job(row, conn=None):
         if owned:
             conn.close()
     return value
+
+
+def mimic_result(job_id):
+    denied = _private(write=True)
+    if denied:
+        return denied
+    data = request.get_json(silent=True)
+    allowed = {'started', 'completed', 'cancelled', 'unavailable'}
+    if not isinstance(data, dict) or set(data) != {'status'} or not isinstance(data.get('status'), str) or data['status'] not in allowed:
+        return jsonify(error='Resultado inválido.'), 400
+    conn = _connection()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
+        if not row:
+            return jsonify(error='Mensagem não encontrada.'), 404
+        context = json.loads(row['context'])
+        if row['status'] != 'done' or not mimic.valid_plan(context.get('mimic_plan')):
+            return jsonify(error='Essa mensagem não tem uma imitação para executar.'), 409
+        previous = context.get('mimic_result', {}).get('status', 'planned')
+        # A terminal result wins; duplicate/late browser reports are harmless.
+        if previous not in {'completed', 'cancelled', 'unavailable'}:
+            status = data['status']
+            context['mimic_result'] = {'status': status, 'at': time.time()}
+            label = context['mimic_plan']['label']
+            answer = {'started': f'Estou representando {label} com meu visor e meus braços.',
+                      'completed': f'Representei {label} com meu visor e meus braços.',
+                      'cancelled': 'A imitação foi interrompida.',
+                      'unavailable': 'Não consegui mostrar a imitação agora. Tente de novo quando o robô estiver disponível.'}[status]
+            conn.execute('UPDATE jobs SET context=?,answer=?,updated_at=? WHERE id=?',
+                         (json.dumps(context, ensure_ascii=False), sato_agent.public_answer(answer), time.time(), job_id))
+            conn.commit()
+            row = conn.execute('SELECT * FROM jobs WHERE id=?', (job_id,)).fetchone()
+        return jsonify(job=_public_job(row, conn))
+    finally:
+        conn.close()
 
 
 def _progress(job_id, kind, text):
@@ -348,6 +391,34 @@ def _answer(row):
     question = row["question"]
     stage = "Conhecendo melhor a sua pergunta."
     _progress(row["id"], "context", stage)
+    target = mimic.intent(question)
+    if target is not None:
+        _progress(row['id'], 'model', 'Pensando em uma forma de imitar isso…')
+        def generate(prompt):
+            # A schema correction is another bounded model call; keep the
+            # existing queue lease valid for that call as well.
+            conn = _connection()
+            try:
+                conn.execute('UPDATE jobs SET lease_until=? WHERE id=? AND status=?',
+                             (time.time() + max(300, RUNNER.timeout + 30), row['id'], 'running'))
+                conn.commit()
+            finally:
+                conn.close()
+            payload = {'id': row['id'], 'conversation_id': row['conversation_id'],
+                       'prompt': prompt, 'history': [], 'root': str(HERMES_ROOT)}
+            return RUNNER.run(payload, lambda kind, text: _progress(row['id'], kind, 'Combinando expressão e movimentos…'))
+        result = mimic.plan(target, generate)
+        if result['plan']:
+            conn = _connection()
+            try:
+                current = conn.execute('SELECT context FROM jobs WHERE id=?', (row['id'],)).fetchone()
+                context = json.loads(current['context'])
+                context.update(mimic_plan=result['plan'], mimic_result={'status': 'planned'})
+                conn.execute('UPDATE jobs SET context=? WHERE id=?', (json.dumps(context, ensure_ascii=False), row['id']))
+                conn.commit()
+            finally:
+                conn.close()
+        return sato_agent.public_answer(result['answer'], question)
     conn = _connection()
     try:
         past = conn.execute("SELECT question,answer,context FROM jobs WHERE robot_id=? AND conversation_id=? AND status='done' AND created_at<? ORDER BY created_at DESC LIMIT 8", (row["robot_id"], row["conversation_id"], row["created_at"])).fetchall()

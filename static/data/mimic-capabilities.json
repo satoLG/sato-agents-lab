@@ -1,0 +1,456 @@
+{
+  "version": 1,
+  "robot": "Sato Agent: a floating spherical body with a 34×19 blue LED visor and exactly two morphable floating arms. Communicate by theatrical approximation using only the listed tools. No extra legs, fingers, props, physical transformations or environmental effects.",
+  "playback": "Frames have normalized at=0..1, strictly increasing, first 0 and last 1. Calls update persistent target poses. A cycle travels smoothly from first to last frame and back. cycles repeats that finite ping-pong within duration seconds. Keep drawings recognizable and motions coordinated. Reduced motion uses a still expressive pose. All state returns to neutral on completion/cancellation.",
+  "tools": [
+    {
+      "name": "visor_draw",
+      "description": "Show a drawing from the performance drawings array on the 34×19 LED grid. Coordinates start at bottom-left; y is 0..19. Use -1 for normal eyes. Only blue LED geometry, no images, HTML, text rendering or URLs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "drawing": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 3
+          }
+        },
+        "required": [
+          "drawing"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arm_pose",
+      "description": "Pose exactly one of the existing two floating arms. position and aim are nonzero direction vectors in robot coordinates: x right, y up, z toward the visitor. shape 0=ball, 1=paddle; length/width deform its mesh; reach controls its orbit radius; twist rotates it around its long axis. No new limbs or objects. Silhouette hints: ears are high (+y) and point up; wings spread far to opposite sides (-x/+x) and flap up/down; paws sit forward (+z), often round. Choose poses for the requested target, not the example animal. Omitted pose fields keep their previous values (initially side/down, paddle, length=width=reach=1, twist=0).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ]
+          },
+          "position": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            }
+          },
+          "aim": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            }
+          },
+          "shape": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "length": {
+            "type": "number",
+            "minimum": 0.6,
+            "maximum": 1.8
+          },
+          "width": {
+            "type": "number",
+            "minimum": 0.6,
+            "maximum": 1.6
+          },
+          "reach": {
+            "type": "number",
+            "minimum": 0.85,
+            "maximum": 1.25
+          },
+          "twist": {
+            "type": "number",
+            "minimum": -6.284,
+            "maximum": 6.284
+          }
+        },
+        "required": [
+          "side"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body_pose",
+      "description": "Add a small lift and pitch/yaw/roll (radians) to the floating spherical body, relative to its current floor and facing. Cannot move through the world, fly away, change cameras or create objects. Omitted components keep their previous value (initially all zero).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lift": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.45
+          },
+          "pitch": {
+            "type": "number",
+            "minimum": -0.5,
+            "maximum": 0.5
+          },
+          "yaw": {
+            "type": "number",
+            "minimum": -3.142,
+            "maximum": 3.142
+          },
+          "roll": {
+            "type": "number",
+            "minimum": -0.5,
+            "maximum": 0.5
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "performanceSchema": {
+    "type": "object",
+    "properties": {
+      "version": {
+        "const": 1
+      },
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]{0,39}$"
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 70
+      },
+      "duration": {
+        "type": "number",
+        "minimum": 3,
+        "maximum": 12
+      },
+      "cycles": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3
+      },
+      "drawings": {
+        "type": "array",
+        "maxItems": 4,
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 18,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "line"
+                  },
+                  "points": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 34
+                    }
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 3
+                  }
+                },
+                "required": [
+                  "type",
+                  "points",
+                  "width"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "ellipse"
+                  },
+                  "center": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 34
+                    }
+                  },
+                  "radius": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0.5,
+                      "maximum": 12
+                    }
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3
+                  }
+                },
+                "required": [
+                  "type",
+                  "center",
+                  "radius",
+                  "width"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "box"
+                  },
+                  "center": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 34
+                    }
+                  },
+                  "size": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 24
+                    }
+                  },
+                  "radius": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 4
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3
+                  }
+                },
+                "required": [
+                  "type",
+                  "center",
+                  "size",
+                  "radius",
+                  "width"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "frames": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 8,
+        "items": {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "calls": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "const": "visor_draw"
+                      },
+                      "arguments": {
+                        "type": "object",
+                        "properties": {
+                          "drawing": {
+                            "type": "integer",
+                            "minimum": -1,
+                            "maximum": 3
+                          }
+                        },
+                        "required": [
+                          "drawing"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "arguments"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "const": "arm_pose"
+                      },
+                      "arguments": {
+                        "type": "object",
+                        "properties": {
+                          "side": {
+                            "type": "string",
+                            "enum": [
+                              "left",
+                              "right"
+                            ]
+                          },
+                          "position": {
+                            "type": "array",
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": {
+                              "type": "number",
+                              "minimum": -1,
+                              "maximum": 1
+                            }
+                          },
+                          "aim": {
+                            "type": "array",
+                            "minItems": 3,
+                            "maxItems": 3,
+                            "items": {
+                              "type": "number",
+                              "minimum": -1,
+                              "maximum": 1
+                            }
+                          },
+                          "shape": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "length": {
+                            "type": "number",
+                            "minimum": 0.6,
+                            "maximum": 1.8
+                          },
+                          "width": {
+                            "type": "number",
+                            "minimum": 0.6,
+                            "maximum": 1.6
+                          },
+                          "reach": {
+                            "type": "number",
+                            "minimum": 0.85,
+                            "maximum": 1.25
+                          },
+                          "twist": {
+                            "type": "number",
+                            "minimum": -6.284,
+                            "maximum": 6.284
+                          }
+                        },
+                        "required": [
+                          "side"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "arguments"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "const": "body_pose"
+                      },
+                      "arguments": {
+                        "type": "object",
+                        "properties": {
+                          "lift": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 0.45
+                          },
+                          "pitch": {
+                            "type": "number",
+                            "minimum": -0.5,
+                            "maximum": 0.5
+                          },
+                          "yaw": {
+                            "type": "number",
+                            "minimum": -3.142,
+                            "maximum": 3.142
+                          },
+                          "roll": {
+                            "type": "number",
+                            "minimum": -0.5,
+                            "maximum": 0.5
+                          }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "arguments"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "at",
+            "calls"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "version",
+      "id",
+      "label",
+      "duration",
+      "cycles",
+      "drawings",
+      "frames"
+    ],
+    "additionalProperties": false
+  }
+}

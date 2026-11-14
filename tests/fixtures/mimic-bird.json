@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "id": "passaro_bravo",
+  "label": "pássaro bravo",
+  "duration": 5.2,
+  "cycles": 2,
+  "drawings": [
+    [
+      {
+        "type": "ellipse",
+        "center": [
+          12,
+          11
+        ],
+        "radius": [
+          1.4,
+          1.6
+        ],
+        "width": 0
+      },
+      {
+        "type": "ellipse",
+        "center": [
+          22,
+          11
+        ],
+        "radius": [
+          1.4,
+          1.6
+        ],
+        "width": 0
+      },
+      {
+        "type": "line",
+        "points": [
+          9,
+          14.5,
+          15,
+          12.6
+        ],
+        "width": 1.2
+      },
+      {
+        "type": "line",
+        "points": [
+          25,
+          14.5,
+          19,
+          12.6
+        ],
+        "width": 1.2
+      },
+      {
+        "type": "line",
+        "points": [
+          14.5,
+          7,
+          19.5,
+          7
+        ],
+        "width": 1.4
+      },
+      {
+        "type": "line",
+        "points": [
+          14.5,
+          7,
+          17,
+          4.8
+        ],
+        "width": 1.4
+      },
+      {
+        "type": "line",
+        "points": [
+          19.5,
+          7,
+          17,
+          4.8
+        ],
+        "width": 1.4
+      },
+      {
+        "type": "line",
+        "points": [
+          14,
+          16,
+          12.5,
+          18
+        ],
+        "width": 1.0
+      },
+      {
+        "type": "line",
+        "points": [
+          20,
+          16,
+          21.5,
+          18
+        ],
+        "width": 1.0
+      }
+    ]
+  ],
+  "frames": [
+    {
+      "at": 0,
+      "calls": [
+        {
+          "name": "visor_draw",
+          "arguments": {
+            "drawing": 0
+          }
+        },
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "left",
+            "position": [
+              -0.85,
+              0.15,
+              0.05
+            ],
+            "aim": [
+              -1,
+              0.1,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": -0.2
+          }
+        },
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "right",
+            "position": [
+              0.85,
+              0.15,
+              0.05
+            ],
+            "aim": [
+              1,
+              0.1,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": 0.2
+          }
+        },
+        {
+          "name": "body_pose",
+          "arguments": {
+            "lift": 0.05,
+            "pitch": 0,
+            "yaw": 0,
+            "roll": 0
+          }
+        }
+      ]
+    },
+    {
+      "at": 0.5,
+      "calls": [
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "left",
+            "position": [
+              -0.8,
+              0.55,
+              0.05
+            ],
+            "aim": [
+              -0.7,
+              0.7,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": -0.35
+          }
+        },
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "right",
+            "position": [
+              0.8,
+              0.55,
+              0.05
+            ],
+            "aim": [
+              0.7,
+              0.7,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": 0.35
+          }
+        },
+        {
+          "name": "body_pose",
+          "arguments": {
+            "lift": 0.12,
+            "pitch": -0.08,
+            "yaw": 0,
+            "roll": 0
+          }
+        }
+      ]
+    },
+    {
+      "at": 1,
+      "calls": [
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "left",
+            "position": [
+              -0.8,
+              -0.05,
+              0.05
+            ],
+            "aim": [
+              -0.9,
+              -0.35,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": -0.1
+          }
+        },
+        {
+          "name": "arm_pose",
+          "arguments": {
+            "side": "right",
+            "position": [
+              0.8,
+              -0.05,
+              0.05
+            ],
+            "aim": [
+              0.9,
+              -0.35,
+              0.05
+            ],
+            "shape": 1,
+            "length": 1.8,
+            "width": 1.4,
+            "reach": 1.2,
+            "twist": 0.1
+          }
+        },
+        {
+          "name": "body_pose",
+          "arguments": {
+            "lift": 0.08,
+            "pitch": 0.06,
+            "yaw": 0,
+            "roll": 0
+          }
+        }
+      ]
+    }
+  ]
+}

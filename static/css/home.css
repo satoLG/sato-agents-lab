@@ -18,13 +18,21 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke
 @media(max-height:500px){.home-header{top:8px}#home-chat{bottom:4px}#home-speech .speech-text{-webkit-line-clamp:2;max-height:3.1em;font-size:12px}#home .speech-card{padding:10px 14px}#last-question-text{-webkit-line-clamp:1;max-height:1.5em}.home-composer:focus-within .composer-heading{padding-bottom:2px}#home-settings{padding:18px}#home-settings header{margin-bottom:16px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 #home[data-history=true] #last-question{display:none}
-/* A small invitation attached to the companion, available before login. */
+/* Each invitation is its own floating balloon, with no shared menu surface. */
 #robot-curiosity{position:absolute;z-index:7;left:50%;top:22%;transform:translateX(-50%)}
 #robot-question-toggle{display:grid;place-items:center;width:42px;height:42px;border:1px solid #b1e9fb55;border-radius:50%;font-size:25px;font-weight:800;color:var(--accent);cursor:pointer;box-shadow:0 5px 22px #0003;transition:transform .2s,background .2s}
 #robot-question-toggle:hover,#robot-question-toggle[aria-expanded=true]{transform:rotate(-9deg) scale(1.08);background:var(--answer)}
 #robot-question-toggle:focus-visible,#robot-questions button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-#robot-questions{position:absolute;bottom:52px;left:50%;transform:translate(calc(-50% + var(--question-shift,0px)),var(--question-y,0px));width:260px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;padding:7px;border:1px solid #b1e9fb2b;border-radius:23px;box-shadow:0 14px 35px #0003}
-#robot-questions button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:46px;padding:11px 14px;border:0;border-radius:17px;text-align:left;background:transparent;color:var(--ink);font:700 14px/1.35 Nunito,sans-serif;cursor:pointer}
-#robot-questions button:hover{background:#a5dcf017}#robot-questions button+button{border-top:1px solid #ffffff0a}#robot-questions button:last-child{color:var(--accent)}
+#robot-questions{position:absolute;bottom:58px;left:50%;transform:translate(calc(-50% + var(--question-shift,0px)),var(--question-y,0px));display:grid;gap:13px;justify-items:start;width:min(410px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:8px 9px 11px;pointer-events:none}
+#robot-questions .question-bubble{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:45px;max-width:100%;padding:12px 19px;border:1px solid #b1e9fb28;border-radius:25px;color:var(--ink);font:700 14px/1.35 Nunito,sans-serif;cursor:pointer;pointer-events:auto;box-shadow:0 8px 24px #0003;transform-origin:50% 100%;animation:question-float 4.8s ease-in-out infinite}
+#robot-questions .question-bubble:after{content:'';position:absolute;bottom:-5px;left:27px;width:9px;height:9px;background:inherit;border-right:1px solid #b1e9fb28;border-bottom:1px solid #b1e9fb28;transform:rotate(45deg);border-bottom-right-radius:3px}
+#robot-questions .question-bubble:nth-child(1){margin-left:6px;--float-angle:-1deg}
+#robot-questions .question-bubble:nth-child(2){justify-self:end;animation-delay:-1.8s;--float-angle:1deg}
+#robot-questions .question-bubble:nth-child(3){margin-left:55px;color:var(--accent);animation-delay:-3.1s;--float-angle:-.6deg}
+#robot-questions .question-bubble:hover{background:var(--answer);border-color:#b1e9fb66}
+#robot-questions[data-state=closing] .question-bubble{pointer-events:none;animation-play-state:paused}
+.mime-icon{width:23px;height:23px;flex:none}
 #home[data-history=true] #robot-curiosity,#home[data-exploring=true] #robot-curiosity{visibility:hidden;pointer-events:none}
-@media(prefers-reduced-motion:reduce){#robot-question-toggle{transition:none}#robot-question-toggle:hover,#robot-question-toggle[aria-expanded=true]{transform:none}}
+@keyframes question-float{0%,100%{transform:translateY(0) rotate(var(--float-angle,0deg))}50%{transform:translateY(-5px) rotate(calc(var(--float-angle,0deg) * -1))}}
+@media(max-width:450px){#robot-questions{width:min(350px,calc(100vw - 24px));gap:12px}#robot-questions .question-bubble:nth-child(3){margin-left:36px}}
+@media(prefers-reduced-motion:reduce){#robot-question-toggle{transition:none}#robot-question-toggle:hover,#robot-question-toggle[aria-expanded=true]{transform:none}#robot-questions .question-bubble{animation:none}}

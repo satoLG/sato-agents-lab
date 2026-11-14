@@ -12,7 +12,7 @@ from flask import Flask, abort, jsonify, render_template, request
 
 from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
-from hermes_dashboard import config, lab_feed, streaming, sato_agent
+from hermes_dashboard import config, lab_feed, streaming, sato_agent, mimic
 
 app = Flask(__name__)
 web_chat.configure(app)
@@ -133,6 +133,16 @@ def api_lab_chat():
 @app.get("/api/sato-agent/suggestions")
 def api_sato_agent_suggestions():
     return jsonify(sato_agent.suggestions())
+
+
+@app.get("/api/sato-agent/mimic/tools")
+def api_sato_mimic_tools():
+    return jsonify(mimic.CAPABILITIES)
+
+
+@app.post("/api/lab/hermes-chat/jobs/<job_id>/mimic-result")
+def api_sato_mimic_result(job_id):
+    return web_chat.mimic_result(job_id)
 
 
 @app.get("/api/lab/hermes-chat/session")

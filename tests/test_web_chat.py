@@ -215,3 +215,47 @@ def test_owner_and_project_evidence_reach_runner_in_conversation(private_chat, m
     assert project['repository_metadata']['primary_language'] == 'JavaScript'
     assert project['recent_changes'][0]['url'].endswith('/commit/abc')
     assert len(payloads[2]['history']) == 4
+
+def test_mimic_queue_passes_only_robot_tools_and_persists_a_valid_plan(private_chat, monkeypatch):
+    import copy
+    plan = copy.deepcopy(web_chat.mimic.PRESETS['rabbit'])
+    plan.update(id='bird', label='um pássaro bravo')
+    calls = []
+    def run(payload, _):
+        calls.append(payload)
+        return json.dumps({'possible': True, 'performance': plan})
+    monkeypatch.setattr(web_chat.RUNNER, 'run', run)
+    monkeypatch.setattr(web_chat, '_context', lambda *a, **k: (_ for _ in ()).throw(AssertionError('Private context read')))
+    headers = authorize(private_chat)
+    created = private_chat.post('/api/lab/hermes-chat/jobs', json={'robot_id': 'guide:hermes', 'question': '/mimic um pássaro bravo'}, headers=headers).json
+    row = web_chat._claim()
+    answer = web_chat._answer(row)
+    assert 'Vou tentar' in answer and len(calls) == 1
+    assert calls[0]['history'] == [] and 'arm_pose' in calls[0]['prompt']
+    assert 'owner-profile' not in calls[0]['prompt'] and 'USER.md' not in calls[0]['prompt']
+    web_chat._finish(row, answer=answer)
+    job = private_chat.get('/api/lab/hermes-chat/jobs/' + created['id']).json
+    assert job['mimic_plan'] == plan and job['mimic_result']['status'] == 'planned'
+    endpoint = '/api/lab/hermes-chat/jobs/' + created['id'] + '/mimic-result'
+    assert private_chat.post(endpoint, json={'status': 'started'}).status_code == 403
+    assert private_chat.post(endpoint, json={'status': []}, headers=headers).status_code == 400
+    started = private_chat.post(endpoint, json={'status': 'started'}, headers=headers)
+    assert started.status_code == 200 and started.json['job']['mimic_result']['status'] == 'started'
+    completed = private_chat.post(endpoint, json={'status': 'completed'}, headers=headers)
+    assert completed.json['job']['mimic_result']['status'] == 'completed'
+    assert 'Representei' in completed.json['job']['answer']
+    late = private_chat.post(endpoint, json={'status': 'cancelled'}, headers=headers)
+    assert late.json['job']['mimic_result'] == completed.json['job']['mimic_result']
+    assert late.json['job']['mimic_plan'] == plan
+
+
+def test_invalid_mimic_plan_is_not_delivered_as_an_executable_action(private_chat, monkeypatch):
+    monkeypatch.setattr(web_chat.RUNNER, 'run', lambda *args: '{"possible":true,"performance":{"code":"run anything"}}')
+    headers = authorize(private_chat)
+    created = private_chat.post('/api/lab/hermes-chat/jobs', json={'robot_id': 'guide:hermes', 'question': '/mimic um moinho'}, headers=headers).json
+    row = web_chat._claim()
+    answer = web_chat._answer(row)
+    web_chat._finish(row, answer=answer)
+    job = private_chat.get('/api/lab/hermes-chat/jobs/' + created['id']).json
+    assert 'mimic_plan' not in job and 'Não consegui transformar' in answer
+    assert private_chat.post('/api/lab/hermes-chat/jobs/' + created['id'] + '/mimic-result', json={'status': 'completed'}, headers=headers).status_code == 409
