@@ -18,7 +18,9 @@ async function setup(page,scenario='lab'){
 const sample=page=>page.evaluate(()=>window.__homeSample);
 async function hold(page,key,ms){await page.keyboard.down(key);await page.waitForTimeout(ms);await page.keyboard.up(key);}
 async function drag(page,x,y,dx,dy){await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps:4});await page.mouse.up();}
-async function scenario(page,name,kind){await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('radio',{name,exact:true}).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);await page.getByRole('button',{name:'Fechar configurações',exact:true}).click();await expect(page.getByRole('dialog')).toBeHidden();if(kind==='black')await expect(page.locator('#home-art')).toHaveCSS('opacity','0.16');}
+async function scenario(page,name,kind){await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('radio',{name,exact:true}).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);
+ // With motion on, the rift closes the dialog itself so the crossing is visible.
+ if(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches))await page.getByRole('button',{name:'Fechar configurações',exact:true}).click();await expect(page.getByRole('dialog')).toBeHidden();if(kind==='black')await expect(page.locator('#home-art')).toHaveCSS('opacity','0.16');}
 
 test('play, movement, orbit, wall collision and a front view at the stopped location',async({page},info)=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));await setup(page);
@@ -57,7 +59,7 @@ test('LED eyes follow all pointer quadrants and stay on the visor',async({page},
  await setup(page);
  const views=[];
  for(const [x,y]of [[120,150],[1300,150],[1300,850],[120,850]]){
-  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.abs(s.eye[0])).toBeLessThanOrEqual(34*.27+.5);expect(Math.abs(s.eye[1])).toBeLessThanOrEqual(19*.2+.5);expect(s.head.slice(0,3)).toEqual([0,0,0]);
+  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.abs(s.eye[0])).toBeLessThanOrEqual(26*.2+.5);expect(Math.abs(s.eye[1])).toBeLessThanOrEqual(15*.2+.5);expect(s.head.slice(0,3)).toEqual([0,0,0]);
 
  }
  expect(views[0][0]).toBeLessThan(0);expect(views[1][0]).toBeGreaterThan(0);expect(views[0][1]).toBeGreaterThan(0);expect(views[2][1]).toBeLessThan(0);

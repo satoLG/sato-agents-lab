@@ -271,6 +271,8 @@ const settings=$('home-settings');let settingsRevision=0;juice.dialog(settings);
 $('home-settings-toggle').addEventListener('click',()=>settings.showModal());$('settings-close').addEventListener('click',()=>settings.close());settings.addEventListener('click',event=>{if(event.target!==settings)return;const r=settings.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)settings.close();});settings.addEventListener('close',()=>{$('home-settings-toggle').focus({preventScroll:true});});
 async function changeScenario(kind,options){const revision=++settingsRevision;$('settings-status').textContent='Carregando cenário…';try{if(!scene)throw new Error('O cenário precisa de WebGL 2.');const applied=await scene.setScenario(kind,options);if(applied&&revision===settingsRevision){try{localStorage.setItem('sato-home-scenario',kind);}catch{}$('settings-status').textContent='';}}catch(error){if(revision===settingsRevision){$('settings-status').textContent=error.message;const current=$('home-scene').dataset.scenario||'black';document.querySelector(`[name="home-scenario"][value="${current}"]`).checked=true;}}}
 document.querySelectorAll('[name="home-scenario"]').forEach(input=>input.addEventListener('change',()=>changeScenario(input.value)));
+// The rift plays behind the settings dialog, so it steps aside to show it.
+function portalStage(stage){if(stage==='open'&&settings.open)settings.close();audio.ui({open:'portalOpen',enter:'portalEnter',arrive:'portalArrive'}[stage]);}
 function changeTheme(theme){if(!['cyan','mint','violet','amber'].includes(theme))return;$('home').dataset.theme=theme;document.querySelector(`[name="home-theme"][value="${theme}"]`).checked=true;try{localStorage.setItem('sato-home-theme',theme);}catch{}}
 document.querySelectorAll('[name="home-theme"]').forEach(input=>input.addEventListener('change',()=>changeTheme(input.value)));
 try{changeTheme(localStorage.getItem('sato-home-theme')||'cyan');}catch{}
@@ -278,7 +280,7 @@ new ResizeObserver(layoutComposer).observe($('home-chat'));new ResizeObserver(()
 function progress(value,text){$('home-progress').value=value;$('home-loading-stage').textContent=text;}
 async function start(){
  const chatReady=initializeChat();
- try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onScenario:kind=>{audio.setScenario(kind);$('home-explore').hidden=kind==='black';},onExplore:explorationChanged});
+ try{await document.fonts.load('700 16px Nunito');progress(20,'Carregando robô…');scene=await createCompanionScene($('home-scene'),{onProgress:progress,onFrame(value){pose=value;placeSpeech();},onScenario:kind=>{audio.setScenario(kind);$('home-explore').hidden=kind==='black';},onExplore:explorationChanged,onPortal:portalStage});
   let saved;try{saved=localStorage.getItem('sato-home-scenario');}catch{}if(['lab','forest'].includes(saved)){progress(85,'Preparando cenário…');document.querySelector(`[name="home-scenario"][value="${saved}"]`).checked=true;await changeScenario(saved,{immediate:true});}
  }
  catch(error){console.warn('Companion scene unavailable',error);$('home-fallback').hidden=false;}

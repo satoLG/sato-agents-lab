@@ -288,9 +288,41 @@ test('robot touch never stretches the sphere or arms @scene',async({browser},tes
  try{
   await chatRoutes(page);await instrumentScene(page);await ready(page);
   await page.locator('#robot-touch').click();await page.waitForTimeout(400);await page.locator('#robot-touch').click();await page.waitForTimeout(650);
-  const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(.5);expect(scale[1]).toBeCloseTo(.5);expect(scale[2]).toBeCloseTo(.28);}
+  const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(1);expect(scale[1]).toBeCloseTo(1);expect(scale[2]).toBeCloseTo(1);}
 
   await page.locator('#robot-touch').click();await page.waitForTimeout(2100);
+ }finally{await context.close();}
+});
+
+test('a rift opens behind the robot, shows the next scenario and carries it across @scene',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));await chatRoutes(page);await instrumentScene(page);await ready(page);
+  await page.evaluate(()=>{window.__portal=[];const scene=document.querySelector('#home-scene');new MutationObserver(()=>{const stage=scene.dataset.portal,{rig,world}=__companionQA;if(stage&&__portal.at(-1)?.stage!==stage)__portal.push({stage,scenario:scene.dataset.scenario,z:rig.root.position.z,rift:world.getObjectByName('scenario-portal').position.z,lab:world.getObjectByName('companion-lab')?.position.z,dialog:document.getElementById('home-settings').open});}).observe(scene,{attributes:true,attributeFilter:['data-portal']});});
+  await page.locator('#home-settings-toggle').click();await page.locator('[name="home-scenario"][value="lab"]').check();
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-portal','arrive',{timeout:30000});await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','lab');
+  const stages=await page.evaluate(()=>__portal);expect(stages.map(s=>s.stage)).toEqual(['open','enter','dive','arrive']);
+  // The rift sits behind the robot with the lab parked beyond it; the scenario only changes on arrival.
+  expect(stages[0].scenario).toBe('black');expect(stages[0].rift).toBeLessThan(-1);expect(stages[0].lab).toBeLessThan(stages[0].rift);expect(stages[2].scenario).toBe('black');expect(stages[2].z).toBeLessThan(stages[0].rift);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  const settled=await page.evaluate(()=>{const {rig,world,renderer}=__companionQA;return {robot:rig.root.position.toArray(),visible:rig.root.visible,lab:world.getObjectByName('companion-lab').position.toArray(),rift:world.getObjectByName('scenario-portal').visible,autoClear:renderer.autoClear,portal:document.getElementById('home').dataset.portal};});
+  expect(settled.robot[0]).toBe(0);expect(settled.robot[2]).toBe(0);expect(settled.visible).toBe(true);expect(settled.lab).toEqual([0,0,0]);expect(settled.rift).toBe(false);expect(settled.portal).toBeUndefined();
+  await page.waitForTimeout(200);expect(await page.evaluate(()=>__companionQA.renderer.autoClear)).toBe(true);expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+
+test('arms reshape between ball and paddle, point and spin on request @scene',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  await chatRoutes(page);await instrumentScene(page);await ready(page);
+  const read=()=>page.evaluate(()=>__companionQA.rig.arms.map(arm=>({ball:arm.mesh.morphTargetInfluences[0],reach:Math.abs(arm.lower.position.x),axis:arm.axis.toArray(),dir:arm.dir.toArray(),spin:arm.spinAngle})));
+  await page.evaluate(()=>__companionQA.rig.gesture('moons',8));await page.waitForTimeout(1200);
+  for(const arm of await read())expect(arm.ball).toBeGreaterThan(.95);
+  await page.evaluate(()=>{const {rig}=__companionQA;rig.setArms('left',{spot:[-.4,.6,.7],shape:1,aim:'out',reach:1.4},8);rig.setArms('right',{shape:.5,spin:6});});await page.waitForTimeout(1300);
+  const [left,right]=await read();expect(left.ball).toBeLessThan(.05);expect(left.reach).toBeCloseTo(.76*1.4,1);
+  // Pointing out: the long axis follows the orbit direction, which reached the requested spot.
+  expect(left.axis[0]*left.dir[0]+left.axis[1]*left.dir[1]+left.axis[2]*left.dir[2]).toBeGreaterThan(.9);expect(left.dir[1]).toBeGreaterThan(.4);expect(left.dir[2]).toBeGreaterThan(.5);
+  expect(right.ball).toBeGreaterThan(.4);expect(right.ball).toBeLessThan(.6);expect(Math.abs(right.spin)).toBeGreaterThan(3);
  }finally{await context.close();}
 });
 

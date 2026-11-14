@@ -3,6 +3,7 @@ import {createExteriorFade} from './lab-chamber-materials.js';
 import {createHomeForest} from './home-forest.js';
 import {createHomeLaboratory} from './home-laboratory.js';
 import {batchStatic} from './lab-batch.js';
+import {pixelateTextures} from './retro-textures.js';
 
 // Small cube faces form a real skybox, with a continuous horizon on every side.
 function createSkybox(kind){
@@ -24,7 +25,7 @@ function createSkybox(kind){
   ctx.putImageData(pixels,0,0);faces.push(canvas);
  }
  // An enclosing cube fills an orthographic view as well as a perspective one.
- const materials=faces.map(canvas=>{const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;return new T.MeshBasicMaterial({map,side:T.BackSide,depthWrite:false,toneMapped:false,fog:false});});
+ const materials=faces.map(canvas=>{const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.magFilter=T.NearestFilter;return new T.MeshBasicMaterial({map,side:T.BackSide,depthWrite:false,toneMapped:false,fog:false});});
  const sky=new T.Mesh(new T.BoxGeometry(140,140,140),materials);sky.name=`${kind}-skybox`;sky.renderOrder=-10;sky.visible=false;return sky;
 }
 // Reuse the lab's finishes, garden assets and existing forest-floor photograph.
@@ -37,6 +38,8 @@ export async function createMiniEnvironment(kind,art){
   nature=await createHomeForest(root,art);
  }
  batchStatic(root);
+ // Hard, chunky texels on every surface before the first upload.
+ pixelateTextures(root,64);
  const fade=createExteriorFade(root);fade(1);
  const skybox=createSkybox(kind);
  return {root,skybox,navigation:nature?.navigation,groundHeight:nature?.groundHeight,tick(t){nature?.tick?.(t);},setLevel(level){fade(1-level);skybox.visible=level>.002;skybox.material.forEach(material=>material.color.setScalar(level));}};

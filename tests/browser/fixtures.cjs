@@ -4,7 +4,7 @@ const {test:base,expect}=require('@playwright/test');
 // GPU while tests wait for chat, navigation, collision and DOM assertions.
 function frameLimitedSource(source){
  return 'let __testLastFrame=-Infinity;\n'+source
-  .replace(/let pixelRatio=Math\.min\(devicePixelRatio,[\d.]+\)/, 'let pixelRatio=.5')
+  .replace('let coarseness=0', 'let coarseness=2')
   .replace('function applyResize(){', 'function applyResize(){__testLastFrame=-Infinity;')
   .replaceAll('renderer.render(world,camera);',
    'world.updateMatrixWorld(true);camera.updateMatrixWorld(true);if(performance.now()-__testLastFrame>=1000){renderer.render(world,camera);__testLastFrame=performance.now();}');
