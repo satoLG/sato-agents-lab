@@ -163,7 +163,7 @@ async function instrumentScene(page){
     if(!mesh.isMesh)return;const positions=mesh.geometry.getAttribute('position');
     for(let i=0;i<positions.count;i++){const p=new T.Vector3().fromBufferAttribute(positions,i).applyMatrix4(mesh.matrixWorld);if(p.y>=chute.position.y)tubeArmRadius=Math.max(tubeArmRadius,Math.hypot(p.x,p.z));}
    });
-   window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,cameraY:camera.position.y,body:rig.root.rotation.y,arm:rig.arms[0].upper.rotation.x,tubeArmRadius});
+   window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,cameraY:camera.position.y,body:rig.root.rotation.y,arm:rig.arms[0].travel,tubeArmRadius});
   }`;
   await route.fulfill({response,body:frameLimitedSource(source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`))});
  });
@@ -195,7 +195,7 @@ test('tube arrival lands, says ouch, rises and dance makes complete turns @scene
   await page.waitForFunction(()=>!document.getElementById('home').dataset.juiceIntro&&!document.getElementById('home-chat').getAnimations().length,null,{timeout:5000});
   const gap=await page.evaluate(()=>{const robot=document.getElementById('robot-touch').getBoundingClientRect(),chat=document.getElementById('home-chat').getBoundingClientRect();return chat.top-robot.bottom;});expect(gap).toBeGreaterThanOrEqual(0);expect(gap).toBeLessThan(70);
   for(let i=0;i<3;i++)await page.locator('#robot-touch').tap();await expect(page.locator('#home-scene')).toHaveAttribute('data-reaction','dance');await page.waitForTimeout(4400);
-  const turns=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='dance');return {body:Math.max(...f.map(v=>v.body))-Math.min(...f.map(v=>v.body)),arm:Math.max(...f.map(v=>v.arm))-Math.min(...f.map(v=>v.arm)),last:__companionQA.rig.arms[0].upper.rotation.x};});expect(turns.body).toBeGreaterThan(6);expect(turns.arm).toBeGreaterThan(12);expect(Math.abs(turns.last)).toBeLessThan(.6);
+  const turns=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='dance');return {body:Math.max(...f.map(v=>v.body))-Math.min(...f.map(v=>v.body)),arm:Math.max(...f.map(v=>v.arm))-Math.min(...f.map(v=>v.arm)),last:__companionQA.rig.arms[0].dir.angleTo(__companionQA.rig.arms[0].rest)};});expect(turns.body).toBeGreaterThan(6);expect(turns.arm).toBeGreaterThan(12);expect(Math.abs(turns.last)).toBeLessThan(.6);
   await page.evaluate(()=>window.__companionFrames=[]);await page.waitForTimeout(4000);
   const hover=await page.evaluate(()=>{const f=__companionFrames.filter(f=>f.reaction==='idle');return Math.max(...f.map(v=>v.y))-Math.min(...f.map(v=>v.y));});expect(hover).toBeGreaterThan(.075);expect(hover).toBeLessThan(.10);
  }finally{await context.close();}
@@ -288,7 +288,7 @@ test('robot touch never stretches the sphere or arms @scene',async({browser},tes
  try{
   await chatRoutes(page);await instrumentScene(page);await ready(page);
   await page.locator('#robot-touch').click();await page.waitForTimeout(400);await page.locator('#robot-touch').click();await page.waitForTimeout(650);
-  const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(1);expect(scale[1]).toBeCloseTo(1);expect(scale[2]).toBeCloseTo(.56);}
+  const scales=await page.evaluate(()=>{const {rig}=__companionQA;return {root:rig.root.scale.toArray(),arms:rig.arms.map(arm=>{const mesh=arm.upper.getObjectByName('smooth-arm'),e=mesh.matrixWorld.elements;return [Math.hypot(e[0],e[1],e[2]),Math.hypot(e[4],e[5],e[6]),Math.hypot(e[8],e[9],e[10])];})};});expect(scales.root).toEqual([1,1,1]);for(const scale of scales.arms){expect(scale[0]).toBeCloseTo(.5);expect(scale[1]).toBeCloseTo(.5);expect(scale[2]).toBeCloseTo(.28);}
 
   await page.locator('#robot-touch').click();await page.waitForTimeout(2100);
  }finally{await context.close();}
