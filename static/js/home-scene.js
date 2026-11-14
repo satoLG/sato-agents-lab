@@ -8,8 +8,10 @@ import {createHomeNavigation} from './home-navigation.js';
 const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 
 export async function createCompanionScene(container,{onProgress,onFrame,onArrival,onScenario,onExplore}={}){
- const renderer=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
- let pixelRatio=Math.min(devicePixelRatio,1.75),qualityFrames=0,qualityElapsed=0;
+ // High-density screens already smooth edges, so they skip MSAA, and the
+ // fill resolution starts capped: a full-screen canvas is the main GPU cost.
+ const renderer=new T.WebGLRenderer({antialias:devicePixelRatio<1.5,alpha:true,powerPreference:'low-power'});
+ let pixelRatio=Math.min(devicePixelRatio,1.5),qualityFrames=0,qualityElapsed=0;
  renderer.setPixelRatio(pixelRatio);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
  container.append(renderer.domElement);onProgress?.(40,'Montando o robô…');
  const world=new T.Scene();renderer.setClearColor('#111b21',0);
@@ -65,15 +67,15 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
    // Unfold only after the entire shell clears the mouth; never widen inside it.
    const clearance=smooth((3.05-(rig.root.position.y+1.84))/.65);
    rig.root.rotation.z=-.18*clearance;
-   for(const arm of rig.arms){arm.upper.rotation.set(-.15*clearance,0,arm.side*(.025+.9*clearance));}
+   rig.gesture('tuck');
   }else if(age<3.35){
    stage('ouch');const p=smooth((age-2.6)/.75);rig.root.position.y=-.05;rig.hips.position.y=.42;rig.root.rotation.z=-.18*(1-p);rig.spine.rotation.x=.18;rig.face.mood('ouch',.8);rig.spine.rotation.z=-.13;
-   for(const arm of rig.arms){arm.upper.rotation.x=-.7;arm.lower.rotation.x=-.5;}
+   rig.gesture('up');
    for(const leg of rig.legs){leg.upper.rotation.x=-.7;leg.lower.rotation.x=1.05;leg.ankle.rotation.x=-.35;}
   }else if(age<4.6){
    if(container.dataset.arrival!=='rise')rig.face.mood('happy',1.4);stage('rise');const p=smooth((age-3.35)/1.25),crouch=1-p;rig.root.position.y=-.05*crouch;rig.hips.position.y=.54-.12*crouch;rig.spine.rotation.x=.18*crouch;rig.spine.rotation.z=-.13*crouch;
    for(const leg of rig.legs){leg.upper.rotation.x=-.7*crouch;leg.lower.rotation.x=1.05*crouch;leg.ankle.rotation.x=-.35*crouch;}
-   for(const arm of rig.arms){arm.upper.rotation.x=-.7*crouch;arm.lower.rotation.x=-.5*crouch;}
+   rig.gesture('sides');
   }else{arrival=null;chute.visible=false;stage('settled');arrivalResolve?.();return;}
   if(age>2.65)chute.position.y=3.05+5*smooth((age-2.65)/1.9);
  }
@@ -90,20 +92,18 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(navigation.active)return;
   if(!reaction)return;
   const elapsed=time-reaction.at,p=Math.min(1,elapsed/reaction.duration),envelope=Math.sin(p*Math.PI);
-  if(p>=1){if(reaction.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction=null;container.dataset.reaction='idle';return;}
-  const right=rig.arms[1],left=rig.arms[0];
+  if(p>=1){reaction=null;container.dataset.reaction='idle';return;}
   if(reduced.matches){rig.spine.rotation.z=envelope*.08;return;}
   switch(reaction.kind){
-   case 'wave':case 'hello':right.upper.rotation.z=1.95*envelope+.2;right.upper.rotation.x=-.35*envelope;right.lower.rotation.x=-.8*envelope;right.lower.rotation.z=Math.sin(elapsed*12)*.3*envelope;rig.spine.rotation.z=-.1*envelope;break;
-   case 'boop':rig.root.position.y=envelope*.16;rig.spine.rotation.x=-.16*envelope;left.upper.rotation.z=-.8*envelope-.2;right.upper.rotation.z=.8*envelope+.2;break;
+   case 'wave':case 'hello':rig.spine.rotation.z=-.1*envelope;break;
+   case 'boop':rig.root.position.y=envelope*.16;rig.spine.rotation.x=-.16*envelope;break;
    case 'dance':{
-    // One complete body turn and two shoulder windmills with eased starts/stops.
-    const turn=smooth(p),beat=Math.sin(elapsed*10),spin=turn*Math.PI*4;
+    // One complete body turn while both arms orbit the ball (see companion-bot).
+    const turn=smooth(p),beat=Math.sin(elapsed*10);
     rig.root.rotation.y=navigation.facingYaw+turn*Math.PI*2;rig.hips.rotation.z=beat*.07*envelope;rig.root.position.y=Math.abs(beat)*.055*envelope;
-    for(const arm of rig.arms){arm.upper.rotation.z=arm.side*(.2+1.05*envelope);arm.upper.rotation.x=spin*arm.side;arm.lower.rotation.x=-.28*envelope;arm.lower.rotation.z=Math.sin(elapsed*10+arm.side)*.12*envelope;if(arm.wrist)arm.wrist.rotation.y=Math.sin(elapsed*10)*.3*envelope;}
     for(const leg of rig.legs){leg.upper.rotation.x=Math.sin(elapsed*10+leg.side)*.15*envelope;leg.ankle.rotation.x=-Math.max(0,beat*leg.side)*.18*envelope;}break;
    }
-   case 'shy':rig.spine.rotation.z=.22*envelope;rig.spine.rotation.x=.1*envelope;left.upper.rotation.x=-1.2*envelope;left.lower.rotation.x=-.65*envelope;right.upper.rotation.z=.4*envelope+.2;break;
+   case 'shy':rig.spine.rotation.z=.22*envelope;rig.spine.rotation.x=.1*envelope;break;
   }
  }
  function updateScenario(dt){
@@ -136,11 +136,13 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(resizePending)applyResize();navigation.update(dt);pose(dt);updateScenario(dt);navigation.frameFront(frontPosition,frontTarget,dt,frontFov);updateNature(time,reduced.matches);sets.get(currentScenario)?.tick(reduced.matches?0:time);
   // Adapt fill resolution only after sustained slow frames, never the CSS size.
   qualityElapsed+=Math.min(.25,(stamp-(render.previousStamp||stamp))/1000);render.previousStamp=stamp;
-  if(++qualityFrames>=60){if(qualityElapsed/qualityFrames>.055&&pixelRatio>1){pixelRatio=Math.max(1,pixelRatio-.25);renderer.setPixelRatio(pixelRatio);}qualityFrames=0;qualityElapsed=0;}
+  // The loop targets 30 fps; when 30 frames average under ~24 fps, drop the
+  // fill resolution a step (down to .75) and keep checking.
+  if(++qualityFrames>=30){if(qualityElapsed/qualityFrames>.042&&pixelRatio>.75){pixelRatio=Math.max(.75,pixelRatio-.25);renderer.setPixelRatio(pixelRatio);bufferWidth=0;resizePending=true;}qualityFrames=0;qualityElapsed=0;}
   renderer.render(world,camera);report();
  }
  const reactionFaces={wave:['happy',1.6],hello:['happy',2.2],boop:['ouch',.45],dance:['happy',4.2],shy:['happy',1.8]};
- function react(kind='wave'){const [face,duration]=reactionFaces[kind]||['happy',1.4];rig.face.mood(face,duration);if(kind==='boop')setTimeout(()=>{if(!disposed)rig.face.mood('wide',.7);},450);if(reaction?.kind==='dance')for(const arm of rig.arms){arm.upper.rotation.x=0;if(arm.wrist)arm.wrist.rotation.y=0;}reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};container.dataset.reaction=kind;}
+ function react(kind='wave'){const [face,duration]=reactionFaces[kind]||['happy',1.4];rig.face.mood(face,duration);if(kind==='boop')setTimeout(()=>{if(!disposed)rig.face.mood('wide',.7);},450);reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};rig.gesture({wave:'wave',hello:'wave',boop:'front',dance:'dance',shy:'shy'}[kind]||'wave',reaction.duration);container.dataset.reaction=kind;}
  function look(event){if(navigation.active||event.target.closest('dialog'))return;const bounds=container.getBoundingClientRect(),head=project(0,1.2,.4);lookYaw=T.MathUtils.clamp((event.clientX-bounds.left-head.x)/Math.max(100,bounds.width*.4),-.3,.3);lookPitch=T.MathUtils.clamp((head.y-event.clientY+bounds.top)/Math.max(100,bounds.height*.4),-.3,.3);rig.face.look(lookYaw/.3,lookPitch/.3);}
  function disposeSet(set){for(const root of [set.root,set.skybox]){root.traverse(o=>{o.geometry?.dispose();for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){for(const value of Object.values(m))if(value?.isTexture)value.dispose();m.dispose();}});root.removeFromParent();}}
  const leave=()=>{lookYaw=lookPitch=0;rig.face.look(null);};const home=container.closest('#home');home.addEventListener('pointermove',look);home.addEventListener('pointerdown',look);home.addEventListener('pointerleave',leave);
