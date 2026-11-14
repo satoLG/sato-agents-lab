@@ -34,7 +34,7 @@ const vertexShader=`
 varying vec2 vUv;varying vec3 vNormal;
 void main(){vUv=uv;vNormal=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
 const fragmentShader=`
-uniform vec2 uGrid,uSize,uLook,uSquash;uniform vec4 uMood;uniform float uBlink,uTalk,uTime,uPower,uSep;uniform vec3 uLed;
+uniform vec2 uGrid,uSize,uLook,uSquash;uniform vec4 uMood;uniform float uBlink,uTalk,uTime,uPower,uSep,uDrawing;uniform vec3 uLed;
 varying vec2 vUv;varying vec3 vNormal;
 float box(vec2 p,vec2 b,float r){vec2 q=abs(p)-b+r;return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}
 float segment(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;return length(pa-ba*clamp(dot(pa,ba)/dot(ba,ba),0.,1.));}
@@ -50,6 +50,15 @@ float eye(vec2 p,float side){
  return normal*uMood.x+happy*uMood.y+ouch*uMood.z+wide*uMood.w;
 }
 float face(vec2 p){
+ if(uDrawing>.5){
+  vec2 q=p-uGrid*.5;
+  float eyes=min(length(q-vec2(-4.5,2.)),length(q-vec2(4.5,2.)))-1.1;
+  float nose=box(q-vec2(0.,-.5),vec2(1.1,.7),.45);
+  float mouth=min(segment(q,vec2(0.,-1.2),vec2(-1.6,-3.)),segment(q,vec2(0.,-1.2),vec2(1.6,-3.)))-.5;
+  vec2 w=vec2(abs(q.x),q.y);
+  float whiskers=min(segment(w,vec2(4.,-.7),vec2(10.,.3)),min(segment(w,vec2(4.5,-2.),vec2(10.5,-2.)),segment(w,vec2(4.,-3.),vec2(9.5,-4.3))))-.5;
+  return min(min(eyes,nose),min(mouth,whiskers));
+ }
  vec2 c=uGrid*.5+vec2(0.,.7)+uLook;
  float d=min(eye(p-c-vec2(-uSep,0.),-1.),eye(p-c-vec2(uSep,0.),1.));
  if(uTalk>.01){
@@ -81,7 +90,7 @@ void main(){
 
 function createFace(material,{reduced}){
  const u=material.uniforms,weights=new Float32Array([1,0,0,0]);
- const state={gaze:new T.Vector2(),target:new T.Vector2(),velocity:new T.Vector2(),nextGlance:.8,nextBlink:2.2,blinkAt:-1,doubleBlink:false,mood:'normal',moodUntil:0,talk:0,power:0,squash:new T.Vector2(1,1),time:0,pointer:null};
+ const state={gaze:new T.Vector2(),target:new T.Vector2(),velocity:new T.Vector2(),nextGlance:.8,nextBlink:2.2,blinkAt:-1,doubleBlink:false,mood:'normal',moodUntil:0,talk:0,power:0,squash:new T.Vector2(1,1),time:0,pointer:null,drawing:null,drawingUntil:0};
  const range=new T.Vector2(...GAZE_RANGE);
  function mood(kind,duration=0){if(!MOODS.includes(kind))kind='normal';state.mood=kind;state.moodUntil=duration?state.time+duration:0;}
  function blink(double=false){state.blinkAt=state.time;state.doubleBlink=double;}
@@ -89,6 +98,7 @@ function createFace(material,{reduced}){
  function update(dt,{talk=false,travel=null}={}){
   state.time+=dt;const t=state.time;
   if(state.moodUntil&&t>state.moodUntil)mood('normal');
+  if(state.drawingUntil&&t>state.drawingUntil){state.drawing=null;state.drawingUntil=0;}
   state.power=Math.min(1,state.power+dt*2.4);
   // Saccades: hold a point, then snap to a new one. A pointer pulls the gaze.
   if(t>=state.nextGlance){
@@ -114,9 +124,9 @@ function createFace(material,{reduced}){
   const goalWeights=MOODS.map(kind=>kind===state.mood?1:0),ease=reduced()?1:1-Math.exp(-dt*11);
   for(let i=0;i<4;i++)weights[i]+=(goalWeights[i]-weights[i])*ease;
   u.uLook.value.copy(state.gaze);u.uBlink.value=state.mood==='happy'?0:closed;u.uSquash.value.copy(state.squash);
-  u.uMood.value.set(weights[0],weights[1],weights[2],weights[3]);u.uTalk.value=state.talk;u.uTime.value=t;u.uPower.value=state.power;
+  u.uMood.value.set(weights[0],weights[1],weights[2],weights[3]);u.uTalk.value=state.talk;u.uTime.value=t;u.uPower.value=state.power;u.uDrawing.value=state.drawing==='rabbit'?1:0;
  }
- return {update,mood,blink,look,get gaze(){return state.gaze;},get expression(){return state.mood;},reset(){state.power=0;}};
+ return {update,mood,blink,look,drawing(kind,duration=0){state.drawing=kind==='rabbit'?kind:null;state.drawingUntil=state.drawing&&duration?state.time+duration:0;},get gaze(){return state.gaze;},get expression(){return state.drawing||state.mood;},reset(){state.power=0;}};
 }
 
 // Chunky texels on the shell: a tiny grain map with nearest filtering.
@@ -151,7 +161,7 @@ export function createCompanionBot(art,{reduced=()=>false}={}){
  const ball=mesh(spine,geo('companion-ball',()=>new T.SphereGeometry(RADIUS,32,20)),shell);ball.name='companion-ball';
  const visorMaterial=new T.ShaderMaterial({vertexShader,fragmentShader,transparent:true,toneMapped:false,uniforms:{
   uGrid:{value:new T.Vector2(...GRID)},uSize:{value:new T.Vector2(VISOR.radius*VISOR.width,VISOR.radius*VISOR.height)},uLook:{value:new T.Vector2()},uSquash:{value:new T.Vector2(1,1)},
-  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uLed:{value:new T.Color('#2aa8ff')}}});
+  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uDrawing:{value:0},uLed:{value:new T.Color('#2aa8ff')}}});
  const visor=mesh(head,geo('companion-visor',()=>new T.SphereGeometry(VISOR.radius,40,20,Math.PI/2-VISOR.width/2,VISOR.width,Math.PI/2-VISOR.height/2-VISOR.lift,VISOR.height)),visorMaterial);
  visor.name='led-visor';visor.castShadow=false;
  rig.visor=visor;rig.face=createFace(visorMaterial,{reduced});
@@ -201,7 +211,8 @@ function moveArms(rig,dt,{talk,reduced,moving}){
   const g=m.gesture,age=t-(m.gestureAt||0),style=POSES[m.pose];
   if(style){arm.target.copy(style.spots[i]);arm.shapeGoal=pick(style.shape,i,1);arm.aim=pick(style.aim,i,'hang');arm.reachGoal=pick(style.reach,i,1);arm.spin=pick(style.spin,i,0);arm.tumble=pick(style.tumble,i,0);}
   let goal=arm.target,rate=reduced?60:4.2,shape=arm.shapeGoal,pointing=arm.aim,tumble=arm.tumble,reach=arm.reachGoal;
-  if(g==='wave'&&arm.side>0){goal=v(.62+Math.sin(age*9)*.32,.75,.35);rate=12;pointing='out';shape=1;}
+  if(g==='rabbit'){goal=v(arm.side*(.34+(reduced?0:Math.sin(age*5+arm.phase)*.055)),1,.08);rate=10;pointing=up;shape=reduced?1:.94+.06*Math.sin(age*4+arm.phase);reach=.93;tumble=0;}
+  else if(g==='wave'&&arm.side>0){goal=v(.62+Math.sin(age*9)*.32,.75,.35);rate=12;pointing='out';shape=1;}
   else if(g==='wave'){goal=SIDES[0];}
   else if(g==='dance'||g==='orbit'){
    const dance=g==='dance',speed=dance?5:2.2,length=(m.until||t+1)-(m.gestureAt||0),settle=Math.min(1,Math.max(0,(age-(length-.7))/.6)),eased=settle*settle*(3-2*settle),angle=age*speed+(arm.side<0?Math.PI:0);
@@ -215,6 +226,7 @@ function moveArms(rig,dt,{talk,reduced,moving}){
   const loop=reduced?0:talk?.22:.07;wobble.set(Math.sin(t*1.3+arm.phase)*loop,Math.sin(t*1.7+arm.phase*2)*loop,0);
   const dir=arm.dir.clone().applyEuler(wobble).normalize(),ease=reduced?1:1-Math.exp(-dt*8);
   arm.shape+=(shape-arm.shape)*ease;arm.reach+=(reach-arm.reach)*ease;arm.mesh.morphTargetInfluences[0]=1-arm.shape;
+  arm.mesh.scale.y=damp(arm.mesh.scale.y,g==='rabbit'?1.55:1,dt,9);
   arm.upper.quaternion.setFromUnitVectors(axis.set(arm.side,0,0),dir);arm.lower.position.x=arm.side*ORBIT*arm.reach;
   // Long axis: hanging arms tip a little away from the ball.
   if(pointing==='out')goalAxis.copy(dir);else if(pointing==='in')goalAxis.copy(dir).negate();else if(pointing?.isVector3)goalAxis.copy(pointing).normalize();else goalAxis.copy(dir).multiplyScalar(.45).add(down).normalize();

@@ -71,7 +71,7 @@ def test_queue_recovers_a_crashed_worker_and_keeps_history(private_chat, monkeyp
     assert jobs[0]["status"] == "done" and jobs[0]["answer"] == "A VM usa CPU e RAM."
 
 
-def test_hermes_invocation_passes_current_context_to_warm_runner(private_chat, monkeypatch):
+def test_sato_invocation_uses_visitor_identity_without_vm_telemetry(private_chat, monkeypatch):
     calls = []
     def run(payload, on_event):
         calls.append(payload)
@@ -82,7 +82,8 @@ def test_hermes_invocation_passes_current_context_to_warm_runner(private_chat, m
     headers=authorize(private_chat)
     created=private_chat.post('/api/lab/hermes-chat/jobs',json={'robot_id':'guide:hermes','question':'Qual a CPU?'},headers=headers).get_json()['id']
     assert web_chat._answer(web_chat._claim()) == 'CPU em 42%.'
-    assert calls[0]['id'] == created and '42' in calls[0]['prompt']
+    assert calls[0]['id'] == created and 'Sato Agent' in calls[0]['prompt']
+    assert '42' not in calls[0]['prompt']
     assert calls[0]['history'] == []
     job=private_chat.get('/api/lab/hermes-chat/jobs/'+created).get_json()
     assert any(event['kind']=='context' for event in job['progress'])

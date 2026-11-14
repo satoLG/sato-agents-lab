@@ -27,6 +27,14 @@
   <p id="home-explore-hint" role="status" hidden>WASD ou setas · arraste para girar · Esc para sair</p>
   <button id="chat-peek" class="glass scene-icon" type="button" aria-label="Mostrar últimas mensagens" aria-expanded="true" aria-controls="home-speech last-question" hidden>{{ icon('history') }}</button>
   <button id="robot-touch" type="button" aria-label="Cumprimentar o robô" hidden></button>
+  <aside id="robot-curiosity" hidden>
+    <button id="robot-question-toggle" class="glass" type="button" aria-label="Perguntas para começar" aria-expanded="false" aria-controls="robot-questions">?</button>
+    <div id="robot-questions" class="glass" aria-label="Perguntas para começar" hidden>
+      <button type="button" data-suggestion="about">Quem é Sato?</button>
+      <button type="button" data-suggestion="work">No que ele tem trabalhado?</button>
+      <button type="button" data-suggestion="rabbit">Imite um coelho <span aria-hidden="true">↗</span></button>
+    </div>
+  </aside>
   <div id="home-speech" aria-live="polite" aria-atomic="true" hidden></div>
   {{ loading('home-loading','home-progress','home-loading-stage','Carregando robô…') }}
   <p id="home-fallback" class="glass" hidden>O robô precisa de WebGL 2 para aparecer. Você pode continuar conversando abaixo.</p>

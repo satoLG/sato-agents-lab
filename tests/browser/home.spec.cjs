@@ -19,6 +19,9 @@ async function chatRoutes(page,{loggedIn=true}={}){
  return {jobs,get submitted(){return submitted;},get csrfSeen(){return csrfSeen;}};
 }
 async function ready(page){await page.goto('/');await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:45000});await expect(page.locator('#home-loading')).toBeHidden();}
+async function openSettings(page){if(!await page.locator('#home-settings').isVisible())await page.locator('#home-settings-toggle').click();await expect(page.locator('#home-settings')).toBeVisible();}
+async function closeSettings(page){if(await page.locator('#home-settings').isVisible())await page.locator('#settings-close').click();await expect(page.locator('#home-settings')).toBeHidden();}
+async function selectScene(page,kind){await openSettings(page);const input=page.locator(`[name="home-scenario"][value="${kind}"]`),changed=!await input.isChecked();await input.check();if(changed)await expect(page.locator('#home-settings')).toBeHidden();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);}
 async function chooseSession(page){if(await page.locator('#home-sessions').isVisible()){await expect(page.locator('.session-card').first()).toBeVisible();await page.locator('.session-card').first().click();}await expect(page.locator('.history-turn').first()).toBeVisible();}
 async function resumeSeeded(page){await page.locator('#home-history-toggle').click();await chooseSession(page);await page.keyboard.press('Escape');}
 
@@ -174,9 +177,9 @@ test('settings lazily reuse miniature lab and forest with smooth scenario change
  await ready(page);expect(environmentRequests).toBe(0);await page.locator('#home-settings-toggle').click();await expect(page.getByRole('dialog')).toBeVisible();
  await page.evaluate(()=>{const r=__companionQA.renderer,compile=r.compileAsync.bind(r);r.compileAsync=async(...args)=>{await new Promise(resolve=>{window.__releaseCompanionCompile=resolve;});return compile(...args);};window.__restoreCompanionCompile=()=>{r.compileAsync=compile;};});
  await page.locator('[name="home-scenario"][value="lab"]').check();await page.waitForFunction(()=>window.__releaseCompanionCompile);expect(await page.evaluate(()=>__companionQA.world.getObjectByName('companion-lab').visible)).toBe(false);await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');await page.evaluate(()=>{__releaseCompanionCompile();__restoreCompanionCompile();});
- for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();await page.locator('#home-settings-toggle').click();}
+ for(const kind of ['lab','forest']){await selectScene(page,kind);await page.waitForTimeout(700);await closeSettings(page);await page.locator('#home-settings-toggle').click();}
  expect(environmentRequests).toBe(1);const memory=await page.evaluate(()=>({...__companionQA.renderer.info.memory}));
- for(const kind of ['lab','black','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);}await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
+ for(const kind of ['lab','black','forest']){await selectScene(page,kind);}await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');await page.waitForTimeout(800);
  const actual=await page.evaluate(()=>({memory:{...__companionQA.renderer.info.memory},calls:__companionQA.renderer.info.render.calls,sets:__companionQA.world.children.filter(o=>o.name.startsWith('companion-')).length,saved:localStorage.getItem('sato-home-scenario')}));expect(actual.memory).toEqual(memory);expect(actual.calls).toBeLessThan(220);expect(actual.sets).toBe(2);expect(actual.saved).toBe('forest');expect(errors).toEqual([]);
  await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toBeHidden();await page.reload();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest',{timeout:15000});
 });
@@ -225,7 +228,7 @@ test('themes are legible across skyboxes, scene is not selectable and sound SVG 
  const selection=await page.evaluate(()=>['#home','#home-scene canvas','.home-header','#home-speech .speech-text','#last-question-text','#home-input'].map(selector=>getComputedStyle(document.querySelector(selector)).userSelect));expect(selection).toEqual(['none','none','none','text','text','text']);
  await page.locator('#home-settings-toggle').click();await expect(page.locator('#settings-title')).toHaveText('Configurações');
  for(const kind of ['black','lab','forest']){
-  await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);
+  await selectScene(page,kind);await openSettings(page);
   for(const theme of ['cyan','mint','violet','amber']){
    await page.locator(`[name="home-theme"][value="${theme}"]`).check();
    const ratios=await page.evaluate(()=>{
@@ -236,7 +239,7 @@ test('themes are legible across skyboxes, scene is not selectable and sound SVG 
     }).flat();
    });expect(Math.min(...ratios)).toBeGreaterThan(4.5);
   }
-  await page.locator('[name="home-theme"][value="cyan"]').check();await page.locator('#settings-close').click();
+  await page.locator('[name="home-theme"][value="cyan"]').check();await closeSettings(page);
   await page.locator('#home-settings-toggle').click();
  }
  await page.locator('[name="home-theme"][value="violet"]').check();
@@ -244,7 +247,7 @@ test('themes are legible across skyboxes, scene is not selectable and sound SVG 
   if(active)await page.locator('#home-sound').click();
   const offset=await page.locator('#home-sound').evaluate(button=>{const b=button.getBoundingClientRect(),svg=[...button.querySelectorAll('svg')].find(svg=>svg.getBoundingClientRect().width),s=svg.getBoundingClientRect();return Math.hypot(b.x+b.width/2-s.x-s.width/2,b.y+b.height/2-s.y-s.height/2);});expect(offset).toBeLessThan(.5);
  }
- await page.locator('#settings-close').click();await page.locator('#home-history-toggle').click();
+ await closeSettings(page);await page.locator('#home-history-toggle').click();
  const blur=await page.locator('#home-history').evaluate(el=>getComputedStyle(el).backdropFilter);expect(blur).toBe('blur(1px)');
  const terrain=await page.evaluate(()=>{const mesh=__companionQA.world.getObjectByName('forest-terrain');const positions=mesh.geometry.getAttribute('position');return {texture:!!mesh.material.map,variation:Math.max(...Array.from({length:positions.count},(_,i)=>positions.getY(i)))-Math.min(...Array.from({length:positions.count},(_,i)=>positions.getY(i))),sky:__companionQA.world.getObjectByName('forest-skybox').visible};});expect(terrain.texture).toBe(true);expect(terrain.variation).toBeGreaterThan(.1);expect(terrain.sky).toBe(true);
  await page.reload();await expect(page.locator('#home')).toHaveAttribute('data-theme','violet');
@@ -276,7 +279,7 @@ test('full viewport backgrounds keep one canvas and resize only inside a rendere
  await page.setViewportSize({width:393,height:640});await page.waitForTimeout(300);
  const events=await page.evaluate(()=>__drawingEvents);expect(events.filter(event=>event==='setSize').length).toBe(1);expect(events[events.indexOf('setSize')+1]).toBe('render');
  for(const kind of ['lab','forest']){
-  await page.locator('#home-settings-toggle').click();await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.waitForTimeout(700);await page.locator('#settings-close').click();
+  await page.locator('#home-settings-toggle').click();await selectScene(page,kind);await page.waitForTimeout(700);await closeSettings(page);
   const background=await page.evaluate(()=>{const {renderer,world,camera}=__companionQA;renderer.render(world,camera);const gl=renderer.getContext(),pixel=new Uint8Array(4);gl.readPixels(2,2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);return {same:__canvas===renderer.domElement,height:renderer.domElement.getBoundingClientRect().height,pixel:[...pixel]};});expect(background.same).toBe(true);expect(background.height).toBe(640);expect(background.pixel.slice(0,3).reduce((sum,n)=>sum+n,0)).toBeGreaterThan(100);
 
  }
@@ -329,10 +332,10 @@ test('arms reshape between ball and paddle, point and spin on request @scene',as
 test('ambient audio follows the scenario, mutes and resumes without duplicate loops @scene',async({page})=>{
  await chatRoutes(page);await page.route('**/js/home-audio.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('return {startTyping,stopTyping,','window.__homeAudioQA={loops,buffers,context:()=>context};return {startTyping,stopTyping,')});});await ready(page);await page.locator('#home-settings-toggle').click();
  for(const [scenario,kind]of [['lab','hum'],['forest','nature']]){
-  await page.locator(`[name="home-scenario"][value="${scenario}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',scenario);await page.waitForFunction(kind=>__homeAudioQA.loops.has(kind),kind);
+  await selectScene(page,scenario);await page.waitForFunction(kind=>__homeAudioQA.loops.has(kind),kind);
   expect(await page.evaluate(kind=>{const {loops,context}=__homeAudioQA,voice=loops.get(kind);return {size:loops.size,loop:voice.source.loop,state:context().state,buffer:!!voice.source.buffer};},kind)).toEqual({size:1,loop:true,state:'running',buffer:true});
  }
- await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','true');await page.locator('#home-sound').click();await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','false');expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(0);
+ await openSettings(page);await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','true');await page.locator('#home-sound').click();await expect(page.locator('#home-sound')).toHaveAttribute('aria-pressed','false');expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(0);
  await page.locator('#home-sound').click();await page.waitForFunction(()=>__homeAudioQA.loops.has('nature'));expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(1);
  await page.locator('[name="home-scenario"][value="black"]').check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','black');expect(await page.evaluate(()=>__homeAudioQA.loops.size)).toBe(0);
 });
@@ -385,7 +388,7 @@ test('official typewriter renders literal text once and stops keyboard sound on 
   // Markdown code delimiters are formatting, while HTML and pause-like text stay literal.
   const renderedAnswer='<img src=x onerror=alert(1)> Texto ^99999 código & emoji 👩🏽‍💻. '.repeat(10);
   const text=page.locator('#home-speech .speech-text');await expect(text).toHaveAttribute('data-typing','true',{timeout:10000});await page.waitForFunction(()=>!!__typingAudio());const partial=await text.textContent();expect(partial.length).toBeLessThan(421);expect(renderedAnswer.startsWith(partial)).toBe(true);await expect(text.locator('img')).toHaveCount(0);
-  await page.locator('#home-settings-toggle').click();await page.locator('#home-sound').click();expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();await page.locator('#settings-close').click();await expect(text).not.toHaveAttribute('data-typing','true',{timeout:15000});const excerpt=await text.textContent();expect(excerpt.endsWith('…')).toBe(true);expect(renderedAnswer.startsWith(excerpt.slice(0,-1))).toBe(true);expect(excerpt.length).toBeLessThan(421);expect(await text.evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBe(true);expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();
+  await page.locator('#home-settings-toggle').click();await page.locator('#home-sound').click();expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();await closeSettings(page);await expect(text).not.toHaveAttribute('data-typing','true',{timeout:15000});const excerpt=await text.textContent();expect(excerpt.endsWith('…')).toBe(true);expect(renderedAnswer.startsWith(excerpt.slice(0,-1))).toBe(true);expect(excerpt.length).toBeLessThan(421);expect(await text.evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBe(true);expect(await page.evaluate(()=>__typingAudio())).toBeFalsy();
   await page.waitForTimeout(2200);await expect(text).not.toHaveAttribute('data-typing','true');await expect(text.locator('img')).toHaveCount(0);
  }finally{await context.close();}
 });
@@ -425,7 +428,7 @@ for(const viewport of [{width:393,height:852},{width:1440,height:1000}])test(`ca
  await page.setViewportSize(viewport);await chatRoutes(page);await instrumentScene(page);await ready(page);
  const camera=()=>page.evaluate(()=>({projection:__companionQA.camera.projectionMatrix.toArray(),position:__companionQA.camera.position.toArray(),canvas:[__companionQA.renderer.domElement.clientWidth,__companionQA.renderer.domElement.clientHeight]}));
  for(const kind of ['black','lab','forest']){
-  await page.locator('#home-settings-toggle').click();await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await page.locator('#settings-close').click();const before=await camera();
+  await page.locator('#home-settings-toggle').click();await selectScene(page,kind);await closeSettings(page);const before=await camera();
   await page.locator('#home-input').fill(('Pergunta longa sobre a cena. ').repeat(15));await page.locator('#home-send').click();await expect(page.locator('#last-question')).toBeVisible();expect(await camera()).toEqual(before);
   await page.locator('#home-history-toggle').click();await chooseSession(page);expect(await camera()).toEqual(before);await page.keyboard.press('Escape');expect(await camera()).toEqual(before);
   await page.locator('#home-input').fill('Linha\n'.repeat(8));await expect(page.locator('#home-input')).toHaveValue('Linha\n'.repeat(8));expect(await camera()).toEqual(before);await page.locator('#home-input').fill('');
@@ -438,7 +441,7 @@ test('default wallpaper sits behind the transparent canvas and is absent in lab 
  for(const button of await page.locator('#home button,#home a').all()){if(await button.isVisible()){await button.evaluate(el=>el.focus());await expect(button).toHaveCSS('outline-style','none');}}
  await page.keyboard.press('Tab');expect(await page.evaluate(()=>getComputedStyle(document.activeElement).outlineStyle)).toBe('none');
  await page.locator('#home-settings-toggle').click();await expect(page.locator('.scene-option').first()).toContainText('Padrão');
- for(const kind of ['lab','forest']){await page.locator(`[name="home-scenario"][value="${kind}"]`).check();await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario',kind);await expect(page.locator('#home-art')).toHaveCSS('opacity','0');}
+ for(const kind of ['lab','forest']){await selectScene(page,kind);await expect(page.locator('#home-art')).toHaveCSS('opacity','0');}
 });
 
 for(const viewport of [{width:393,height:852},{width:393,height:480}])test(`typing sound ends at the visible preview without muting ${viewport.height}`,async({browser})=>{

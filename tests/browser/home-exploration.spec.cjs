@@ -19,8 +19,8 @@ const sample=page=>page.evaluate(()=>window.__homeSample);
 async function hold(page,key,ms){await page.keyboard.down(key);await page.waitForTimeout(ms);await page.keyboard.up(key);}
 async function drag(page,x,y,dx,dy){await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps:4});await page.mouse.up();}
 async function scenario(page,name,kind){await page.getByRole('button',{name:'Configurações',exact:true}).click();await page.getByRole('radio',{name,exact:true}).check();await expect(page.locator('#home')).toHaveAttribute('data-scenario',kind);
- // With motion on, the rift closes the dialog itself so the crossing is visible.
- if(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches))await page.getByRole('button',{name:'Fechar configurações',exact:true}).click();await expect(page.getByRole('dialog')).toBeHidden();if(kind==='black')await expect(page.locator('#home-art')).toHaveCSS('opacity','0.16');}
+ // Changing a scenario closes the panel immediately in either motion mode.
+ await expect(page.getByRole('dialog')).toBeHidden();if(kind==='black')await expect(page.locator('#home-art')).toHaveCSS('opacity','0.16');}
 
 test('play, movement, orbit, wall collision and a front view at the stopped location',async({page},info)=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));await setup(page);

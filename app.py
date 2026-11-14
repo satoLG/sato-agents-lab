@@ -12,7 +12,7 @@ from flask import Flask, abort, jsonify, render_template, request
 
 from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
-from hermes_dashboard import config, lab_feed, streaming
+from hermes_dashboard import config, lab_feed, streaming, sato_agent
 
 app = Flask(__name__)
 web_chat.configure(app)
@@ -128,6 +128,11 @@ def api_lab_chat():
         return jsonify({"error": "robô e pergunta obrigatórios; máximo de 500 caracteres"}), 400
     response = lab.answer(robot_id, question.strip())
     return (jsonify(response), 200) if response else (jsonify({"error": "Este robô não está mais no snapshot. Atualize o laboratório."}), 404)
+
+
+@app.get("/api/sato-agent/suggestions")
+def api_sato_agent_suggestions():
+    return jsonify(sato_agent.suggestions())
 
 
 @app.get("/api/lab/hermes-chat/session")

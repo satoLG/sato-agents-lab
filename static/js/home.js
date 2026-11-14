@@ -7,6 +7,7 @@ import {createChatTypewriter} from './chat-typewriter.js';
 import {fitChatPreview} from './chat-preview.js';
 import {createHomeWallpaper} from './home-wallpaper.js';
 import {createHomeJuice} from './home-juice.js';
+import {planMimic} from './robot-mimic.js';
 
 const $=id=>document.getElementById(id),API='/api/lab/hermes-chat',ROBOT='guide:hermes';
 const bubble=createSpeechBubble();$('home-speech').append(bubble.el);
@@ -18,6 +19,13 @@ let wallpaper,scene,pose,csrf=null,authenticated=false,available=false,jobs=[],p
 let currentQuestion='',speechPending=false,previewTimer;
 let conversations=[],conversationId=null,conversationTitle='',conversationRevision=0,historyView='sessions',hasEarlier=false,loadedEarlier=false,retryMessage=null;
 const awaitingAnswers=new Set(),animatedAnswers=new Set();
+const suggestedAnswers=new Map([
+ ['about',{question:'Quem é Sato?',answer:'Léo Sato é desenvolvedor de software. Conheça sua trajetória no portfólio: https://leosato.dev.br.'}],
+ ['work',{question:'No que ele tem trabalhado?',answer:'Conheça os trabalhos do Léo no GitHub: https://github.com/satoLG.'}],
+ ['rabbit',{question:'Imite um coelho',command:'/mimic coelho'}],
+]);
+// Warm these small, grounded answers while the companion is arriving.
+fetch('/api/sato-agent/suggestions',{signal:AbortSignal.timeout(12000)}).then(response=>response.ok?response.json():null).then(data=>{for(const item of data?.suggestions||[])if(suggestedAnswers.has(item.id)&&typeof item.question==='string'&&(typeof item.answer==='string'||item.id==='rabbit'))suggestedAnswers.set(item.id,item);}).catch(()=>{});
 const questionCopy=copyMessageButton(()=>currentQuestion,'Copiar pergunta');questionCopy.id='question-copy';$('question-copy').replaceWith(questionCopy);
 const audio=createCompanionAudio(active=>{$('home-sound').setAttribute('aria-pressed',String(active));$('home-sound').setAttribute('aria-label',active?'Silenciar robô':'Ativar som do robô');});
 // Every hidden toggle on the home page pops in with a bounce or shrinks out with particles.
@@ -62,6 +70,7 @@ function placeSpeech(){
  const {head,body} = pose,root=$('home').getBoundingClientRect(),touch=$('robot-touch');
  touch.style.left=`${body.left}px`;touch.style.top=`${body.top}px`;touch.style.width=`${body.right-body.left}px`;touch.style.height=`${body.bottom-body.top}px`;
  const speech=$('home-speech'),navBottom=document.querySelector('.home-header').getBoundingClientRect().bottom-root.top+16;
+ const curiosity=$('robot-curiosity');curiosity.style.left=`${Math.max(42,Math.min(root.width-42,head.x+52))}px`;curiosity.style.top=`${Math.max(navBottom,head.y-48)}px`;
  const chatTop=$('home-chat').hidden?root.height:$('home-chat').getBoundingClientRect().top-root.top;
  const top=Math.max(navBottom,Math.min(head.y-speech.offsetHeight-27,chatTop-speech.offsetHeight-20));
  speech.style.left=`${Math.max(speech.offsetWidth/2+15,Math.min(root.width-speech.offsetWidth/2-15,head.x))}px`;speech.style.top=`${top}px`;
@@ -239,6 +248,7 @@ $('home-input').addEventListener('input',event=>{if(event.inputType?.startsWith(
 $('home-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('home-form').requestSubmit();}});
 $('home-form').addEventListener('submit',async event=>{
  event.preventDefault();const question=$('home-input').value.trim();if(!question||!authenticated||requesting)return;
+ if(performMimic(question)){$('home-input').value='';$('home-input').style.height='auto';layoutComposer();return;}
  requesting=true;inputState();clearTimeout(pollTimer);
  conversationId ||=crypto.randomUUID().replaceAll('-','');const title=question.replace(/\s+/g,' ');conversationTitle ||=title.length<=90?title:title.slice(0,87).trimEnd()+'…';
  const message=retryMessage?.question===question&&retryMessage.conversation_id===conversationId?retryMessage:{request_id:crypto.randomUUID().replaceAll('-',''),conversation_id:conversationId,robot_id:ROBOT,question};retryMessage=message;
@@ -263,6 +273,28 @@ $('home-login').addEventListener('submit',async event=>{
  catch(error){status(error.message,true);}finally{button.disabled=false;}
 });
 const reactions=[{kind:'wave',text:'Oi! Que bom te ver por aqui.'},{kind:'boop',text:'Bip-bip! Acho que você achou meu botão de cócegas.'},{kind:'dance',text:'Um passinho de robô pra alegrar o dia!'}, {kind:'shy',text:'Hehe… agora fiquei tímido.'}];
+function instantReply(question,answer){
+ conversationId ||=crypto.randomUUID().replaceAll('-','');conversationTitle ||=question;
+ const now=Date.now()/1000,id=crypto.randomUUID().replaceAll('-','');
+ mergeJobs([{id,conversation_id:conversationId,robot_id:ROBOT,question,answer,status:'done',created_at:now,updated_at:now,local:true}]);
+ animatedAnswers.add(id);showLatest();status('Pronto!');
+}
+function performMimic(question){
+ const result=planMimic(question);if(!result)return false;
+ if(!result.ok){instantReply(question,result.answer);return true;}
+ const played=scene?.mimic(result.plan);
+ instantReply(question,played?.ok?result.answer:played?.answer||'Não consegui mostrar a imitação agora. Tente novamente quando o robô estiver visível.');return true;
+}
+function toggleQuestions(open){$('robot-questions').hidden=!open;$('robot-question-toggle').setAttribute('aria-expanded',String(open));if(open){$('robot-questions').style.setProperty('--question-shift','0px');$('robot-questions').style.setProperty('--question-y','0px');const bounds=$('robot-questions').getBoundingClientRect(),shift=Math.max(12-bounds.left,Math.min(0,innerWidth-12-bounds.right));$('robot-questions').style.setProperty('--question-shift',`${shift}px`);const height=visualViewport?.height||innerHeight,offset=visualViewport?.offsetTop||0,shiftY=Math.max(offset+12-bounds.top,Math.min(0,offset+height-12-bounds.bottom));$('robot-questions').style.setProperty('--question-y',`${shiftY}px`);}}
+$('robot-question-toggle').addEventListener('click',()=>toggleQuestions($('robot-questions').hidden));
+$('robot-question-toggle').addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();toggleQuestions(true);$('robot-questions').querySelector('button').focus();}});
+$('robot-curiosity').addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();toggleQuestions(false);$('robot-question-toggle').focus();}});
+document.addEventListener('pointerdown',event=>{if(!event.target.closest('#robot-curiosity'))toggleQuestions(false);});
+$('robot-questions').addEventListener('click',event=>{
+ const button=event.target.closest('[data-suggestion]');if(!button)return;const item=suggestedAnswers.get(button.dataset.suggestion);if(!item)return;toggleQuestions(false);
+ if(item.command)performMimic(item.question);else instantReply(item.question,item.answer);
+ $('robot-question-toggle').focus({preventScroll:true});
+});
 $('robot-touch').addEventListener('click',()=>{if(scene?.exploring)return;const reaction=reactions[reactionIndex++%reactions.length];say(reaction.text,{reaction:reaction.kind});});
 $('home-sound').addEventListener('click',()=>audio.toggle());
 function explorationChanged(active){const button=$('home-explore');button.setAttribute('aria-pressed',String(active));button.setAttribute('aria-label',active?'Parar exploração':'Explorar cenário');button.title=active?'Parar exploração':'Explorar cenário';$('home-explore-hint').hidden=!active;}
@@ -290,6 +322,7 @@ async function start(){
  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(disposed)return;$('home-loading').hidden=true;$('home').dataset.sceneReady='true';
  // The interface waits for the robot to land, then everything pops in together.
  if(scene){await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
+ $('robot-curiosity').hidden=false;
  $('home-chat').hidden=false;layoutComposer();juice.reveal($('home-chat'));
  await chatReady;if(disposed)return;document.body.dataset.ready='true';audio.cue('hello');juice.endIntro();
 }
