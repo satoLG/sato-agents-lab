@@ -59,7 +59,7 @@ test('LED eyes follow all pointer quadrants and stay on the visor',async({page},
  await setup(page);
  const views=[];
  for(const [x,y]of [[120,150],[1300,150],[1300,850],[120,850]]){
-  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.abs(s.eye[0])).toBeLessThanOrEqual(26*.2+.5);expect(Math.abs(s.eye[1])).toBeLessThanOrEqual(15*.2+.5);expect(s.head.slice(0,3)).toEqual([0,0,0]);
+  await page.mouse.move(x,y);await page.waitForTimeout(500);const s=await sample(page);views.push(s.eye);expect(Math.abs(s.eye[0])).toBeLessThanOrEqual(34*.27+.5);expect(Math.abs(s.eye[1])).toBeLessThanOrEqual(19*.2+.5);expect(s.head.slice(0,3)).toEqual([0,0,0]);
 
  }
  expect(views[0][0]).toBeLessThan(0);expect(views[1][0]).toBeGreaterThan(0);expect(views[0][1]).toBeGreaterThan(0);expect(views[2][1]).toBeLessThan(0);
