@@ -7,7 +7,8 @@ export function fitChatPreview(body,text){
  const probe=body.cloneNode(false);probe.removeAttribute('id');probe.removeAttribute('tabindex');probe.removeAttribute('data-typing');probe.setAttribute('aria-hidden','true');
  Object.assign(probe.style,{position:'fixed',left:'-10000px',top:'0',visibility:'hidden',pointerEvents:'none',display:'block',width:`${width}px`,height:'auto',minHeight:'0',maxHeight:'none',webkitLineClamp:'unset',margin:'0',transform:'none'});
  body.parentElement.append(probe);
- const fits=value=>{probe.textContent=value;return probe.getBoundingClientRect().height<=height+.5;};
+ // Layout height ignores the bubble's pop-in scale, which a client rect would include.
+ const fits=value=>{probe.textContent=value;return probe.offsetHeight<=height+.5;};
  try{
   if(fits(text))return text;
   const chars=Array.from(text);let low=0,high=chars.length;

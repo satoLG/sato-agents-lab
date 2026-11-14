@@ -72,30 +72,58 @@ export function createHomeJuice(root,audio){
   Object.defineProperty(el,'hidden',{configurable:true,enumerable:true,get(){return state.logical;},set(value){value=!!value;if(value===state.logical)return;change(el,state,value);}});
   return el;
  }
- function stopExit(el,state){if(!state.exit)return;const animations=state.exit;state.exit=null;delete el.dataset.juiceOut;animations.forEach(animation=>animation.cancel());}
+ const exiting=new Map();
+ function stopExit(el,state){if(!state.exit)return;const animations=state.exit;state.exit=null;exiting.delete(el);delete el.dataset.juiceOut;animations.forEach(animation=>animation.cancel());}
+ function startExit(el,state,rect){
+  el.dataset.juiceOut='';const {shrink:selector,burst:burstSelector}=state.options,target=selector&&el.querySelector(selector)||el,burstNode=burstSelector&&el.querySelector(burstSelector);
+  const animations=shrink(el,rect,{target,burstRect:burstNode?burstNode.getBoundingClientRect():rect});state.exit=animations;
+  const done=Promise.all(animations.map(animation=>animation.finished)).then(()=>{if(state.exit!==animations)return;state.exit=null;exiting.delete(el);delete el.dataset.juiceOut;if(state.logical)el.setAttribute('hidden','');animations.forEach(animation=>animation.cancel());},()=>{});
+  exiting.set(el,done);
+ }
  function change(el,state,hide){
   // A child hidden in the same task its container appears never painted: no exit.
   const revealed=[...batch].some(([other,record])=>other!==el&&!record.shown&&other.contains(el));
-  if(!batch.has(el)){const shown=!revealed&&!el.hasAttribute('hidden')&&visible(el)&&!el.parentElement?.closest('[data-juice-out]');batch.set(el,{shown,rect:shown?el.getBoundingClientRect():null,floating:shown&&['absolute','fixed'].includes(getComputedStyle(el).position)});}
+  if(!batch.has(el)){const shown=!state.deferred&&!revealed&&!el.hasAttribute('hidden')&&visible(el)&&!el.parentElement?.closest('[data-juice-out]');batch.set(el,{shown,rect:shown?el.getBoundingClientRect():null});}
   const before=batch.get(el);state.logical=hide;
-  if(!hide){stopExit(el,state);el.removeAttribute('hidden');}
-  else if(!state.exit){
-   if(before.shown&&before.floating&&!still()&&!el.parentElement?.closest('[data-juice-out]')){
-    el.dataset.juiceOut='';const {shrink:selector,burst:burstSelector}=state.options,target=selector&&el.querySelector(selector)||el,burstNode=burstSelector&&el.querySelector(burstSelector);
-    const animations=shrink(el,before.rect,{target,burstRect:burstNode?burstNode.getBoundingClientRect():before.rect});state.exit=animations;
-    Promise.all(animations.map(animation=>animation.finished)).then(()=>{if(state.exit!==animations)return;state.exit=null;delete el.dataset.juiceOut;if(state.logical)el.setAttribute('hidden','');animations.forEach(animation=>animation.cancel());},()=>{});
-   }else el.setAttribute('hidden','');
+  if(!hide){
+   if(state.exit)stopExit(el,state);
+   else if(!state.deferred)el.removeAttribute('hidden');
+  }else{
+   state.deferred=false;
+   if(!state.exit){if(before.shown&&!still())startExit(el,state,before.rect);else el.setAttribute('hidden','');}
   }
   if(!flushQueued){flushQueued=true;queueMicrotask(flush);}
+ }
+ // Swaps run in sequence: whatever leaves the same spot finishes its exit
+ // before the newcomer pops in, so the two never overlap.
+ function enter(el,state){
+  if(pop(el,{sound:intro?'pop':state.options.sound,fade:state.options.fade??true}))stagger(el,state.options.stagger);
  }
  function flush(){
   flushQueued=false;const entries=[...batch];batch.clear();
   for(const [el,before] of entries){
    const state=states.get(el),shown=!state.logical;
-   if(!before.shown&&shown){if(pop(el,{sound:intro?'pop':state.options.sound,fade:state.options.fade??true}))stagger(el,state.options.stagger);}
-   else if(before.shown&&!shown){if(intro)sound('out');if(!before.floating)burst(before.rect);}
+   if(!before.shown&&shown){
+    const blockers=[...exiting].filter(([other])=>other!==el&&!other.contains(el)&&other.parentElement?.contains(el)).map(([,done])=>done);
+    if(!blockers.length||still()){enter(el,state);continue;}
+    const focused=el.contains(document.activeElement)?document.activeElement:null;
+    state.deferred=true;el.setAttribute('hidden','');
+    Promise.all(blockers).then(()=>{if(!state.deferred||state.logical)return;state.deferred=false;el.removeAttribute('hidden');enter(el,state);if(focused&&el.contains(focused)&&document.activeElement===document.body)focused.focus({preventScroll:true});});
+   }
+   else if(before.shown&&!shown&&intro)sound('out');
   }
  }
+ // Text in place (titles): the old words shrink away, then the new ones pop in.
+ const swaps=new WeakMap();
+ function text(el,value,onChange){
+  const current=swaps.get(el)?.value??el.textContent;if(current===value)return;
+  swaps.get(el)?.animation?.cancel();
+  const apply=()=>{swaps.delete(el);el.textContent=value;onChange?.(value);};
+  if(still()||!visible(el)){apply();return;}
+  const options={duration:150,easing:'ease-in',fill:'forwards'},fade=el.animate([{opacity:1},{opacity:0}],options),animation=el.animate([{transform:'scale(1)'},{transform:'scale(.82)'}],{...options,composite:'add'}),entry={value,animation:{cancel(){fade.cancel();animation.cancel();}}};swaps.set(el,entry);
+  animation.finished.then(()=>{if(swaps.get(el)!==entry)return;apply();entry.animation.cancel();lastPop.delete(el);pop(el,{fade:true});},()=>{});
+ }
+ function settled(){return Promise.all([...exiting.values()]);}
  function inView(el){const rect=el.getBoundingClientRect();return rect.bottom>0&&rect.top<innerHeight&&rect.width>0;}
  function stagger(container,selector,{sounds=true}={}){
   if(!selector)return;
@@ -154,10 +182,10 @@ export function createHomeJuice(root,audio){
  // ---- intro ----------------------------------------------------------------
  function reveal(){
   clearTimeout(introFallback);if(root.dataset.juiceIntro!=='pending')return;delete root.dataset.juiceIntro;
-  [...root.querySelectorAll('.home-header .brand,.home-header .site-nav a')].forEach((el,index)=>pop(el,{sound:'pop',pitch:1+index*.12,delay:index*80}));
+  [...root.querySelectorAll('.home-header>*')].forEach((el,index)=>pop(el,{sound:'pop',pitch:1+index*.12,delay:index*80}));
  }
 
- return {watch,pop,burst,list,dialog,stagger,reveal,
+ return {watch,pop,burst,list,dialog,stagger,reveal,text,settled,
   endIntro(){setTimeout(()=>{intro=false;},1500);},
   get intro(){return intro;},
   dispose(){disposed=true;clearTimeout(introFallback);cancelAnimationFrame(frame);frame=0;particles=[];canvas.remove();removeEventListener('resize',resize);removeEventListener('pointerup',pointerUp);removeEventListener('pointercancel',pointerUp);}};

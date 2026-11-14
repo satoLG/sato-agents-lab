@@ -151,3 +151,15 @@ html,body,#home{background:#111b21}
 .juice-particles{position:fixed;inset:0;width:100%;height:100%;z-index:2147483000;pointer-events:none}
 #home [data-juice-out],#home-settings[data-juice-out]{pointer-events:none!important}
 #home[data-juice-intro=pending] .home-header .brand,#home[data-juice-intro=pending] .home-header .site-nav a{opacity:0}
+/* Home loading: a larger striped bar that glides between progress steps. */
+#home-loading .loading-core{width:min(360px,calc(100% - 64px));gap:22px}
+#home-loading .loading-label{font-size:12px;font-weight:800;letter-spacing:6px;color:var(--accent);animation:home-loading-breathe 1.8s ease-in-out infinite}
+#home-loading small{font-size:12px;color:var(--muted)}
+#home-loading progress{height:14px;border-radius:999px;background:#0b1820;box-shadow:inset 0 0 0 1px #ffffff14,0 0 26px color-mix(in srgb,var(--accent) 14%,transparent);animation:home-loading-glow 1.8s ease-in-out infinite}
+#home-loading progress::-webkit-progress-bar{background:#0b1820;border-radius:999px}
+#home-loading progress::-webkit-progress-value{border-radius:999px;background:repeating-linear-gradient(-45deg,transparent 0 9px,#ffffff38 9px 18px),linear-gradient(90deg,var(--accent-dark),var(--accent));background-size:25.46px 100%,100% 100%;box-shadow:0 0 14px color-mix(in srgb,var(--accent) 60%,transparent);transition:width .5s cubic-bezier(.22,.8,.3,1);animation:home-loading-stripes .7s linear infinite}
+#home-loading progress::-moz-progress-bar{border-radius:999px;background:repeating-linear-gradient(-45deg,transparent 0 9px,#ffffff38 9px 18px),linear-gradient(90deg,var(--accent-dark),var(--accent));background-size:25.46px 100%,100% 100%;animation:home-loading-stripes .7s linear infinite}
+#history-subtitle{display:block}
+@keyframes home-loading-stripes{to{background-position:25.46px 0,0 0}}
+@keyframes home-loading-glow{50%{box-shadow:inset 0 0 0 1px #ffffff1f,0 0 34px color-mix(in srgb,var(--accent) 28%,transparent)}}
+@keyframes home-loading-breathe{50%{opacity:.55}}

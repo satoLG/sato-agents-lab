@@ -225,7 +225,7 @@ async function loadConversations(){const data=await api('conversations');if(disp
 function selectConversation(id=null,title=''){
  conversationRevision++;conversationId=id;conversationTitle=title;jobs=[];setPreviewCollapsed(false);retryMessage=null;loadedEarlier=false;hasEarlier=false;clearTimeout(pollTimer);typing.finishAll();awaitingAnswers.clear();historyEntries.clear();historyDays.clear();expandedMessages.clear();lastSpoken='';speechPending=false;showQuestion('');$('home-speech').hidden=true;$('home-input').value='';$('home-input').style.height='auto';$('history-earlier').hidden=true;renderHistory();layoutComposer();
 }
-function setHistoryView(view){historyView=view;$('home-sessions').hidden=view!=='sessions';$('history-thread').hidden=view!=='thread';$('history-new').hidden=view!=='sessions';$('history-sessions').hidden=view!=='thread';$('history-title').textContent=view==='sessions'?'Conversas':conversationTitle||'Nova conversa';$('history-title').title=$('history-title').textContent;$('history-subtitle').textContent=view==='sessions'?'Seu histórico com Sato Agent':'Sato Agent';$('history-bottom').hidden=view!=='thread';historyScroll();}
+function setHistoryView(view){historyView=view;$('home-sessions').hidden=view!=='sessions';$('history-thread').hidden=view!=='thread';$('history-new').hidden=view!=='sessions';$('history-sessions').hidden=view!=='thread';juice.text($('history-title'),view==='sessions'?'Conversas':conversationTitle||'Nova conversa',value=>{$('history-title').title=value;});juice.text($('history-subtitle'),view==='sessions'?'Seu histórico com Sato Agent':'Sato Agent');$('history-bottom').hidden=view!=='thread';historyScroll();}
 async function openConversation(conversation){if(requesting)return;if(conversation.id!==conversationId)selectConversation(conversation.id,conversation.title);setHistoryView('thread');renderHistory();status('Carregando conversa…');await refresh();}
 function newConversation(){if(requesting)return;selectConversation();historyOpen(false);status('Nova conversa.');schedulePoll();$('home-input').focus({preventScroll:true});}
 function historyScroll(){const log=$('home-messages');$('history-bottom').hidden=historyView!=='thread'||log.scrollHeight-log.scrollTop-log.clientHeight<120;}
@@ -259,7 +259,7 @@ $('home-form').addEventListener('submit',async event=>{
 });
 $('home-login').addEventListener('submit',async event=>{
  event.preventDefault();const button=$('home-login').querySelector('button');button.disabled=true;
- try{setSession(await api('login',{method:'POST',body:JSON.stringify({password:$('home-password').value})}));$('home-password').value='';if(authenticated){await loadConversations();schedulePoll();$('home-input').focus({preventScroll:true});}}
+ try{setSession(await api('login',{method:'POST',body:JSON.stringify({password:$('home-password').value})}));$('home-password').value='';if(authenticated){await loadConversations();schedulePoll();await juice.settled();$('home-input').focus({preventScroll:true});}}
  catch(error){status(error.message,true);}finally{button.disabled=false;}
 });
 const reactions=[{kind:'wave',text:'Oi! Que bom te ver por aqui.'},{kind:'boop',text:'Bip-bip! Acho que você achou meu botão de cócegas.'},{kind:'dance',text:'Um passinho de robô pra alegrar o dia!'}, {kind:'shy',text:'Hehe… agora fiquei tímido.'}];
@@ -282,9 +282,12 @@ async function start(){
   let saved;try{saved=localStorage.getItem('sato-home-scenario');}catch{}if(['lab','forest'].includes(saved)){progress(85,'Preparando cenário…');document.querySelector(`[name="home-scenario"][value="${saved}"]`).checked=true;await changeScenario(saved,{immediate:true});}
  }
  catch(error){console.warn('Companion scene unavailable',error);$('home-fallback').hidden=false;}
- if(disposed)return;progress(100,'Pronto!');$('home-chat').hidden=false;layoutComposer();
- await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));$('home-loading').hidden=true;$('home').dataset.sceneReady='true';juice.reveal();
+ if(disposed)return;progress(100,'Pronto!');
+ await new Promise(resolve=>setTimeout(resolve,matchMedia('(prefers-reduced-motion: reduce)').matches?0:260));
+ await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(disposed)return;$('home-loading').hidden=true;$('home').dataset.sceneReady='true';
+ // The interface waits for the robot to land, then everything pops in together.
  if(scene){await scene.arrive();if(disposed)return;$('robot-touch').hidden=false;}
+ $('home-chat').hidden=false;layoutComposer();juice.reveal();
  await chatReady;if(disposed)return;document.body.dataset.ready='true';audio.cue('hello');juice.endIntro();
 }
 window.addEventListener('pagehide',event=>{if(event.persisted){typing.finishAll();return;}disposed=true;clearTimeout(pollTimer);clearTimeout(previewTimer);typing.dispose();scene?.dispose();wallpaper?.dispose();audio.dispose();juice.dispose();});
