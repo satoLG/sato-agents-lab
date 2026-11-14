@@ -5,6 +5,7 @@ import {updateNature} from './nature-motion.js';
 import {createSceneArt} from './scene-art.js';
 import {createHomeNavigation} from './home-navigation.js';
 import {createPortal} from './home-portal.js';
+import {validMimicPlan} from './robot-mimic.js';
 
 const smooth=p=>{p=Math.max(0,Math.min(1,p));return p*p*(3-2*p);};
 // Portal crossing: the rift sits GAP behind the companion and the next world's
@@ -41,7 +42,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
  let arrival=null,arrivalResolve,arrivalPromise,currentScenario='black',desiredScenario='black',scenarioRevision=0;
  container.dataset.scenario='black';container.dataset.arrival='waiting';
- const navigation=createHomeNavigation(container,rig,camera,{getEnvironment:()=>sets.get(currentScenario),onChange(active){reaction=null;lookYaw=lookPitch=0;resizePending=true;onExplore?.(active);}});
+ const navigation=createHomeNavigation(container,rig,camera,{getEnvironment:()=>sets.get(currentScenario),onChange(active){stopMimic();reaction=null;lookYaw=lookPitch=0;resizePending=true;onExplore?.(active);}});
  const point=new T.Vector3(),bodyCorners=[];
  for(const x of [-1.05,1.05])for(const y of [.26,1.87])for(const z of [-.3,.65])bodyCorners.push(new T.Vector3(x,y,z));
  function project(x,y,z){point.set(x,y,z).applyMatrix4(rig.root.matrixWorld).project(camera);return {x:(point.x+1)*width/2,y:(1-point.y)*height/2};}
@@ -105,9 +106,13 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(navigation.active)return;
   if(!reaction)return;
   const elapsed=time-reaction.at,p=Math.min(1,elapsed/reaction.duration),envelope=Math.sin(p*Math.PI);
-  if(p>=1){reaction=null;container.dataset.reaction='idle';return;}
+  if(p>=1){stopMimic();reaction=null;container.dataset.reaction='idle';return;}
   if(reduced.matches){rig.spine.rotation.z=envelope*.08;return;}
   switch(reaction.kind){
+   case 'rabbit':{
+    const hop=Math.max(0,Math.sin(Math.max(0,elapsed-.75)*Math.PI*2/1.05)),bounce=hop*envelope;
+    rig.root.position.y=floor+bounce*.24;rig.root.scale.set(1-bounce*.06,1+bounce*.08,1-bounce*.06);rig.spine.rotation.x=-bounce*.1;break;
+   }
    case 'wave':case 'hello':rig.spine.rotation.z=-.1*envelope;break;
    case 'boop':rig.root.position.y=envelope*.16;rig.spine.rotation.x=-.16*envelope;break;
    case 'dance':{
@@ -183,6 +188,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function activateScenario(kind){navigation.setActive(false);navigation.resetFront();rig.root.position.set(0,0,0);rig.root.rotation.y=.12;currentScenario=kind;applyLook(kind);container.dataset.scenario=kind;home.dataset.scenario=kind;resizePending=true;onScenario?.(kind);}
  async function setScenario(kind,{immediate=false}={}){
   if(!['black','lab','forest'].includes(kind))throw new Error('Cenário inválido.');
+  stopMimic();
   navigation.setActive(false);
   const revision=++scenarioRevision;
   if(kind!=='black'&&!sets.has(kind)){
@@ -215,12 +221,19 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   renderer.render(world,camera);report();
  }
  const reactionFaces={wave:['happy',1.6],hello:['happy',2.2],boop:['ouch',.45],dance:['happy',4.2],shy:['happy',1.8]};
- function react(kind='wave'){if(transition)return;const [face,duration]=reactionFaces[kind]||['happy',1.4];rig.face.mood(face,duration);if(kind==='boop')setTimeout(()=>{if(!disposed)rig.face.mood('wide',.7);},450);reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};rig.gesture({wave:'wave',hello:'wave',boop:'front',dance:'dance',shy:'shy'}[kind]||'wave',reaction.duration);container.dataset.reaction=kind;}
+ function stopMimic(){if(reaction?.kind!=='rabbit')return;rig.face.drawing(null);rig.gesture('sides');reaction=null;container.dataset.reaction='idle';}
+ function mimic(plan){
+  if(disposed||arrival||transition)return {ok:false,answer:'Só um instante, estou terminando meu movimento. Tente de novo já já!'};
+  if(!validMimicPlan(plan))return {ok:false,answer:'Ainda não consigo fazer essa imitação.'};
+  navigation.setActive(false);stopMimic();rig.face.drawing(plan.face,plan.duration);rig.gesture(plan.gesture,plan.duration);speakingUntil=0;
+  reaction={kind:plan.id,at:time,duration:plan.duration};container.dataset.reaction=plan.id;return {ok:true};
+ }
+ function react(kind='wave'){if(transition)return;stopMimic();const [face,duration]=reactionFaces[kind]||['happy',1.4];rig.face.mood(face,duration);if(kind==='boop')setTimeout(()=>{if(!disposed)rig.face.mood('wide',.7);},450);reaction={kind,at:time,duration:kind==='dance'?4.2:kind==='hello'?2.6:1.8};rig.gesture({wave:'wave',hello:'wave',boop:'front',dance:'dance',shy:'shy'}[kind]||'wave',reaction.duration);container.dataset.reaction=kind;}
  function look(event){if(navigation.active||event.target.closest('dialog'))return;const bounds=container.getBoundingClientRect(),head=project(0,1.2,.4);lookYaw=T.MathUtils.clamp((event.clientX-bounds.left-head.x)/Math.max(100,bounds.width*.4),-.3,.3);lookPitch=T.MathUtils.clamp((head.y-event.clientY+bounds.top)/Math.max(100,bounds.height*.4),-.3,.3);rig.face.look(lookYaw/.3,lookPitch/.3);}
  function disposeSet(set){for(const root of [set.root,set.skybox]){root.traverse(o=>{o.geometry?.dispose();for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){for(const value of Object.values(m))if(value?.isTexture)value.dispose();m.dispose();}});root.removeFromParent();}}
  const leave=()=>{lookYaw=lookPitch=0;rig.face.look(null);};home.addEventListener('pointermove',look);home.addEventListener('pointerdown',look);home.addEventListener('pointerleave',leave);
  onProgress?.(75,'Acendendo as luzes…');rig.root.visible=true;chute.visible=true;await renderer.compileAsync(world,camera);rig.root.visible=false;chute.visible=false;renderer.render(world,camera);report();frame=requestAnimationFrame(render);
- return {arrive,react,setScenario,resize,setExploring(value){if(arrival||transition||currentScenario!==desiredScenario)return false;return navigation.setActive(value);},get exploring(){return navigation.active;},speak(duration=2){speakingUntil=time+duration;},dispose(){
+ return {arrive,react,setScenario,mimic,resize,setExploring(value){if(arrival||transition||currentScenario!==desiredScenario)return false;return navigation.setActive(value);},get exploring(){return navigation.active;},speak(duration=2){speakingUntil=time+duration;},dispose(){
   disposed=true;arrivalResolve?.();cancelAnimationFrame(frame);observer.disconnect();navigation.dispose();home.removeEventListener('pointermove',look);home.removeEventListener('pointerdown',look);home.removeEventListener('pointerleave',leave);
   const geometries=new Set(),materials=new Set(),textures=new Set();world.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){materials.add(m);for(const value of Object.values(m))if(value?.isTexture)textures.add(value);}});
   geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());renderer.dispose();renderer.domElement.remove();
