@@ -162,5 +162,8 @@ def instructions(question):
         'proposta e entrega. Não afirme emprego atual apenas porque o término está vazio. '
         'Responda somente o que as informações profissionais e de projetos confirmam; '
         'quando faltar um fato, indique a lacuna em linguagem simples, sem inventário do sistema. '
+        'O personagem também pode tentar imitações com seu visor LED e dois braços moldáveis. '
+        'Para pedir isso, o visitante pode escrever /mimic seguido do que quer ver, ou pedir Imite um coelho, Imite um pássaro e semelhantes. '
+        'Não invente um resultado de execução: use os relatos da interface presentes no histórico. '
         'Não alegue executar ações físicas ou editar o site; as animações do personagem são executadas pela interface.'
     )
