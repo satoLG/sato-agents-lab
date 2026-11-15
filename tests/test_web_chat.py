@@ -218,12 +218,14 @@ def test_owner_and_project_evidence_reach_runner_in_conversation(private_chat, m
 
 def test_mimic_queue_passes_only_robot_tools_and_persists_a_valid_plan(private_chat, monkeypatch):
     import copy
-    plan = copy.deepcopy(web_chat.mimic.PRESETS['rabbit'])
-    plan.update(id='bird', label='um pássaro bravo')
+    plan = copy.deepcopy(web_chat.mimic.PRESETS['bird'])
+    plan.update(id='bird-variation', label='um pássaro bravo')
+    plan['frames'][1]['calls'][-1]['arguments']['pitch'] = -.12
     calls = []
     def run(payload, _):
         calls.append(payload)
-        return json.dumps({'possible': True, 'performance': plan})
+        return json.dumps({'possible': True, 'base': 'bird', 'label': 'um pássaro bravo',
+                           'changes': [{'frame': 1, 'calls': [{'name': 'body_pose', 'arguments': {'pitch': -.12}}]}]})
     monkeypatch.setattr(web_chat.RUNNER, 'run', run)
     monkeypatch.setattr(web_chat, '_context', lambda *a, **k: (_ for _ in ()).throw(AssertionError('Private context read')))
     headers = authorize(private_chat)

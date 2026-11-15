@@ -4,8 +4,8 @@ async function dataFile(name){
  if(url.protocol==='file:'){const {readFile}=await import('node:fs/promises');return JSON.parse(await readFile(url,'utf8'));}
  const response=await fetch(url,{signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error('Mimic contract unavailable');return response.json();
 }
-const loaded=await Promise.all([dataFile('mimic-capabilities'),dataFile('mimic-presets')]).catch(()=>[{version:0,tools:[],performanceSchema:{}},{}]);
-export const [MIMIC_CAPABILITIES,MIMIC_PRESETS]=loaded;
+const loaded=await Promise.all([dataFile('mimic-capabilities'),dataFile('mimic-presets'),dataFile('mimic-library')]).catch(()=>[{version:0,tools:[],performanceSchema:{}},{},{}]);
+export const [MIMIC_CAPABILITIES,MIMIC_PRESETS,MIMIC_LIBRARY]=loaded;
 
 export function matchesSchema(value,schema){
  if(schema.oneOf)return schema.oneOf.filter(option=>matchesSchema(value,option)).length===1;
