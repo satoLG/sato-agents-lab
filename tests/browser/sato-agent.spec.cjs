@@ -100,3 +100,15 @@ test('a generated tool timeline executes once and reports the actual browser out
  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await page.waitForTimeout(1100);
  expect(reports).toEqual(['started','completed']);expect(errors).toEqual([]);
 });
+
+
+test('curated library renders both choreography endpoints on the actual LED and arm rig @scene',async({page},testInfo)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewportSize({width:1280,height:1375});
+ await page.route('**/__mimic-gallery',route=>route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'../fixtures/mimic-gallery.html'),'utf8')}));
+ await page.goto('/__mimic-gallery');await page.waitForFunction(()=>window.mimicGallery?.length===16);
+ expect(await page.evaluate(()=>mimicGallery.every(item=>item.arms===2&&item.led===1))).toBe(true);
+ await page.screenshot({path:testInfo.outputPath('mimic-library-a.png'),fullPage:true});
+ await page.evaluate(()=>renderMimicPhase(1));await page.screenshot({path:testInfo.outputPath('mimic-library-b.png'),fullPage:true});
+ expect(errors).toEqual([]);
+});

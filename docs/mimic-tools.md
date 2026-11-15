@@ -12,7 +12,28 @@ The robot has a spherical floating body, a blue 34×19 LED visor and exactly two
 | `arm_pose` | Set one existing arm's orbit direction, aim, ball/paddle shape, length, width, reach and axial twist. |
 | `body_pose` | Add bounded lift, pitch, yaw and roll relative to the current floor and facing. |
 
-The model receives this catalog, a valid example and the requested imitation only. Professional context, operational memories and tool access to the machine are excluded from this planning request. It returns `{possible:true, performance:{...}}` or `{possible:false, reason:"..."}`. There is at most one correction attempt for malformed output.
+The model receives the catalog, the complete curated application library and the requested imitation on **every model-planned imitation**, including a repair attempt. This data lives in `static/data/mimic-presets.json` (performances) and `mimic-library.json` (aliases, category and recognition cues). It is not installed in Hermes memory, rules or skills. Ordinary professional chat does not receive the library. Planning excludes professional context, operational memories and machine tools.
+
+## Curated library and derivation
+
+| Category | Presets |
+|---|---|
+| Animals | Rabbit, bird, cat, fish |
+| Vehicles | Car, train, helicopter, sailboat |
+| Objects | Clock, umbrella, camera, heart |
+| Nature | Tree, rain, wave, flower |
+
+Each base coordinates a visor pictogram/face, arm silhouette and two endpoint poses. Recognition cues tell the model which visual features must survive an adaptation. Exact Portuguese/English aliases use the same shared data immediately in the browser or server, without a model call. Modifiers such as `pássaro bravo` or `carro de corrida` still go to the planner.
+
+The preferred response is a small derivation:
+
+```json
+{"possible":true,"base":"car","label":"um carro de corrida","cycles":3,"changes":[{"frame":1,"calls":[{"name":"arm_pose","arguments":{"side":"left","width":1.45}}]}]}
+```
+
+`base` selects a known application preset. `label` is required; optional `duration`, `cycles` and `drawings` replace those fields. Each `changes` entry selects an existing **frame index**, then merges tool arguments into the matching tool/arm at that frame. Unchanged fields, drawings and frames retain the authored base. The server derives a fresh copy, then validates the complete result against the existing browser contract. Bases are never mutated. Unknown fields, full timelines, invalid indices/tools and values outside the contract are rejected, with at most one precise correction attempt. Refusals use `{possible:false,reason:"..."}`. Existing completed performances and the browser/API performance format remain compatible; only new model planning requires a base.
+
+The complete context is about 35 KB of compact JSON/text, rather than storing these application details in global agent memory. Updating the versioned application files updates future imitation requests.
 
 ## Performance
 
@@ -24,10 +45,10 @@ Both Python and JavaScript validate the same JSON Schema plus cross-field invari
 
 ## Chat and outcomes
 
-The rabbit preset is shared data and plays immediately. Other `/mimic …` and natural imitation requests use the existing authenticated chat queue and model runner. Plans and execution status are additive keys in the existing job-context JSON; there is no database-column migration or history rewrite. Older clients ignore the extra response fields.
+All sixteen exact presets are shared data and play immediately. Other `/mimic …` and natural imitation requests use the existing authenticated chat queue and model runner. Plans and execution status are additive keys in the existing job-context JSON; there is no database-column migration or history rewrite. Older clients ignore the extra response fields.
 
 The browser executes only a newly completed request and tracks its id to prevent replay on polling/history reload. It reports `started`, `completed`, `cancelled` or `unavailable` to the CSRF-protected `jobs/<id>/mimic-result` endpoint. Terminal reports are idempotent and cannot be overwritten by late events. The visible response describes completion only after the browser reports it.
 
 ## Extending
 
-Add a primitive to the shared catalog and schema, implement its compiler/executor handler, and add matching boundary and visual tests. For a fast preset, add data to `mimic-presets.json`; it must pass the same contract as generated plans. Future external MCP integration can adapt this registry and the existing execution-result channel to a selected browser/session; transport and authentication must be supplied explicitly rather than treating this catalog endpoint as a complete MCP server.
+Add a primitive to the shared catalog and schema, implement its compiler/executor handler, and add matching boundary and visual tests. For another preset, add a valid performance to `mimic-presets.json` and matching aliases/recognition cues to `mimic-library.json`; the same data feeds local execution and every planner context. The browser suite renders both endpoints of the entire library through the real LED shader and arm rig for visual review. Future external MCP integration can adapt this registry and the existing execution-result channel to a selected browser/session; transport and authentication must be supplied explicitly rather than treating this catalog endpoint as a complete MCP server.

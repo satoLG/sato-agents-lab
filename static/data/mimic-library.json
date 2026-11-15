@@ -1,0 +1,143 @@
+{
+  "rabbit": {
+    "category": "animals",
+    "aliases": [
+      "coelho",
+      "coelhinho",
+      "rabbit",
+      "bunny"
+    ],
+    "recognition": "Two long upright ears, whiskers and nose, small vertical hops. Keep the ears high; never use this silhouette for wings."
+  },
+  "bird": {
+    "category": "animals",
+    "aliases": [
+      "passaro",
+      "passarinho",
+      "ave",
+      "bird"
+    ],
+    "recognition": "Broad wings spread sideways and flap vertically, a small triangular beak. Bird emotion changes eyebrows, not the wing silhouette."
+  },
+  "cat": {
+    "category": "animals",
+    "aliases": [
+      "gato",
+      "gatinho",
+      "cat"
+    ],
+    "recognition": "Two SHORT outward-pointing ears, slanted eyes and whiskers, curious head tilt. Short ears distinguish it from the rabbit."
+  },
+  "fish": {
+    "category": "animals",
+    "aliases": [
+      "peixe",
+      "peixinho",
+      "fish"
+    ],
+    "recognition": "Small side fins, swimming side-to-side; visor shows a fish profile with triangular tail and bubbles."
+  },
+  "car": {
+    "category": "vehicles",
+    "aliases": [
+      "carro",
+      "automovel",
+      "car",
+      "automobile"
+    ],
+    "recognition": "Round arms LOW at the sides are two wheels; windshield, headlights and grille on visor, subtle suspension bounce."
+  },
+  "train": {
+    "category": "vehicles",
+    "aliases": [
+      "trem",
+      "locomotiva",
+      "train"
+    ],
+    "recognition": "Locomotive face with two windows, central headlight and chimney; side arms reciprocate like piston rods."
+  },
+  "helicopter": {
+    "category": "vehicles",
+    "aliases": [
+      "helicoptero",
+      "helicopter"
+    ],
+    "recognition": "Long slender arms spread horizontally ABOVE the head as rotor blades; visor cockpit and skids, bounded hover with a back-and-forth rotor sweep (no real flight)."
+  },
+  "sailboat": {
+    "category": "vehicles",
+    "aliases": [
+      "veleiro",
+      "barco a vela",
+      "sailboat"
+    ],
+    "recognition": "One upright thin arm is a mast, the other is a broad diagonal sail; visor sail and hull, gentle side-to-side rocking."
+  },
+  "clock": {
+    "category": "objects",
+    "aliases": [
+      "relogio",
+      "clock"
+    ],
+    "recognition": "Circular dial with hands on visor; two thin arms form differently oriented hands and sweep a short arc, without spinning the whole robot."
+  },
+  "umbrella": {
+    "category": "objects",
+    "aliases": [
+      "guarda-chuva",
+      "guarda chuva",
+      "umbrella"
+    ],
+    "recognition": "Two raised arms spread outward as a canopy; visor shows the dome, shaft and hooked handle. A slight tilt suggests shelter from rain."
+  },
+  "camera": {
+    "category": "objects",
+    "aliases": [
+      "camera",
+      "camera fotografica",
+      "maquina fotografica"
+    ],
+    "recognition": "Two small round hands grip a camera; visor is a camera outline with round lens and flash; lens briefly narrows like a shutter."
+  },
+  "heart": {
+    "category": "objects",
+    "aliases": [
+      "coracao",
+      "heart"
+    ],
+    "recognition": "Heart outline on visor, two rounded hands frame it BELOW the visor without covering the drawing; slow heartbeat expands the hands and adds a tiny lift."
+  },
+  "tree": {
+    "category": "nature",
+    "aliases": [
+      "arvore",
+      "tree"
+    ],
+    "recognition": "Wide diagonal arms are branches, leafy tree pictogram with trunk on visor; slow sway in the wind, not upright animal ears."
+  },
+  "rain": {
+    "category": "nature",
+    "aliases": [
+      "chuva",
+      "rain"
+    ],
+    "recognition": "Round arms high above the body are cloud lobes; visor cloud and descending rain strokes. Clouds stay above, raindrops move down."
+  },
+  "wave": {
+    "category": "nature",
+    "aliases": [
+      "onda",
+      "onda do mar",
+      "wave"
+    ],
+    "recognition": "Arms alternate high and low like rolling crests; visor shows water ripples and a curling wave; gentle body roll, no extra water objects."
+  },
+  "flower": {
+    "category": "nature",
+    "aliases": [
+      "flor",
+      "flower"
+    ],
+    "recognition": "Rounded arms unfold sideways as petals; five-petal flower pictogram and stem on visor; slow opening with a small lift."
+  }
+}

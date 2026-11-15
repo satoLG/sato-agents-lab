@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../static/vendor/three.module.min.js';
 import {planMimic,validMimicPlan,RABBIT_MIMIC} from '../static/js/robot-mimic.js';
-import {compileMimicPlan} from '../static/js/mimic-contract.js';
+import {compileMimicPlan,MIMIC_PRESETS,MIMIC_LIBRARY} from '../static/js/mimic-contract.js';
 import {createMimicPerformer,rasterizeDrawing} from '../static/js/mimic-performer.js';
 import {createCompanionBot,poseCompanion} from '../static/js/companion-bot.js';
 
@@ -16,6 +16,19 @@ test('known requests are instant; novel requests are delegated to the tool plann
  for(const prompt of ['Imite um coelho','/mimic coelho','Pode imitar um coelhinho?','Sato, você consegue imitar um coelho?','Finja ser um coelho'])assert.deepEqual(planMimic(prompt)?.plan,RABBIT_MIMIC);
  assert.equal(planMimic('/mimic parar').stop,true);assert.equal(planMimic('/mimic 😡').target,'😡');assert.equal(planMimic('Quem é Sato?'),null);assert.equal(planMimic('/mimic dragão').needsPlanning,true);assert.equal(planMimic('/mimic').ok,false);
  assert.equal(validMimicPlan(RABBIT_MIMIC),true);
+});
+
+test('all curated application presets are valid, exact aliases are local and modifiers go to the model',()=>{
+ assert.equal(Object.keys(MIMIC_PRESETS).length,16);
+ for(const [key,entry]of Object.entries(MIMIC_LIBRARY)){
+  const preset=MIMIC_PRESETS[key];assert.ok(validMimicPlan(preset),key);
+  for(const alias of entry.aliases)assert.deepEqual(planMimic(`/mimic ${alias}`).plan,preset);
+  const compiled=compileMimicPlan(preset);assert.equal(compiled.frames.length,2);
+  const robot=rig(),performer=createMimicPerformer(robot);performer.start(preset,0);performer.update(1,{reduced:true});poseCompanion(robot,0,.1,{reduced:true});
+  assert.ok(robot.arms.every(arm=>Number.isFinite(arm.mesh.scale.x)&&Number.isFinite(arm.dir.y)),key);performer.stop();robot.face.dispose();
+ }
+ assert.equal(planMimic('/mimic pássaro bravo').needsPlanning,true);assert.equal(planMimic('/mimic carro de corrida').needsPlanning,true);
+ const copy=planMimic('/mimic gato').plan;copy.duration=999;assert.notEqual(planMimic('/mimic gato').plan.duration,999);
 });
 
 test('the contract rejects unknown tools, nonfinite/extreme values, bad times and drawings',()=>{
