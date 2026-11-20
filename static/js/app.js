@@ -1,7 +1,7 @@
 // Roteador das abas. Cada aba so e inicializada na primeira vez que aparece -
 // nao adianta montar o cytoscape ou pedir o du do disco antes de alguem olhar.
 import * as activity from "./tab-activity.js";
-import * as vm from "./tab-vm.js";
+import * as sistema from "./tab-vm.js";
 import * as tools from "./tab-tools.js";
 import * as mcps from "./tab-mcps.js";
 import * as memory from "./tab-memory.js";
@@ -13,7 +13,7 @@ const TABS = {
   atividade: activity,
   providers: {init(){}},
   gateway: {init(){}},
-  vm: vm,
+  sistema: sistema,
   tools: tools,
   mcps: mcps,
   memoria: memory,
@@ -35,13 +35,13 @@ function show(name) {
     const panel = panelOf(key);
     if (panel) panel.hidden = key !== name;
   });
-  // pausa o refresh da VM quando ela sai de vista
-  if (name !== "vm" && started.has("vm") && vm.stop) vm.stop();
+  // pausa o refresh da aba Sistema quando ela sai de vista
+  if (name !== "sistema" && started.has("sistema") && sistema.stop) sistema.stop();
   if (!started.has(name)) {
     started.add(name);
     TABS[name].init(panelOf(name));
-  } else if (name === "vm") {
-    TABS.vm.init(panelOf("vm"));
+  } else if (name === "sistema") {
+    TABS.sistema.init(panelOf("sistema"));
   } else if (TABS[name].refresh) {
     TABS[name].refresh();
   }
@@ -51,7 +51,8 @@ function show(name) {
 }
 
 function currentTab() {
-  return (location.hash || "").replace(/^#\/?/, "") || "atividade";
+  const name = (location.hash || "").replace(/^#\/?/, "") || "atividade";
+  return name === "vm" ? "sistema" : name; // links antigos para a aba VM
 }
 
 document.querySelectorAll("[data-tab]").forEach((btn) => {
