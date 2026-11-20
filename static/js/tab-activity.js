@@ -1,4 +1,4 @@
-// Aba 1: atividade do agente (heatmap tipo GitHub + detalhe do dia).
+// Aba 2: atividade do agente (heatmap tipo GitHub + detalhe do dia).
 // O painel "ao vivo" acima do heatmap e servido pelo htmx (fragments/live.html);
 // aqui cuidamos so do calendario e da lista do dia selecionado.
 import { h, fmt, render, load, empty, getJSON, notice } from "./core.js";

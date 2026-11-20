@@ -239,8 +239,8 @@ O dashboard procura tudo em `~`. Se o seu Hermes estiver noutro lugar:
 
 | Aba | O que mostra | De onde vem |
 |-----|--------------|-------------|
+| VM | CPU (total e por core), memoria, swap, discos e o que ocupa cada espaco; primeira aba, atualiza a cada 15s enquanto visivel | `/proc`, `df`, `du` |
 | Atividade | Painel do que roda agora + calendario tipo GitHub; clicar num dia abre os eventos daquele dia | `events.db`, `ps`, `~/.hermes/logs/` |
-| VM | CPU (total e por core), memoria, swap, discos e o que ocupa cada espaco | `/proc`, `df`, `du` |
 | Tools | Catalogo de tools e estatisticas de tool calling | `events.db` (`tool_calls`) |
 | MCPs | Servidores MCP, acoes e uso | `config.yaml` + `tool_calls` com nome `mcp__servidor__acao` |
 | Memoria | Memorias, skills e contextos, com leitura do conteudo | `~/.hermes/{memories,skills,contexts}` |

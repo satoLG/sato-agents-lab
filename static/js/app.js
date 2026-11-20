@@ -9,11 +9,13 @@ import * as rag from "./tab-rag.js";
 import * as cron from "./tab-cron.js";
 import * as webhooks from "./tab-webhooks.js";
 
+// A ordem segue a navegacao: o status do hardware (VM) abre o dashboard.
+const DEFAULT_TAB = "vm";
 const TABS = {
+  vm: vm,
   atividade: activity,
   providers: {init(){}},
   gateway: {init(){}},
-  vm: vm,
   tools: tools,
   mcps: mcps,
   memoria: memory,
@@ -27,7 +29,7 @@ const started = new Set();
 function panelOf(name) { return document.getElementById(`panel-${name}`); }
 
 function show(name) {
-  if (!TABS[name]) name = "atividade";
+  if (!TABS[name]) name = DEFAULT_TAB;
   document.querySelectorAll("[data-tab]").forEach((btn) => {
     btn.setAttribute("aria-selected", btn.dataset.tab === name ? "true" : "false");
   });
@@ -35,7 +37,8 @@ function show(name) {
     const panel = panelOf(key);
     if (panel) panel.hidden = key !== name;
   });
-  // pausa o refresh da VM quando ela sai de vista
+  // pausa o refresh da VM quando ela sai de vista; ao voltar, init() busca
+  // uma leitura nova na hora e religa o polling de 15s
   if (name !== "vm" && started.has("vm") && vm.stop) vm.stop();
   if (!started.has(name)) {
     started.add(name);
@@ -51,7 +54,7 @@ function show(name) {
 }
 
 function currentTab() {
-  return (location.hash || "").replace(/^#\/?/, "") || "atividade";
+  return (location.hash || "").replace(/^#\/?/, "") || DEFAULT_TAB;
 }
 
 document.querySelectorAll("[data-tab]").forEach((btn) => {

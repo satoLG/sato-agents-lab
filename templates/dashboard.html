@@ -11,10 +11,10 @@
 
 {% block nav %}
 <nav class="tabs" role="tablist" aria-label="Secoes do dashboard">
-  <button class="tab" type="button" role="tab" id="tab-atividade" data-tab="atividade" aria-selected="true" aria-controls="panel-atividade">Atividade</button>
+  <button class="tab" type="button" role="tab" id="tab-vm" data-tab="vm" aria-selected="true" aria-controls="panel-vm">VM</button>
+  <button class="tab" type="button" role="tab" id="tab-atividade" data-tab="atividade" aria-selected="false" aria-controls="panel-atividade">Atividade</button>
   <button class="tab" type="button" role="tab" id="tab-providers" data-tab="providers" aria-selected="false" aria-controls="panel-providers">Providers</button>
   <button class="tab" type="button" role="tab" id="tab-gateway" data-tab="gateway" aria-selected="false" aria-controls="panel-gateway">Gateway</button>
-  <button class="tab" type="button" role="tab" id="tab-vm" data-tab="vm" aria-selected="false" aria-controls="panel-vm">VM</button>
   <button class="tab" type="button" role="tab" id="tab-tools" data-tab="tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
   <button class="tab" type="button" role="tab" id="tab-mcps" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
   <button class="tab" type="button" role="tab" id="tab-memoria" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
@@ -26,7 +26,16 @@
 
 {% block content %}
 
-<section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade">
+<section class="panel" id="panel-vm" role="tabpanel" aria-labelledby="tab-vm">
+  <div class="panel-head">
+    <h1>VM</h1>
+    <p>CPU, memoria e disco da maquina onde o agente roda.</p>
+  </div>
+  <div data-live-sector="vm" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
+  <div data-role="vm"><p class="skeleton">carregando...</p></div>
+</section>
+
+<section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade" hidden>
   <div class="panel-head">
     <h1>Atividade</h1>
     <p>Mensagens e ferramentas do histórico nativo do Hermes. O conteúdo dos prompts fica oculto nesta página de acesso aberto.</p>
@@ -52,15 +61,6 @@
   </div>
 
   <div data-role="detail"></div>
-</section>
-
-<section class="panel" id="panel-vm" role="tabpanel" aria-labelledby="tab-vm" hidden>
-  <div class="panel-head">
-    <h1>VM</h1>
-    <p>CPU, memoria e disco da maquina onde o agente roda.</p>
-  </div>
-  <div data-live-sector="vm" aria-label="Indicadores ao vivo"><p class="reading-status" role="status">Conectando…</p><div class="stat-grid"></div><div class="execution-history" data-live-history></div></div>
-  <div data-role="vm"><p class="skeleton">carregando...</p></div>
 </section>
 
 <section class="panel" id="panel-tools" role="tabpanel" aria-labelledby="tab-tools" hidden>

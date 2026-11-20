@@ -194,6 +194,18 @@ def test_paginas_html_renderizam(vm, client):
     assert "url_for" not in corpo, "sobrou url_for nao resolvido no HTML"
 
 
+def test_dashboard_abre_no_status_do_hardware(client):
+    import re
+    corpo = client.get("/dashboard").get_data(as_text=True)
+    abas = re.findall(r'<button class="tab"[^>]*data-tab="([^"]+)"[^>]*aria-selected="(\w+)"', corpo)
+    assert abas[0] == ("vm", "true"), abas
+    assert abas[1][0] == "atividade"
+    assert [a for a, sel in abas if sel == "true"] == ["vm"]
+    paineis = re.findall(r'<section class="panel" id="panel-([^"]+)"[^>]*?( hidden)?>', corpo)
+    assert paineis[0] == ("vm", ""), paineis
+    assert all(oculto for nome, oculto in paineis[1:]), paineis
+
+
 def test_memory_doc_casos_ruins(vm, client):
     memories = vm.hermes / "memories"
     memories.mkdir()

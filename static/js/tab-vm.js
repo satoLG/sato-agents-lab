@@ -1,4 +1,4 @@
-// Aba 2: VM - CPU (agregado e por core), memoria, swap, discos e o que ocupa espaco.
+// Aba 1: VM - CPU (agregado e por core), memoria, swap, discos e o que ocupa espaco.
 import { h, fmt, render, load, empty, table, notice, statusClass } from "./core.js";
 import { bars, meter, stat, seriesColor } from "./charts.js";
 
