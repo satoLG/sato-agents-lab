@@ -9,11 +9,14 @@ import * as rag from "./tab-rag.js";
 import * as cron from "./tab-cron.js";
 import * as webhooks from "./tab-webhooks.js";
 
+// Sistema e a aba mais consultada: abre por padrao e vem primeiro na navegacao.
+const DEFAULT_TAB = "sistema";
+
 const TABS = {
+  sistema: sistema,
   atividade: activity,
   providers: {init(){}},
   gateway: {init(){}},
-  sistema: sistema,
   tools: tools,
   mcps: mcps,
   memoria: memory,
@@ -27,7 +30,7 @@ const started = new Set();
 function panelOf(name) { return document.getElementById(`panel-${name}`); }
 
 function show(name) {
-  if (!TABS[name]) name = "atividade";
+  if (!TABS[name]) name = DEFAULT_TAB;
   document.querySelectorAll("[data-tab]").forEach((btn) => {
     btn.setAttribute("aria-selected", btn.dataset.tab === name ? "true" : "false");
   });
@@ -51,7 +54,7 @@ function show(name) {
 }
 
 function currentTab() {
-  const name = (location.hash || "").replace(/^#\/?/, "") || "atividade";
+  const name = (location.hash || "").replace(/^#\/?/, "") || DEFAULT_TAB;
   return name === "vm" ? "sistema" : name; // links antigos para a aba VM
 }
 

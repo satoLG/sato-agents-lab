@@ -1,4 +1,5 @@
 """Nenhuma rota pode responder 500, em nenhum estado de VM plausivel."""
+import re
 import pytest
 from datetime import datetime, timezone
 
@@ -191,6 +192,12 @@ def test_paginas_html_renderizam(vm, client):
                 "panel-memoria", "panel-rag", "panel-cron"]:
         assert aba in corpo, f"faltou {aba} no HTML do dashboard"
     assert "js/app.js" in corpo and "vendor/htmx.min.js" in corpo
+    # Sistema e a primeira aba e ja vem aberta; as demais ficam ocultas
+    abas = re.findall(r'data-tab="([a-z]+)" aria-selected="(true|false)"', corpo)
+    assert abas[0] == ("sistema", "true")
+    assert all(sel == "false" for _, sel in abas[1:])
+    assert re.search(r'id="panel-sistema"[^>]*aria-labelledby="tab-sistema">', corpo)
+    assert re.search(r'id="panel-atividade"[^>]*hidden>', corpo)
     assert "url_for" not in corpo, "sobrou url_for nao resolvido no HTML"
 
 

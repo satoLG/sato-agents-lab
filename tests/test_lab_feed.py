@@ -19,3 +19,12 @@ def test_cron_schedule_is_separate_from_execution_history(vm, monkeypatch):
     board=lab_feed.boards({'events':{'data':data}})['cron']
     assert len(board['upcoming'])==1 and board['upcoming'][0]['status']=='AGENDADO'
     assert board['rows'][0]['status']=='CONCLUÍDO'
+
+
+def test_vm_telemetry_carries_fields_for_live_sistema_tab(vm, monkeypatch):
+    # A aba Sistema atualiza CPU por core, memoria e swap a partir do SSE.
+    monkeypatch.setattr(lab_feed, 'boards', lambda channels: {})
+    data = lab_feed.collect()['channels']['vm']['data']
+    assert {'total', 'cores', 'count'} <= set(data['cpu'])
+    assert {'used_percent', 'used', 'total', 'swap_total', 'swap_used', 'swap_percent'} <= set(data['memory'])
+    assert 'disk_breakdown' not in data
