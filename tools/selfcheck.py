@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnostico do dashboard: roda na VM e diz exatamente o que esta faltando.
+"""Diagnostico do dashboard: roda na maquina do dashboard e diz exatamente o que esta faltando.
 
     python3 tools/selfcheck.py
 

@@ -187,7 +187,7 @@ def test_paginas_html_renderizam(vm, client):
     dash = client.get("/dashboard")
     assert dash.status_code == 200, dash.get_data(as_text=True)[:500]
     corpo = dash.get_data(as_text=True)
-    for aba in ["panel-atividade", "panel-vm", "panel-tools", "panel-mcps",
+    for aba in ["panel-atividade", "panel-sistema", "panel-tools", "panel-mcps",
                 "panel-memoria", "panel-rag", "panel-cron"]:
         assert aba in corpo, f"faltou {aba} no HTML do dashboard"
     assert "js/app.js" in corpo and "vendor/htmx.min.js" in corpo

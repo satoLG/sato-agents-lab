@@ -1,4 +1,4 @@
-// Aba 2: VM - CPU (agregado e por core), memoria, swap, discos e o que ocupa espaco.
+// Aba: Sistema - CPU (agregado e por core), memoria, swap, discos e o que ocupa espaco.
 import { h, fmt, render, load, empty, table, notice, statusClass } from "./core.js";
 import { bars, meter, stat, seriesColor } from "./charts.js";
 
@@ -6,7 +6,7 @@ let refs = {};
 let timer = null;
 
 export function init(root) {
-  refs = { body: root.querySelector("[data-role=vm]") };
+  refs = { body: root.querySelector("[data-role=sistema]") };
   refresh();
   clearInterval(timer);
   timer = setInterval(refresh, 15000);

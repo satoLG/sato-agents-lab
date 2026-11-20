@@ -200,7 +200,7 @@ def fragment_live():
     return render_template("fragments/live.html", live=activity.live_snapshot())
 
 
-# --- aba: VM ---
+# --- aba: Sistema (API mantem /api/vmstats por compatibilidade) ---
 
 @app.route("/api/vmstats")
 def api_vmstats():
