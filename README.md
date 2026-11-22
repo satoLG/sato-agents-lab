@@ -96,6 +96,11 @@ a digitação e para ao terminar, silenciar, trocar de conversa ou ocultar a aba
 Histórico retomado e movimento reduzido mostram o texto completo da prévia
 imediatamente. O bundle e a licença são locais; para regenerar, execute
 `npm ci && npm run build:typewriter`.
+Ao abrir uma conversa, o histórico fica invisível até as mensagens chegarem e
+então mostra a mais recente, com as últimas entrando em sequência. Ao fechar o
+histórico, os balões da cena só voltam depois que o painel sai, um após o outro.
+A resposta sobe para não ficar sob o botão **?** ao lado do robô; quando o
+cabeçalho não deixa espaço, o **?** sai de cena até a prévia recolher.
 Somente o conteúdo do chat e os campos de texto podem ser selecionados.
 No histórico, mensagens longas também começam resumidas; **Ver mais** expande
 somente o balão escolhido. A expansão permanece ao atualizar ou reabrir o

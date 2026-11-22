@@ -428,6 +428,51 @@ test('a history request started before submission cannot remove the newly regist
  await page.locator('#home-input').fill('Nova mensagem durante o refresh');await page.locator('#home-send').click();await expect(page.locator('#home-input')).toBeEnabled();release();await expect(page.locator('#last-question')).toContainText('Nova mensagem durante o refresh');await expect(page.locator('#home-input')).toHaveValue('');await expect(page.locator('.history-turn')).toHaveCount(2);
 });
 
+function seedLongConversation(chat,count=8){
+ const answer='Resposta longa para ocupar a prévia inteira do balão e conferir que nada aparece cortado. '.repeat(4),now=Date.now()/1000;
+ for(let i=0;i<count;i++)chat.jobs.push({id:`turn-${i}`,question:`Pergunta ${i+1} sobre o laboratório com texto suficiente para ocupar espaço?`,status:'done',answer:`Resposta ${i+1}. ${answer}`,created_at:now-900+i*60,updated_at:now-890+i*60});
+}
+function overlaps(a,b){return !!a&&!!b&&Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;}
+
+test('opening a conversation lands on the latest turn and pops it in instead of flashing the top',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));const chat=await chatRoutes(page);seedLongConversation(chat);await ready(page);
+  // Every frame while the thread opens: is the log painted, where is it scrolled, is anything animating.
+  await page.evaluate(()=>{window.__thread=[];const tick=()=>{const log=document.getElementById('home-messages');if(log.checkVisibility({checkVisibilityCSS:true,checkOpacity:true})&&log.clientHeight>40)__thread.push({end:log.scrollHeight-log.scrollTop-log.clientHeight,turns:log.querySelectorAll('.history-turn').length,animating:log.getAnimations({subtree:true}).length});if(!window.__threadDone)requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+  await page.locator('#home-history-toggle').click();await page.locator('.session-card').first().click();
+  await expect(page.locator('#home-messages')).not.toHaveAttribute('data-juice-hold',/.*/);await page.waitForTimeout(1200);
+  const frames=await page.evaluate(()=>{window.__threadDone=true;return __thread.filter(f=>f.turns>0);});
+  expect(frames.length).toBeGreaterThan(0);
+  // From its first painted frame the thread shows the end of the conversation, never its top.
+  expect(Math.max(...frames.map(f=>f.end))).toBeLessThan(40);
+  // And the turns pop in: some animation runs on the first painted frames.
+  expect(frames.slice(0,6).some(f=>f.animating>0)).toBe(true);
+  await expect(page.locator('#home-messages .history-turn').last()).toBeInViewport();expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+
+test('leaving the history pops the latest bubbles in after the overlay, and the "?" never covers them',async({browser})=>{
+ for(const [width,height] of [[393,852],[1440,900],[852,393]]){
+  const context=await browser.newContext({viewport:{width,height},reducedMotion:'no-preference'}),page=await context.newPage();
+  try{
+   const errors=[];page.on('pageerror',e=>errors.push(e.message));const chat=await chatRoutes(page);seedLongConversation(chat,1);await ready(page);
+   await page.locator('#home-history-toggle').click();await chooseSession(page);await expect(page.locator('#home-messages')).not.toHaveAttribute('data-juice-hold',/.*/);
+   await page.evaluate(()=>{window.__leave=[];const ids=['home-speech','last-question','robot-question-toggle','home-history'];const tick=()=>{const frame={};for(const id of ids){const el=document.getElementById(id),seen=!!el&&el.checkVisibility({checkVisibilityCSS:true,visibilityProperty:true})&&+getComputedStyle(el).opacity>.05;frame[id]=seen;if(id==='home-speech'||id==='last-question')frame[id+'Animating']=!!el&&el.getAnimations().length>0;}__leave.push(frame);if(!window.__leaveDone)requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+   await page.locator('#history-close').click();await expect(page.locator('#home-speech')).toBeVisible();await page.waitForTimeout(900);
+   const frames=await page.evaluate(()=>{window.__leaveDone=true;return __leave;});
+   // While the overlay is still on screen, none of the bubbles shows beneath it.
+   for(const f of frames)if(f['home-history'])expect(f['home-speech']||f['last-question'],`${width}`).toBe(false);
+   // Once it is gone they animate in rather than appearing at once.
+   expect(frames.some(f=>f['home-speechAnimating']),`${width}`).toBe(true);
+   const boxes=await page.evaluate(()=>Object.fromEntries(['home-speech','robot-question-toggle','last-question'].map(id=>{const el=document.getElementById(id);const shown=el.checkVisibility({checkVisibilityCSS:true,visibilityProperty:true})&&+getComputedStyle(el.closest('#robot-curiosity')||el).opacity>.05;const r=el.getBoundingClientRect();return [id,shown?{left:r.left,top:r.top,right:r.right,bottom:r.bottom}:null];})));
+   expect(overlaps(boxes['home-speech'],boxes['robot-question-toggle']),`${width}x${height}`).toBe(false);
+   const header=await page.locator('.home-header').boundingBox(),speech=boxes['home-speech'];expect(speech.top,`${width}`).toBeGreaterThanOrEqual(header.y+header.height);
+   expect(errors).toEqual([]);
+  }finally{await context.close();}
+ }
+});
+
 test('latest messages fold above the robot, reopen and fold again without losing the conversation',async({browser},testInfo)=>{
  const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
  try{

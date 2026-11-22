@@ -20,6 +20,10 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke
 #home[data-history=true] #last-question{display:none}
 /* Each invitation is its own floating balloon, with no shared menu surface. */
 #robot-curiosity{position:absolute;z-index:7;left:50%;top:22%;transform:translateX(-50%)}
+#robot-curiosity{transition:opacity .2s ease,scale .2s ease}#robot-curiosity[data-covered=true]{opacity:0;scale:.6;pointer-events:none}
+#home[data-history-leaving=true] #home-speech,#home[data-history-leaving=true] #last-question,#home[data-history-leaving=true] #robot-curiosity{visibility:hidden}
+#home-messages[data-juice-hold]{opacity:0}
+@media(prefers-reduced-motion:reduce){#robot-curiosity{transition:none}}
 #robot-question-toggle{display:grid;place-items:center;width:42px;height:42px;border:1px solid #b1e9fb55;border-radius:50%;font-size:25px;font-weight:800;color:var(--accent);cursor:pointer;box-shadow:0 5px 22px #0003;transition:transform .2s,background .2s}
 #robot-question-toggle:hover,#robot-question-toggle[aria-expanded=true]{transform:rotate(-9deg) scale(1.08);background:var(--answer)}
 #robot-question-toggle:focus-visible,#robot-questions button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}

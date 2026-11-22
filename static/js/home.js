@@ -72,10 +72,19 @@ function placeSpeech(){
  const {head,body} = pose,root=$('home').getBoundingClientRect(),touch=$('robot-touch');
  touch.style.left=`${body.left}px`;touch.style.top=`${body.top}px`;touch.style.width=`${body.right-body.left}px`;touch.style.height=`${body.bottom-body.top}px`;
  const speech=$('home-speech'),navBottom=document.querySelector('.home-header').getBoundingClientRect().bottom-root.top+16;
- const curiosity=$('robot-curiosity');curiosity.style.left=`${Math.max(42,Math.min(root.width-42,head.x+52))}px`;curiosity.style.top=`${Math.max(navBottom,head.y-48)}px`;if(questions.open)questions.position();
+ const curiosity=$('robot-curiosity'),curiosityX=Math.max(42,Math.min(root.width-42,head.x+52)),curiosityY=Math.max(navBottom,head.y-48);curiosity.style.left=`${curiosityX}px`;curiosity.style.top=`${curiosityY}px`;if(questions.open)questions.position();
  const chatTop=$('home-chat').hidden?root.height:$('home-chat').getBoundingClientRect().top-root.top;
- const top=Math.max(navBottom,Math.min((pose.speechAnchor||head).y-speech.offsetHeight-27,chatTop-speech.offsetHeight-20));
- speech.style.left=`${Math.max(speech.offsetWidth/2+15,Math.min(root.width-speech.offsetWidth/2-15,head.x))}px`;speech.style.top=`${top}px`;
+ const speechX=Math.max(speech.offsetWidth/2+15,Math.min(root.width-speech.offsetWidth/2-15,head.x)),height=speech.offsetHeight;
+ let top=Math.min((pose.speechAnchor||head).y-height-27,chatTop-height-20);
+ // The "?" beside the head and the reply never share a spot: the reply rises
+ // above it, and only when the header leaves no room does the "?" step aside.
+ const toggle=$('robot-question-toggle'),size=toggle.offsetWidth||42,showing=!speech.hidden&&$('home').dataset.previewCollapsed!=='true'&&!curiosity.hidden;
+ const across=showing&&curiosityX+size/2>speechX-speech.offsetWidth/2&&curiosityX-size/2<speechX+speech.offsetWidth/2;
+ if(across&&top+height>curiosityY-8)top=curiosityY-8-height;
+ top=Math.max(navBottom,top);
+ const covered=across&&top+height>curiosityY-4;
+ if(curiosity.dataset.covered!==String(covered)){curiosity.dataset.covered=String(covered);if(covered&&questions.open)toggleQuestions(false);}
+ speech.style.left=`${speechX}px`;speech.style.top=`${top}px`;
  const peek=$('chat-peek'),peekY=Math.max(navBottom+24,head.y-36);peek.style.left=`${head.x}px`;peek.style.top=`${peekY}px`;
  speech.style.setProperty('--collapse-y',`${peekY-top-speech.offsetHeight/2}px`);
  const question=$('last-question'),chat=$('home-chat').getBoundingClientRect();question.style.setProperty('--collapse-y',`${peekY-(chat.top-root.top+question.offsetTop)-question.offsetHeight/2}px`);question.style.setProperty('--collapse-x',`${head.x-(chat.left-root.left+question.offsetLeft)-question.offsetWidth/2}px`);
@@ -239,13 +248,35 @@ function renderConversations(){
 }
 async function loadConversations(){const data=await api('conversations');if(disposed)return;conversations=data.conversations||[];renderConversations();}
 function selectConversation(id=null,title=''){
- conversationRevision++;conversationId=id;conversationTitle=title;jobs=[];setPreviewCollapsed(false);retryMessage=null;loadedEarlier=false;hasEarlier=false;clearTimeout(pollTimer);typing.finishAll();awaitingAnswers.clear();historyEntries.clear();historyDays.clear();expandedMessages.clear();lastSpoken='';speechPending=false;showQuestion('');$('home-speech').hidden=true;$('home-input').value='';$('home-input').style.height='auto';$('history-earlier').hidden=true;renderHistory();layoutComposer();
+ delete $('home-messages').dataset.juiceHold;conversationRevision++;conversationId=id;conversationTitle=title;jobs=[];setPreviewCollapsed(false);retryMessage=null;loadedEarlier=false;hasEarlier=false;clearTimeout(pollTimer);typing.finishAll();awaitingAnswers.clear();historyEntries.clear();historyDays.clear();expandedMessages.clear();lastSpoken='';speechPending=false;showQuestion('');$('home-speech').hidden=true;$('home-input').value='';$('home-input').style.height='auto';$('history-earlier').hidden=true;renderHistory();layoutComposer();
 }
 function setHistoryView(view){historyView=view;$('home-sessions').hidden=view!=='sessions';$('history-thread').hidden=view!=='thread';$('history-new').hidden=view!=='sessions';$('history-sessions').hidden=view!=='thread';juice.text($('history-title'),view==='sessions'?'Conversas':conversationTitle||'Nova conversa',value=>{$('history-title').title=value;});juice.text($('history-subtitle'),view==='sessions'?'Seu histórico com Sato Agent':'Sato Agent');$('history-bottom').hidden=view!=='thread';historyScroll();}
-async function openConversation(conversation){if(requesting)return;if(conversation.id!==conversationId)selectConversation(conversation.id,conversation.title);setHistoryView('thread');renderHistory();status('Carregando conversa…');await refresh();}
+async function openConversation(conversation){
+ if(requesting)return;const fresh=conversation.id!==conversationId;if(fresh)selectConversation(conversation.id,conversation.title);
+ // A freshly opened thread stays invisible until its messages are loaded and
+ // it is on screen; then it lands on the latest turn and pops them in.
+ const log=$('home-messages'),hold=fresh?(log.dataset.juiceHold=String((Number(log.dataset.juiceHold)||0)+1)):null;
+ setHistoryView('thread');renderHistory();status('Carregando conversa…');
+ try{await refresh();}finally{if(hold)await revealThread(hold);}
+}
+async function revealThread(hold){
+ const log=$('home-messages');await juice.settled();await new Promise(requestAnimationFrame);
+ if(disposed||log.dataset.juiceHold!==hold)return;
+ log.scrollTop=log.scrollHeight;delete log.dataset.juiceHold;historyScroll();
+ juice.stagger(log,'.history-question,.history-answer',{sounds:false});
+}
 function newConversation(){if(requesting)return;selectConversation();historyOpen(false);status('Nova conversa.');schedulePoll();$('home-input').focus({preventScroll:true});}
 function historyScroll(){const log=$('home-messages');$('history-bottom').hidden=historyView!=='thread'||log.scrollHeight-log.scrollTop-log.clientHeight<120;}
-function historyOpen(open,role){if(open)scene?.setExploring(false);clearTimeout(previewTimer);previewTimer=null;$('home-history').hidden=!open;typing.finishAll();$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');setHistoryView(role||conversationId?'thread':'sessions');layoutComposer();if(open){if(role&&jobs.length)expandedMessages.add(`${jobs.at(-1).id}:${role}`);if(historyView==='sessions'&&authenticated)loadConversations().catch(error=>status(error.message,true));renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else{$('home-history-toggle').focus({preventScroll:true});setPreviewCollapsed(false);schedulePreviewCollapse();}}
+function historyOpen(open,role){if(open){scene?.setExploring(false);delete $('home').dataset.historyLeaving;}clearTimeout(previewTimer);previewTimer=null;$('home-history').hidden=!open;typing.finishAll();$('home').dataset.history=String(open);$('home-history-toggle').setAttribute('aria-expanded',String(open));$('home-history-toggle').setAttribute('aria-label',open?'Fechar histórico da conversa':'Abrir histórico da conversa');setHistoryView(role||conversationId?'thread':'sessions');layoutComposer();if(open){if(role&&jobs.length)expandedMessages.add(`${jobs.at(-1).id}:${role}`);if(historyView==='sessions'&&authenticated)loadConversations().catch(error=>status(error.message,true));renderHistory();const target=role?$('home-messages').querySelector('.history-turn:last-child .history-'+role):null;if(target)target.scrollIntoView({block:'start'});else $('home-messages').scrollTop=$('home-messages').scrollHeight;$('history-close').focus({preventScroll:true});historyScroll();}else{$('home-history-toggle').focus({preventScroll:true});setPreviewCollapsed(false);schedulePreviewCollapse();revealAfterHistory();}}
+// Leaving the history, the overlay shrinks away first; only then do the reply,
+// the question and the "?" pop back in, instead of appearing under it at once.
+function revealAfterHistory(){
+ const home=$('home'),revision=(revealAfterHistory.revision||0)+1;revealAfterHistory.revision=revision;home.dataset.historyLeaving='true';
+ juice.settled().then(()=>new Promise(requestAnimationFrame)).then(()=>{
+  if(disposed||revealAfterHistory.revision!==revision||home.dataset.historyLeaving!=='true')return;delete home.dataset.historyLeaving;placeSpeech();
+  ['home-speech','last-question','robot-curiosity'].map($).filter(el=>!el.hidden&&(el.id==='robot-curiosity'?el.dataset.covered!=='true':home.dataset.previewCollapsed!=='true')).forEach((el,index)=>juice.pop(el,{fade:true,delay:index*70}));
+ });
+}
 speechMore.addEventListener('click',()=>historyOpen(true,'answer'));$('question-more').addEventListener('click',()=>historyOpen(true,'question'));
 $('home-messages').addEventListener('scroll',historyScroll);$('history-bottom').addEventListener('click',()=>{$('home-messages').scrollTo({top:$('home-messages').scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});});
 $('home-history-toggle').addEventListener('click',()=>historyOpen($('home-history').hidden));$('history-close').addEventListener('click',()=>historyOpen(false));$('history-sessions').addEventListener('click',()=>{typing.finishAll();setHistoryView('sessions');loadConversations().catch(error=>status(error.message,true));});$('history-new').addEventListener('click',newConversation);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('home-history').hidden)historyOpen(false);});
