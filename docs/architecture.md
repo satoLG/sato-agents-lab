@@ -5,6 +5,11 @@ Cada princípio tem um ADR com o porquê em [`docs/adr/`](adr/README.md).
 Se uma mudança precisa quebrar um princípio, escreva um ADR novo que o substitua
 no mesmo PR; não quebre em silêncio.
 
+Parte das regras é verificada em CI por [`tests/test_architecture.py`](../tests/test_architecture.py):
+timeout em toda chamada externa bloqueante, módulos de domínio sem importar `app.py`,
+bancos do Hermes abertos só para leitura, nenhum asset de CDN e todo ADR no índice.
+Quando um PR errar um padrão, prefira transformar o erro em teste ali.
+
 ## Visão geral
 
 ```
