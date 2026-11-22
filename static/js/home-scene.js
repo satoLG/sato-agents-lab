@@ -58,9 +58,25 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   return true;
  }
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
+ // Entering or leaving exploration never cuts: the first frame repeats the
+ // last one shown and the view glides to the new framing. The view offset is
+ // a virtual canvas height (stage height in front view, the viewport while
+ // exploring), so it interpolates with position, orientation and fov.
+ const CAMERA_BLEND=.8,shot=()=>({position:new T.Vector3(),quaternion:new T.Quaternion(),fov:42,full:1});
+ const shown=shot(),goal=shot(),blend={from:shot(),at:-1};
+ function project3(fov,full){camera.fov=fov;camera.aspect=width/full;if(Math.abs(full-height)<.5)camera.clearViewOffset();else camera.setViewOffset(width,full,0,0,width,height);camera.updateProjectionMatrix();}
+ function capture(view){view.position.copy(camera.position);view.quaternion.copy(camera.quaternion);view.fov=camera.fov;view.full=camera.view?.enabled?camera.view.fullHeight:height;return view;}
+ function apply(view){camera.position.copy(view.position);camera.quaternion.copy(view.quaternion);project3(view.fov,view.full);camera.updateMatrixWorld(true);}
+ function blendCamera(){
+  capture(goal);const p=blend.at<0||transition?1:smooth((time-blend.at)/CAMERA_BLEND);
+  if(p>=1){blend.at=-1;capture(shown);return false;}
+  const from=blend.from;
+  camera.position.lerpVectors(from.position,goal.position,p);camera.quaternion.slerpQuaternions(from.quaternion,goal.quaternion,p);
+  project3(from.fov+(goal.fov-from.fov)*p,from.full+(goal.full-from.full)*p);camera.updateMatrixWorld(true);capture(shown);return true;
+ }
  let arrival=null,arrivalResolve,arrivalPromise,currentScenario='black',desiredScenario='black',scenarioRevision=0;
  container.dataset.scenario='black';container.dataset.arrival='waiting';
- const navigation=createHomeNavigation(container,rig,camera,{getEnvironment:()=>sets.get(currentScenario),onChange(active){stopMimic();reaction=null;lookYaw=lookPitch=0;resizePending=true;onExplore?.(active);}});
+ const navigation=createHomeNavigation(container,rig,camera,{getEnvironment:()=>sets.get(currentScenario),onChange(active){stopMimic();reaction=null;lookYaw=lookPitch=0;resizePending=true;if(!reduced.matches&&!transition){blend.from.position.copy(shown.position);blend.from.quaternion.copy(shown.quaternion);blend.from.fov=shown.fov;blend.from.full=shown.full;blend.at=time;}onExplore?.(active);}});
  const point=new T.Vector3(),bodyCorners=[];
  for(const x of [-1.05,1.05])for(const y of [.26,1.87])for(const z of [-.3,.65])bodyCorners.push(new T.Vector3(x,y,z));
  function project(x,y,z){point.set(x,y,z).applyMatrix4(rig.root.matrixWorld).project(camera);return {x:(point.x+1)*width/2,y:(1-point.y)*height/2};}
@@ -237,8 +253,11 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   // The loop targets 30 fps; when 30 frames average under ~24 fps, make the
   // pixels one step coarser (twice at most) and keep checking.
   if(++qualityFrames>=30){if(qualityElapsed/qualityFrames>.042&&coarseness<2&&!transition){coarseness++;resizePending=true;}qualityFrames=0;qualityElapsed=0;}
+  const blending=blendCamera();
   drawPortal();
   renderer.render(world,camera);report();
+  // Navigation keeps steering its own camera; only the drawn frame blends.
+  if(blending)apply(goal);
  }
  const reactionFaces={wave:['happy',1.6],hello:['happy',2.2],boop:['ouch',.45],dance:['happy',4.2],shy:['happy',1.8]};
  function stopMimic(){const wasActive=performer.active;performer.stop();if(container.dataset.mimic==='playing'){container.dataset.mimic='idle';container.dataset.reaction='idle';}return wasActive;}

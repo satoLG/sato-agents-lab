@@ -144,7 +144,9 @@ câmera; arrastar o fundo gira a visão; Esc sai. No celular, o primeiro contato
 restante do fundo gira a câmera, inclusive com dois dedos simultâneos. Paredes,
 equipamentos, margem do rio e arbustos bloqueiam o robô e encurtam a câmera.
 Ao sair, o robô permanece onde parou e a câmera escolhe uma vista frontal livre,
-sem atravessar a sala. A íris segue cursor/toque nos dois eixos, limitada a 0,025
+sem atravessar a sala. Entrar e sair da exploração não corta a imagem: o primeiro quadro
+repete o anterior e posição, direção, campo de visão e enquadramento deslizam
+até a nova vista em 0,8 s (sem animação com movimento reduzido). A íris segue cursor/toque nos dois eixos, limitada a 0,025
 unidade dentro da abertura mecânica; o conjunto óptico fica fixo na carcaça.
 
 Fora da exploração, a câmera depende somente do viewport: perguntas, balões e histórico não alteram

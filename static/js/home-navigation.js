@@ -12,8 +12,8 @@ export function allowedPosition(x,z,area,radius=.65){
 
 export function createHomeNavigation(container,rig,camera,{getEnvironment,onChange}){
  const home=container.closest('#home'),stick=document.getElementById('home-joystick'),knob=stick.firstElementChild;
- const keys=new Set(),axis={x:0,y:0},pointers=new Map(),target=new T.Vector3(),desired=new T.Vector3(),front=new T.Vector3(),orbit=new T.Vector3();
- let active=false,yaw=Math.PI,viewYaw=0,pitch=.28,viewPitch=.28,speed=0,travelAngle=0,returning=false,stickPointer=null,frontYaw=0,boom=4.6;
+ const keys=new Set(),axis={x:0,y:0},pointers=new Map(),target=new T.Vector3(),desired=new T.Vector3(),front=new T.Vector3(),orbit=new T.Vector3(),aim=new T.Vector3();
+ let active=false,yaw=Math.PI,viewYaw=0,pitch=.28,viewPitch=.28,speed=0,travelAngle=0,returning=false,stickPointer=null,frontYaw=0,boom=4.6,overhead=false,settle=0;
  const listeners=[];
  const listen=(el,event,fn,options)=>{el.addEventListener(event,fn,options);listeners.push(()=>el.removeEventListener(event,fn,options));};
  const controls=()=>!document.querySelector('dialog[open]')&&home.dataset.history!=='true'&&!document.hidden&&!document.activeElement?.matches('input,textarea,[contenteditable=true]');
@@ -21,7 +21,7 @@ export function createHomeNavigation(container,rig,camera,{getEnvironment,onChan
  function reset(){keys.clear();pointers.clear();axis.x=axis.y=0;stickPointer=null;stick.hidden=true;knob.style.transform='';speed=0;container.dataset.moving='false';}
  function setActive(value){
   value=!!value&&!!getEnvironment();if(active===value)return active;
-  active=value;reset();returning=!active;home.dataset.exploring=String(active);container.dataset.exploring=String(active);
+  active=value;reset();returning=!active;overhead=false;settle=0;home.dataset.exploring=String(active);container.dataset.exploring=String(active);
   if(active){yaw=Math.atan2(camera.position.x-rig.root.position.x,camera.position.z-rig.root.position.z);viewYaw=yaw;pitch=viewPitch=.28;boom=Math.hypot(camera.position.x-rig.root.position.x,camera.position.z-rig.root.position.z);document.activeElement?.blur();}
   if(!active){
    const area=getEnvironment()?.navigation;
@@ -92,7 +92,11 @@ export function createHomeNavigation(container,rig,camera,{getEnvironment,onChan
     for(let i=1;i<=8&&!found;i++)for(const side of [-1,1]){const angle=viewYaw+side*i*Math.PI/8,room=clearance(angle);if(room>=1.8){cameraYaw=angle;safeDistance=room;found=true;break;}}
    }
    boom=safeDistance<boom?safeDistance:boom+(safeDistance-boom)*(1-Math.exp(-dt*7));if(safeDistance>=1.8)boom=Math.max(1.8,boom);
-   if(safeDistance<1.8){camera.position.set(target.x,target.y+3.1,target.z+.1);}else camera.position.set(target.x+Math.sin(cameraYaw)*boom*Math.cos(viewPitch),target.y+Math.sin(viewPitch)*boom,target.z+Math.cos(cameraYaw)*boom*Math.cos(viewPitch));
+   // Boxed in, the camera rises above the robot; switching between that and
+   // the orbit glides instead of cutting.
+   const above=safeDistance<1.8;if(above!==overhead){overhead=above;settle=.6;}
+   if(above)aim.set(target.x,target.y+3.1,target.z+.1);else aim.set(target.x+Math.sin(cameraYaw)*boom*Math.cos(viewPitch),target.y+Math.sin(viewPitch)*boom,target.z+Math.cos(cameraYaw)*boom*Math.cos(viewPitch));
+   if(settle>0){settle=Math.max(0,settle-dt);camera.position.lerp(aim,settle>0?1-Math.exp(-dt*9):1);}else camera.position.copy(aim);
    camera.lookAt(target);camera.updateMatrixWorld(true);
    container.dataset.moving=String(magnitude>.02&&speed>.01);
   }else if(returning){
