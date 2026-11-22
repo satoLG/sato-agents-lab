@@ -96,4 +96,37 @@ test('mobile reveals one floating stick only during movement and supports simult
  }finally{await context.close();}
 });
 
+test.describe('with motion',()=>{
+ test.use({reducedMotion:'no-preference'});
+ // Every animation frame, between toggling and settling, stays close to the
+ // previous one: no cut in position, field of view or where the robot sits.
+ async function record(page,act,ms){
+  await page.evaluate(()=>{window.__cameraLog=[];const tick=()=>{if(!window.__cameraLog)return;window.__cameraLog.push(JSON.parse(JSON.stringify(window.__homeSample)));requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+  await act();await page.waitForTimeout(ms);
+  return page.evaluate(()=>{const log=window.__cameraLog;window.__cameraLog=null;return log;});
+ }
+ function steps(log){
+  let position=0,fov=0,center=0;
+  for(let i=1;i<log.length;i++){const a=log[i-1],b=log[i];position=Math.max(position,Math.hypot(...b.camera.map((v,k)=>v-a.camera[k])));fov=Math.max(fov,Math.abs(b.fov-a.fov));center=Math.max(center,Math.hypot(b.center[0]-a.center[0],b.center[1]-a.center[1]));}
+  return {position,fov,center,travel:Math.hypot(...log.at(-1).camera.map((v,k)=>v-log[0].camera[k])),zoom:Math.abs(log.at(-1).fov-log[0].fov)};
+ }
+ test('play and stop glide the camera frame by frame instead of cutting',async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));await setup(page);
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-arrival','settled',{timeout:30000});await page.waitForTimeout(800);
+  const play=await record(page,()=>page.getByRole('button',{name:'Explorar cenário',exact:true}).click(),1600);
+  const enter=steps(play);
+  expect(play.at(-1).active).toBe(true);
+  // The exploration framing really differs from the front view...
+  expect(enter.zoom+enter.travel).toBeGreaterThan(2);
+  // ...but it is reached without any single-frame jump.
+  expect(enter.position).toBeLessThan(.5);expect(enter.fov).toBeLessThan(3);expect(enter.center).toBeLessThan(.2);
+  await hold(page,'w',900);
+  const stop=await record(page,()=>page.getByRole('button',{name:'Parar exploração',exact:true}).click(),1800);
+  const leave=steps(stop);
+  expect(stop.at(-1).active).toBe(false);
+  expect(leave.position).toBeLessThan(.5);expect(leave.fov).toBeLessThan(3);expect(leave.center).toBeLessThan(.2);
+  expect(errors).toEqual([]);
+ });
+});
+
 });
