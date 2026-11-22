@@ -25,9 +25,12 @@ test('Sistema abre primeiro e atualiza CPU/memoria via SSE sem re-renderizar',as
  await page.route('**/api/vmstats',route=>route.fulfill({json:{...vm(3,20),
   filesystems:[{mount:'/',fstype:'ext4',total:100,used:40,free:60,used_percent:40}],
   top_processes:[{command:'proc-fixture',pid:'1',cpu:1,mem:2}],timestamp:'2026-11-13T12:00:00Z'}}));
- let streams=0;
- await page.route('**/api/lab/stream',route=>{
-  streams+=1;
+ let streams=0,releaseNext;
+ // The reconnection that carries the second reading waits until the first one
+ // has been checked, so a fast reconnect cannot overtake that assertion.
+ const nextReading=new Promise(resolve=>{releaseNext=resolve;});
+ await page.route('**/api/lab/stream',async route=>{
+  streams+=1;if(streams>1)await nextReading;
   const sample=streams===1?vm(10,30):vm(77,61);
   const now=streams===1?'2026-11-13T12:00:02Z':'2026-11-13T12:00:04Z';
   // a resposta termina e o mesmo EventSource reconecta (retry curto): simula leituras sucessivas
@@ -43,6 +46,7 @@ test('Sistema abre primeiro e atualiza CPU/memoria via SSE sem re-renderizar',as
  await expect(core0).toContainText('10.0%');
  await expect(panel.getByText('proc-fixture')).toBeVisible();
  await panel.locator('[data-role=sistema] .bar-fill').first().evaluate(el=>{window.__fill=el;});
+ releaseNext();
  await expect(core0).toContainText('77.0%');
  await expect(panel.locator('[data-role=sistema] .meter-row').first()).toContainText('4.0 GB / 8.0 GB');
  await expect(panel.locator('[data-role=sistema] .stat').nth(1)).toContainText('61.0%');
