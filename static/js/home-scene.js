@@ -34,13 +34,29 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  const reduced=reducedMotion,sets=new Map(),pendingSets=new Map();
  let width=1,height=1,frame=0,last=0,time=0,speakingUntil=0,reaction=null,disposed=false,lookYaw=0,body,resizePending=true;
  let bufferWidth=0,bufferHeight=0,lookPitch=0,frontFov=42,transition=null;
- // While diving, a plane sweeps from the rift to the camera and cuts away the
- // world being left, so nothing of it remains once the rift is gone.
+ // Once the rift covers the whole screen, a plane sweeps from it to the camera
+ // and cuts away what is left of the world being left in front of it, so
+ // nothing of it remains once the rift is gone. Before that, the next world
+ // only shows inside the rift.
  // The plane stays installed (keeping everything when idle) so no program
  // ever recompiles for it mid-crossing.
  const sweep=new T.Plane(),sweepPoint=new T.Vector3(),keepAll=()=>sweep.set(T.Object3D.DEFAULT_UP,1e6);
  keepAll();renderer.clippingPlanes=[sweep];
  const portal=createPortal(world);
+ // Whether the rift already spans every screen corner, using the shader's own
+ // ellipse (see home-portal.js) with room for its jitter and torn rows.
+ const corner=new T.Vector3(),riftNormal=new T.Vector3(),ray=new T.Ray(),riftPlane=new T.Plane();
+ function riftCoversScreen(open){
+  const rx=1.22*Math.min(open*2.4,Math.max(1,open)),ry=1.66*(open<1?open*open:open);
+  riftPlane.setFromNormalAndCoplanarPoint(riftNormal.set(0,0,1).applyQuaternion(portal.group.quaternion),portal.group.position);
+  for(const [x,y] of [[-1,-1],[1,-1],[-1,1],[1,1]]){
+   ray.origin.copy(camera.position);ray.direction.set(x,y,.5).unproject(camera).sub(camera.position).normalize();
+   if(!ray.intersectPlane(riftPlane,corner))return false;
+   portal.group.worldToLocal(corner);
+   if(Math.hypot((Math.abs(corner.x)+.4)/rx,(Math.abs(corner.y)+.15)/ry)>.85)return false;
+  }
+  return true;
+ }
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
  let arrival=null,arrivalResolve,arrivalPromise,currentScenario='black',desiredScenario='black',scenarioRevision=0;
  container.dataset.scenario='black';container.dataset.arrival='waiting';
@@ -148,7 +164,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function openPortal(to){
   const next=sets.get(to),yaw=navigation.facingYaw-.12,start=rig.root.position.clone().setY(0),back=new T.Vector3(0,0,-1).applyAxisAngle(UP,yaw);
   const floorFrom=sets.get(currentScenario)?.groundHeight?.(start.x,start.z)||0,floorTo=next?.groundHeight?.(0,0)||0;
-  transition={to,at:time,yaw,start,back,floorFrom,floorTo,camera:camera.position.clone(),stage:'',inNext:false,inFrom:true};
+  transition={to,at:time,yaw,start,back,floorFrom,floorTo,camera:camera.position.clone(),stage:'',inNext:false,inFrom:true,coverAt:null};
   portal.place(start.x+back.x*GAP,floorFrom+1.25,start.z+back.z*GAP,yaw);
   if(next){next.root.position.copy(start).addScaledVector(back,DEPTH);next.root.rotation.y=next.skybox.rotation.y=yaw;}
   reaction=null;container.dataset.reaction='idle';home.dataset.portal=to;portal.flash=.45;rig.face.mood('wide',ENTER+.2);rig.gesture('up',ENTER);portalStage('open');
@@ -159,15 +175,18 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(age>=DIVE){if(tr.stage!=='dive'){rig.face.mood('happy',1.6);rig.gesture('up',ARRIVE-DIVE+.5);}portalStage('dive');}
   else if(age>=ENTER){if(tr.stage!=='enter')rig.gesture('tuck',DIVE-ENTER);portalStage('enter');}
   // A slit that overshoots as it tears open, then swallows the whole view.
-  portal.set({open:dive>0?1+dive*dive*11:opening*(1+.12*Math.sin(opening*Math.PI)),time,tear:Math.max(1-opening*.8,dive)});
+  const open=dive>0?1+dive*dive*11:opening*(1+.12*Math.sin(opening*Math.PI));
+  portal.set({open,time,tear:Math.max(1-opening*.8,dive)});
   const depth=DEPTH*enter,turn=Math.PI*(smooth((age-.12)/.45)+smooth((age-DIVE-.05)/.6));
   rig.root.position.set(tr.start.x+tr.back.x*depth,tr.floorFrom+(tr.floorTo-tr.floorFrom)*enter+Math.sin(time*1.65)*.045,tr.start.z+tr.back.z*depth);
   rig.root.rotation.y=navigation.facingYaw+turn;
   // Each world draws the companion while any part of it is on its side.
   tr.inNext=depth>GAP-.95;tr.inFrom=depth<GAP+.95;
   camera.position.copy(tr.camera).addScaledVector(tr.back,DEPTH*dive);camera.position.y+=(tr.floorTo-tr.floorFrom)*dive;camera.updateMatrixWorld(true);
-  // The cut starts just past the rift and reaches beyond the camera as the dive ends.
-  const rift=portal.group.position,reach=tr.camera.clone().sub(rift).dot(tr.back)*-1+1.5,cut=smooth((age-DIVE+.1)/(ARRIVE-DIVE-.05));
+  // The cut waits until the rift fills the screen (or the very end, on an
+  // unusually wide view), then reaches from just past it to beyond the camera.
+  if(tr.coverAt===null&&age>=DIVE&&(riftCoversScreen(open)||age>=ARRIVE-.25))tr.coverAt=age;
+  const rift=portal.group.position,reach=tr.camera.clone().sub(rift).dot(tr.back)*-1+1.5,cut=tr.coverAt===null?0:smooth((age-tr.coverAt)/Math.max(.12,ARRIVE-tr.coverAt-.02));
   tr.cut=cut;tr.sweepAt=rift.clone().addScaledVector(tr.back,.2-(reach+.2)*cut);
  }
  function arrivePortal(){

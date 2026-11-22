@@ -128,7 +128,9 @@ em todas as direções. A floresta tem céu, terreno contínuo, rio, árvores ao
 e névoa que encobre o limite externo. A grama procedural adapta a grade irregular,
 os triângulos voltados à câmera e o vento nas pontas de `folio-2025/Grass.js`. Os cenários ultrapassam as
 laterais do celular. São carregados uma vez, sob demanda, no
-mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. A cena
+mesmo canvas. A troca desvanece pelo preto e oculta o cenário inativo. Na travessia
+pelo portal, o próximo cenário só aparece dentro do rasgo e ocupa a tela junto
+com a expansão dele. A cena
 preenche todo o viewport, inclusive atrás do chat. O cenário salvo é preparado
 durante o loading e revelado suavemente. Com o som ativo, laboratório e floresta
 tocam loops locais: o laboratório usa o arquivo `amb_machinery_factory_lp_01.wav`
