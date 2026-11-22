@@ -56,8 +56,13 @@ async function refreshHeavy() {
       heavyAt = Date.now();
       if (!built) build(d);
       else updateHeavy(d);
-      // a leitura do SSE costuma ser mais nova; so usa esta se nao houver outra
-      if (!sampleAt) applyFast(d, d.timestamp);
+      // a leitura do SSE costuma ser mais nova; so usa esta se nao houver outra.
+      // Um evento que chegou antes do painel existir ficou em hermesTelemetry.
+      if (!sampleAt) {
+        const last = window.hermesTelemetry?.payload;
+        if (last?.channels?.vm?.data) applyTelemetry(last);
+        else applyFast(d, d.timestamp);
+      }
     } catch (err) {
       if (!built) render(refs.body, notice(err.message));
     } finally {
