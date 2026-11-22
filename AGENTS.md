@@ -15,3 +15,9 @@
   `gh` is authenticated using the existing Hermes credential. MCP/environment
   authentication and CLI authentication are distinct. Never print credentials
   or ask the owner to paste a token into chat.
+
+# Architecture
+
+- Read `docs/architecture.md` before designing a change and follow its
+  principles and design checklist. Decisions and their reasons are in
+  `docs/adr/`; to change one, add a new ADR that supersedes it in the same PR.
