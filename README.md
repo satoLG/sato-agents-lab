@@ -71,7 +71,7 @@ static/
 templates/              base, home, dashboard e fragments/
 tools/                  atualização da VM, RAG, senha do chat, selfcheck, builds
 tests/                  pytest (*.py), unitários JS (*.test.mjs), browser/ (Playwright)
-docs/                   sato-agent, mimic-tools, rag-sync, scenic-environments
+docs/                   architecture, adr/, sato-agent, mimic-tools, rag-sync, scenic-environments
 ```
 
 ## Rodando localmente
@@ -115,4 +115,4 @@ O Playwright tem dois projetos: `ui` (chat, dashboard, interface) e `scenes` (We
 
 - O checkout de produção fica em `/home/leona/projects/hermes-dashboard`, sempre na `main` limpa, e roda como `hermes-dashboard.service`.
 - O job Hermes `update-dashboard` (`no_agent`, a cada 30 min) roda [`tools/update_dashboard.sh`](tools/update_dashboard.sh). O script só aceita fast-forward, valida numa cópia temporária, reinicia o serviço e volta à versão anterior se `/` ou `/dashboard` não responderem.
-- Desenvolvimento acontece em branch e PR, e o merge fica com o Sato. Issues com a label `claude` são implementadas à noite pelo worker do Claude Code. Regras completas em [`AGENTS.md`](AGENTS.md).
+- Desenvolvimento acontece em branch e PR, e o merge fica com o Sato. Issues com a label `claude` são implementadas à noite pelo worker do Claude Code. Regras completas em [`AGENTS.md`](AGENTS.md); princípios e decisões em [`docs/architecture.md`](docs/architecture.md) e [`docs/adr/`](docs/adr/README.md), verificados por `tests/test_architecture.py`.
