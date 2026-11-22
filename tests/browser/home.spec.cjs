@@ -168,7 +168,7 @@ async function instrumentScene(page){
    });
    window.__companionFrames.push({stage:container.dataset.arrival,reaction:container.dataset.reaction,y:rig.root.position.y,cameraY:camera.position.y,body:rig.root.rotation.y,arm:rig.arms[0].travel,tubeArmRadius});
   }`;
-  await route.fulfill({response,body:frameLimitedSource(source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`))});
+  await route.fulfill({response,body:frameLimitedSource(source.replace('return {arrive,react,setScenario,','window.__companionQA={world,rig,chute,renderer,camera,get transition(){return transition;},get time(){return time;}};return {arrive,react,setScenario,').replace(/renderer.render\(world,camera\);report\(\);(\r?\n) \}/,`renderer.render(world,camera);report();${sample}\n }`))});
  });
 }
 
@@ -311,6 +311,27 @@ test('a rift opens behind the robot, shows the next scenario and carries it acro
   const settled=await page.evaluate(()=>{const {rig,world,renderer}=__companionQA;return {robot:rig.root.position.toArray(),visible:rig.root.visible,lab:world.getObjectByName('companion-lab').position.toArray(),rift:world.getObjectByName('scenario-portal').visible,autoClear:renderer.autoClear,portal:document.getElementById('home').dataset.portal};});
   expect(settled.robot[0]).toBe(0);expect(settled.robot[2]).toBe(0);expect(settled.visible).toBe(true);expect(settled.lab).toEqual([0,0,0]);expect(settled.rift).toBe(false);expect(settled.portal).toBeUndefined();
   await page.waitForTimeout(200);expect(await page.evaluate(()=>__companionQA.renderer.autoClear)).toBe(true);expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+
+for(const [width,height] of [[393,852],[1440,1100]])test(`the next scenario only shows inside the rift until it fills the screen ${width} @scene`,async({browser})=>{
+ const context=await browser.newContext({viewport:{width,height},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));await chatRoutes(page);await instrumentScene(page);await ready(page);
+  // Sample the crossing every animation frame: scene time since the rift
+  // opened, how far the sweep has cut the world being left, and the rift size.
+  await page.evaluate(()=>{window.__crossing=[];const tick=()=>{const qa=window.__companionQA,tr=qa.transition;if(tr)__crossing.push({age:qa.time-tr.at,cut:tr.cut||0,coverAt:tr.coverAt,open:qa.world.getObjectByName('portal-mask').material.uniforms.uOpen.value});if(!window.__crossingDone)requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+  await page.locator('#home-settings-toggle').click();await page.locator('[name="home-scenario"][value="lab"]').check();
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-portal','arrive',{timeout:30000});
+  const frames=await page.evaluate(()=>{window.__crossingDone=true;return __crossing;});
+  expect(frames.length).toBeGreaterThan(10);
+  // Nothing of the world being left is cut while the rift is still a hole in it.
+  const first=frames.find(f=>f.cut>0);expect(first).toBeTruthy();
+  expect(first.age).toBeGreaterThan(1.45);expect(first.open).toBeGreaterThan(3);
+  for(const f of frames)if(f.coverAt===null||f.age<f.coverAt)expect(f.cut,`age ${f.age.toFixed(2)}`).toBe(0);
+  // The sweep still completes as the crossing ends.
+  expect(Math.max(...frames.map(f=>f.cut))).toBeGreaterThan(.8);
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','lab');expect(errors).toEqual([]);
  }finally{await context.close();}
 });
 
