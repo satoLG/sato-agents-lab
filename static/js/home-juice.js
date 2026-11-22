@@ -147,7 +147,7 @@ export function createHomeJuice(root,audio){
   const seen=new Set([...container.children].filter(node=>node.matches?.(selector)).map(key));
   const observer=new MutationObserver(records=>{
    const added=[];for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1&&node.matches(selector)){const id=key(node);if(!seen.has(id)){seen.add(id);added.push(node);}}
-   if(!added.length||!visible(container))return;
+   if(!added.length||!visible(container)||container.dataset.juiceHold)return;
    const targets=added.flatMap(node=>parts?[...node.querySelectorAll(parts)]:[node]).filter(node=>visible(node)&&inView(node)).slice(-10);
    targets.forEach((node,index)=>pop(node,{sound:targets.length===1?sound:'pop',pitch:1+Math.min(index,8)*.06,delay:index*90}));
   });
