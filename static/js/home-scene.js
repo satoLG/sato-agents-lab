@@ -63,7 +63,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  // a virtual canvas height (stage height in front view, the viewport while
  // exploring), so it interpolates with position, orientation and fov.
  const CAMERA_BLEND=.8,shot=()=>({position:new T.Vector3(),quaternion:new T.Quaternion(),fov:42,full:1});
- const shown=shot(),goal=shot(),blend={from:shot(),at:-1};
+ const shown=shot(),goal=shot(),blend={from:shot(),at:-1,restore:false};
  function project3(fov,full){camera.fov=fov;camera.aspect=width/full;if(Math.abs(full-height)<.5)camera.clearViewOffset();else camera.setViewOffset(width,full,0,0,width,height);camera.updateProjectionMatrix();}
  function capture(view){view.position.copy(camera.position);view.quaternion.copy(camera.quaternion);view.fov=camera.fov;view.full=camera.view?.enabled?camera.view.fullHeight:height;return view;}
  function apply(view){camera.position.copy(view.position);camera.quaternion.copy(view.quaternion);project3(view.fov,view.full);camera.updateMatrixWorld(true);}
@@ -247,17 +247,17 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  function render(stamp){
   if(disposed)return;frame=requestAnimationFrame(render);if(document.hidden){last=stamp;return;}
   if(stamp-last<1000/30&&!resizePending)return;const dt=Math.min(.06,(stamp-last)/1000||.033);last=stamp;time+=dt;
+  // Navigation keeps steering its own camera; only the drawn frame blended.
+  if(blend.restore){apply(goal);blend.restore=false;}
   if(resizePending)applyResize();navigation.update(dt);pose(dt);updateScenario(dt);if(!transition)navigation.frameFront(frontPosition,frontTarget,dt,frontFov);updateNature(time,reduced.matches);sets.get(currentScenario)?.tick(reduced.matches?0:time);
   // Adapt fill resolution only after sustained slow frames, never the CSS size.
   qualityElapsed+=Math.min(.25,(stamp-(render.previousStamp||stamp))/1000);render.previousStamp=stamp;
   // The loop targets 30 fps; when 30 frames average under ~24 fps, make the
   // pixels one step coarser (twice at most) and keep checking.
   if(++qualityFrames>=30){if(qualityElapsed/qualityFrames>.042&&coarseness<2&&!transition){coarseness++;resizePending=true;}qualityFrames=0;qualityElapsed=0;}
-  const blending=blendCamera();
+  blend.restore=blendCamera();
   drawPortal();
   renderer.render(world,camera);report();
-  // Navigation keeps steering its own camera; only the drawn frame blends.
-  if(blending)apply(goal);
  }
  const reactionFaces={wave:['happy',1.6],hello:['happy',2.2],boop:['ouch',.45],dance:['happy',4.2],shy:['happy',1.8]};
  function stopMimic(){const wasActive=performer.active;performer.stop();if(container.dataset.mimic==='playing'){container.dataset.mimic='idle';container.dataset.reaction='idle';}return wasActive;}
