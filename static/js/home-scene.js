@@ -42,6 +42,15 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
  // ever recompiles for it mid-crossing.
  const sweep=new T.Plane(),sweepPoint=new T.Vector3(),keepAll=()=>sweep.set(T.Object3D.DEFAULT_UP,1e6);
  keepAll();renderer.clippingPlanes=[sweep];
+ // While the rift grows, the ground between it and the camera, and whatever
+ // stands there, gives way to the next world with it: the world being left is
+ // clipped inside a prism from the rift toward the camera, as wide as the rift
+ // seen from the camera. Every scenario material carries these planes from the
+ // start (intersected, so only the prism is cut); idle, the top plane sits
+ // far below the ground and nothing is clipped.
+ renderer.localClippingEnabled=true;
+ const reveal=[0,1,2,3,4].map(()=>new T.Plane()),revealShape=reveal.map(()=>new T.Plane()),revealIdle=()=>reveal[4].set(T.Object3D.DEFAULT_UP,1e6);
+ revealIdle();
  const portal=createPortal(world);
  // Whether the rift already spans every screen corner, using the shader's own
  // ellipse (see home-portal.js) with room for its jitter and torn rows.
@@ -56,6 +65,42 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
    if(Math.hypot((Math.abs(corner.x)+.4)/rx,(Math.abs(corner.y)+.15)/ry)>.85)return false;
   }
   return true;
+ }
+ // The prism: behind the camera-side face of the rift, in front of a plane
+ // `tr.reveal` metres toward the camera, between the planes through the
+ // camera and the rift's sides, and below its top.
+ const revealPoint=new T.Vector3(),revealNormal=new T.Vector3(),revealSide=new T.Vector3();
+ function shapeReveal(tr,open){
+  const rift=portal.group.position,back=tr.back,depth=tr.reveal,eye=camera.position;
+  const half=1.22*Math.min(open*2.4,Math.max(1,open)),top=1.66*(open<1?open*open:open);
+  revealSide.set(back.z,0,-back.x);
+  revealShape[0].setFromNormalAndCoplanarPoint(back,revealPoint.copy(rift).addScaledVector(back,.02));
+  revealShape[1].setFromNormalAndCoplanarPoint(revealNormal.copy(back).negate(),revealPoint.copy(rift).addScaledVector(back,-depth));
+  for(const [i,sign] of [[2,1],[3,-1]]){
+   revealPoint.copy(rift).addScaledVector(revealSide,sign*half).sub(eye);
+   revealNormal.crossVectors(revealPoint,UP).normalize();if(revealNormal.dot(revealSide)*sign<0)revealNormal.negate();
+   revealShape[i].setFromNormalAndCoplanarPoint(revealNormal,eye);
+  }
+  revealShape[4].set(UP,-(rift.y+top));
+  // The seam rides the front edge on the ground, as wide as the prism there.
+  const span=revealPoint.copy(rift).sub(eye).dot(back),width=2*half*(span-depth)/span;
+  tr.seam=!reduced.matches&&depth>.05&&width>.05;
+  if(tr.seam){
+   revealPoint.copy(rift).addScaledVector(back,-depth);
+   const ground=sets.get(currentScenario)?.groundHeight?.(revealPoint.x,revealPoint.z)??tr.floorFrom;
+   portal.edge(revealPoint.x,ground+.03,revealPoint.z,tr.yaw,width);
+  }
+ }
+ // Nothing of the world being left writes depth where the ground gave way, so
+ // its skybox would show there. Like the rift's mask, a depth-only floor at
+ // the ground, kept to the prism, holds the next world in place.
+ const revealKeep=reveal.map(()=>new T.Plane());
+ const revealFloor=new T.Mesh(new T.PlaneGeometry(1,1).rotateX(-Math.PI/2),new T.MeshBasicMaterial({colorWrite:false,clippingPlanes:revealKeep}));
+ revealFloor.name='portal-reveal-floor';revealFloor.renderOrder=-1000;revealFloor.frustumCulled=false;revealFloor.visible=false;world.add(revealFloor);
+ // Each scenario already owns its materials (copied by its exterior fade), so
+ // the companion and the chute never carry these planes.
+ function prepareReveal(set){
+  set.root.traverse(o=>{for(const m of [o.material].flat())if(m){m.clippingPlanes=reveal;m.clipIntersection=true;}});
  }
  const frontPosition=new T.Vector3(),frontTarget=new T.Vector3();
  // Entering or leaving exploration never cuts: the first frame repeats the
@@ -181,7 +226,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   const next=sets.get(to),yaw=navigation.facingYaw-.12,start=rig.root.position.clone().setY(0),back=new T.Vector3(0,0,-1).applyAxisAngle(UP,yaw);
   const floorFrom=sets.get(currentScenario)?.groundHeight?.(start.x,start.z)||0,floorTo=next?.groundHeight?.(0,0)||0;
   transition={to,at:time,yaw,start,back,floorFrom,floorTo,camera:camera.position.clone(),stage:'',inNext:false,inFrom:true,coverAt:null};
-  portal.place(start.x+back.x*GAP,floorFrom+1.25,start.z+back.z*GAP,yaw);
+  portal.place(start.x+back.x*GAP,floorFrom+1.25,start.z+back.z*GAP,yaw,floorFrom);
   if(next){next.root.position.copy(start).addScaledVector(back,DEPTH);next.root.rotation.y=next.skybox.rotation.y=yaw;}
   reaction=null;container.dataset.reaction='idle';home.dataset.portal=to;portal.flash=.45;rig.face.mood('wide',ENTER+.2);rig.gesture('up',ENTER);portalStage('open');
  }
@@ -204,21 +249,29 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(tr.coverAt===null&&age>=DIVE&&(riftCoversScreen(open)||age>=ARRIVE-.25))tr.coverAt=age;
   const rift=portal.group.position,reach=tr.camera.clone().sub(rift).dot(tr.back)*-1+1.5,cut=tr.coverAt===null?0:smooth((age-tr.coverAt)/Math.max(.12,ARRIVE-tr.coverAt-.02));
   tr.cut=cut;tr.sweepAt=rift.clone().addScaledVector(tr.back,.2-(reach+.2)*cut);
+  // The ground gives way from the rift toward the camera while the rift
+  // grows, reaching past the camera just before the arrival.
+  tr.reveal=reach*smooth((age-ENTER)/(ARRIVE-.15-ENTER));tr.shape=revealShape;shapeReveal(tr,open);
  }
  function arrivePortal(){
   const tr=transition,next=sets.get(tr.to);sets.get(currentScenario)?.setLevel(0);
   if(next){next.root.position.set(0,0,0);next.root.rotation.y=next.skybox.rotation.y=0;}
-  portalStage('arrive');transition=null;portal.group.visible=portal.eraser.visible=false;rig.root.visible=true;portal.flash=1;delete home.dataset.portal;
+  portalStage('arrive');transition=null;portal.group.visible=portal.eraser.visible=portal.seam.visible=revealFloor.visible=false;revealIdle();rig.root.visible=true;portal.flash=1;delete home.dataset.portal;
   activateScenario(tr.to);next?.setLevel(1);
  }
  // Two passes while a rift is open: the next world, then the current one
  // around the rift. The second pass is the frame's regular draw.
  function drawPortal(){
-  renderer.autoClear=true;keepAll();if(!transition)return;
+  renderer.autoClear=true;keepAll();revealIdle();if(!transition)return;
   const tr=transition,from=sets.get(currentScenario),next=sets.get(tr.to);
-  applyLook(tr.to);from?.setLevel(0);next?.setLevel(1);portal.group.visible=portal.eraser.visible=false;portal.glitch.visible=false;rig.root.visible=tr.inNext;
+  applyLook(tr.to);from?.setLevel(0);next?.setLevel(1);portal.group.visible=portal.eraser.visible=false;portal.glitch.visible=portal.seam.visible=revealFloor.visible=false;rig.root.visible=tr.inNext;
   renderer.render(world,camera);
   applyLook(currentScenario);next?.setLevel(0);from?.setLevel(1);portal.group.visible=true;portal.eraser.visible=currentScenario==='black';portal.glitch.visible=portal.flash>.001;rig.root.visible=tr.inFrom;
+  if(tr.reveal>0){
+   reveal.forEach((plane,i)=>{plane.copy(revealShape[i]);revealKeep[i].copy(plane).negate();});
+   revealFloor.position.set(portal.group.position.x,tr.floorFrom,portal.group.position.z);revealFloor.scale.set(80,1,80);
+   revealFloor.visible=true;portal.seam.visible=tr.seam;
+  }
   renderer.autoClear=false;renderer.clearDepth();if(tr.cut>0)sweep.setFromNormalAndCoplanarPoint(sweepPoint.copy(tr.back).negate(),tr.sweepAt);
  }
  function activateScenario(kind){navigation.setActive(false);navigation.resetFront();rig.root.position.set(0,0,0);rig.root.rotation.y=.12;currentScenario=kind;applyLook(kind);container.dataset.scenario=kind;home.dataset.scenario=kind;resizePending=true;onScenario?.(kind);}
@@ -230,7 +283,7 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
   if(kind!=='black'&&!sets.has(kind)){
    if(!pendingSets.has(kind))pendingSets.set(kind,(async()=>{
     const {createMiniEnvironment}=await import('./home-environments.js');if(disposed)return;
-    const set=await createMiniEnvironment(kind,art);if(disposed){disposeSet(set);return;}world.add(set.root,set.skybox);
+    const set=await createMiniEnvironment(kind,art);if(disposed){disposeSet(set);return;}prepareReveal(set);world.add(set.root,set.skybox);
     // Compile against the destination's fog so the crossing does not stall.
     const fog=world.fog;world.fog=looks[kind].fog;const compiled=renderer.compileAsync(set.root,camera,world);world.fog=fog;
     await compiled;if(disposed){disposeSet(set);return;}sets.set(kind,set);

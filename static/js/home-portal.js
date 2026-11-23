@@ -25,15 +25,18 @@ const screenVertex='void main(){gl_Position=vec4(position.xy,.99999,1.);}';
 const GREEN='vec3(.2,1.,.55)',CYAN='vec3(.45,.9,1.)';
 
 export function createPortal(world){
- const uniforms={uOpen:{value:0},uTime:{value:0},uTear:{value:0},uGlow:{value:1}};
+ const uniforms={uOpen:{value:0},uTime:{value:0},uTear:{value:0},uGlow:{value:1},uFloor:{value:-1e3}};
  const group=new T.Group();group.name='scenario-portal';group.visible=false;world.add(group);
  const plane=new T.PlaneGeometry(70,70);
  const mask=new T.Mesh(plane,new T.ShaderMaterial({uniforms,vertexShader:planeVertex,fragmentShader:shape+'void main(){if(rift(vPlane)>0.)discard;gl_FragColor=vec4(0.);}',colorWrite:false}));
  mask.name='portal-mask';mask.renderOrder=-1000;group.add(mask);
  // Flickering blocks around the edge and code rain falling beside it.
  const rim=new T.Mesh(plane,new T.ShaderMaterial({uniforms,vertexShader:planeVertex,transparent:true,depthWrite:false,blending:T.AdditiveBlending,premultipliedAlpha:true,toneMapped:false,fragmentShader:shape+`
-uniform float uGlow;
+uniform float uGlow,uFloor;
 void main(){
+ // Nothing glows below the ground: once the ground in front gives way, that
+ // part of the edge would otherwise show through.
+ if(vPlane.y<uFloor)discard;
  float h=rift(vPlane);vec2 cell=floor(vPlane/${CELL});
  float flick=hash(cell+floor(uTime*18.));
  float edge=smoothstep(.34,0.,h)*step(0.,h),inner=smoothstep(-.16,0.,h)*step(h,0.)*.35;
@@ -63,8 +66,27 @@ void main(){
  gl_FragColor=vec4(mix(${GREEN},${CYAN},hash(cell*1.7))*a,a);
 }`}));
  glitch.name='portal-glitch';glitch.frustumCulled=false;glitch.renderOrder=999;glitch.visible=false;world.add(glitch);
- return {group,eraser,glitch,
-  place(x,y,z,yaw){group.position.set(x,y,z);group.rotation.set(0,yaw,0);},
+ // A matrix seam lying on the ground along the front edge of the reveal (see
+ // home-scene.js): flickering blocks around a bright core line.
+ const band=new T.PlaneGeometry(1,1);band.rotateX(-Math.PI/2);
+ const seamUniforms={uTime:uniforms.uTime,uGlow:uniforms.uGlow,uWidth:{value:1}};
+ const seam=new T.Mesh(band,new T.ShaderMaterial({uniforms:seamUniforms,transparent:true,depthWrite:false,blending:T.AdditiveBlending,premultipliedAlpha:true,toneMapped:false,
+  vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:`
+uniform float uTime,uGlow,uWidth;varying vec2 vUv;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void main(){
+ vec2 cell=floor(vec2(vUv.x*uWidth,vUv.y*.5)/${CELL});
+ float flick=hash(cell+floor(uTime*18.)),line=1.-abs(vUv.y-.5)*2.;
+ float core=pow(line,8.),blocks=step(.45,flick)*smoothstep(0.,.7,line);
+ float ends=smoothstep(0.,.08,vUv.x)*smoothstep(1.,.92,vUv.x);
+ float a=(core*.9+blocks*.45*line)*ends*uGlow;
+ vec3 color=mix(mix(${GREEN},${CYAN},flick),vec3(1.),core*.6);
+ gl_FragColor=vec4(color*a,a);
+}`}));
+ seam.name='portal-seam';seam.renderOrder=21;seam.visible=false;world.add(seam);
+ return {group,eraser,glitch,seam,
+  place(x,y,z,yaw,floor=y-1e3){group.position.set(x,y,z);group.rotation.set(0,yaw,0);uniforms.uFloor.value=floor-y;},
+  edge(x,y,z,yaw,width){seam.position.set(x,y,z);seam.rotation.set(0,yaw,0);seam.scale.set(width,1,.5);seamUniforms.uWidth.value=width;},
   set({open,time,tear,glow=1}){uniforms.uOpen.value=open;uniforms.uTime.value=time;uniforms.uTear.value=tear;uniforms.uGlow.value=glow;},
   set flash(value){flash.uFlash.value=value;glitch.visible=value>.001;},get flash(){return flash.uFlash.value;},
  };

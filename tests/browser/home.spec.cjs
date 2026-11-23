@@ -335,6 +335,44 @@ for(const [width,height] of [[393,852],[1440,1100]])test(`the next scenario only
  }finally{await context.close();}
 });
 
+test('the ground gives way to the next scenario as the rift grows, not only on arrival @scene',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'no-preference'}),page=await context.newPage();
+ try{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));await chatRoutes(page);await instrumentScene(page);await ready(page);
+  await selectScene(page,'lab');await expect(page.locator('#home-scene')).toHaveAttribute('data-portal','arrive',{timeout:30000});
+  // Every frame of the lab → forest crossing: how far the ground has given
+  // way, and whether a ground point just in front of the rift, and one far
+  // off to its side, are inside the clipped prism.
+  await page.evaluate(()=>{window.__ground=[];const tick=()=>{
+   const qa=window.__companionQA,tr=qa.transition;
+   if(tr){
+    const rift=qa.world.getObjectByName('scenario-portal').position,side=[tr.back.z,-tr.back.x],point=(along,across)=>tr.back.clone().set(rift.x-tr.back.x*along+side[0]*across,tr.floorFrom-.05,rift.z-tr.back.z*along+side[1]*across);
+    const inside=p=>!!tr.shape&&tr.reveal>0&&tr.shape.every(plane=>plane.distanceToPoint(p)<0);
+    __ground.push({age:qa.time-tr.at,reveal:tr.reveal||0,coverAt:tr.coverAt,near:inside(point(.6,0)),far:inside(point(.6,25)),seam:qa.world.getObjectByName('portal-seam').visible});
+   }
+   if(!window.__groundDone)requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+  await selectScene(page,'forest');
+  const frames=await page.evaluate(()=>{window.__groundDone=true;return __ground;});
+  expect(frames.length).toBeGreaterThan(10);
+  // Nothing gives way before the companion starts into the rift (ENTER = .5 s).
+  for(const f of frames)if(f.age<.5)expect(f.reveal,`age ${f.age.toFixed(2)}`).toBe(0);
+  // The ground in front of the rift is already the next scenario well before
+  // the arrival and before the rift fills the screen.
+  const early=frames.find(f=>f.near);expect(early).toBeTruthy();expect(early.age).toBeLessThan(1.25);
+  expect(early.coverAt===null||early.age<early.coverAt).toBe(true);
+  // It grows steadily toward the camera, stays within the rift's width, and
+  // the matrix seam rides its edge.
+  for(let i=1;i<frames.length;i++)expect(frames[i].reveal).toBeGreaterThanOrEqual(frames[i-1].reveal-1e-6);
+  for(const f of frames)expect(f.far,`age ${f.age.toFixed(2)}`).toBe(false);
+  expect(frames.some(f=>f.seam)).toBe(true);
+  expect(Math.max(...frames.map(f=>f.reveal))).toBeGreaterThan(5);
+  await expect(page.locator('#home-scene')).toHaveAttribute('data-scenario','forest');
+  // Once arrived, nothing stays clipped and the seam is gone.
+  expect(await page.evaluate(()=>__companionQA.world.getObjectByName('portal-seam').visible)).toBe(false);
+  expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+
 test('arms reshape between ball and paddle, point and spin on request @scene',async({browser})=>{
  const context=await browser.newContext({viewport:{width:393,height:852},reducedMotion:'no-preference'}),page=await context.newPage();
  try{
