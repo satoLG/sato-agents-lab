@@ -82,13 +82,14 @@ export async function createCompanionScene(container,{onProgress,onFrame,onArriv
    revealShape[i].setFromNormalAndCoplanarPoint(revealNormal,eye);
   }
   revealShape[4].set(UP,-(rift.y+top));
-  // The seam rides the front edge on the ground, as wide as the prism there.
-  const span=revealPoint.copy(rift).sub(eye).dot(back),width=2*half*(span-depth)/span;
-  tr.seam=!reduced.matches&&depth>.05&&width>.05;
+  // The rift's edge outlines the prism on the ground: along each side, from
+  // the rift to the front, and across the front while it is still in view.
+  const span=revealPoint.copy(rift).sub(eye).dot(back),ahead=Math.min(depth,span-.3),front=half*(span-ahead)/span;
+  tr.seam=!reduced.matches&&depth>.05;
   if(tr.seam){
-   revealPoint.copy(rift).addScaledVector(back,-depth);
-   const ground=sets.get(currentScenario)?.groundHeight?.(revealPoint.x,revealPoint.z)??tr.floorFrom;
-   portal.edge(revealPoint.x,ground+.03,revealPoint.z,tr.yaw,width);
+   const ground=(along,across)=>{const x=rift.x-back.x*along+revealSide.x*across,z=rift.z-back.z*along+revealSide.z*across;return [x,sets.get(currentScenario)?.groundHeight?.(x,z)??tr.floorFrom,z];};
+   const left=ground(ahead,-front),right=ground(ahead,front);
+   portal.outline([[ground(0,-half),left],[ground(0,half),right],...(depth<span-.3?[[left,right]]:[])]);
   }
  }
  // Nothing of the world being left writes depth where the ground gave way, so
