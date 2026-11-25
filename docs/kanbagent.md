@@ -48,6 +48,28 @@ o crontab roda o mesmo comando a cada 2 minutos para pegar o que sobrar. O worke
 falha, o card destrava e mostra o motivo com "↻ Pedir de novo". Ao voltar para `ideia` e ir de novo
 para `proposta`, o Hermes reescreve em cima de tudo que já foi escrito.
 
+## Claude executa o card (níveis por tarefa)
+
+Levar um card da Fila de execução para `execucao` (ou reprovar a entrega em `revisao_codigo`) exige
+repositório ligado e abre um pedido `execucao`; o card trava e o quadro mostra "executando… <passo>".
+O worker `python -m hermes_dashboard.kanbagent_exec` (disparado como o do Hermes, crontab a cada 5 min)
+repete a segurança do worker de issues: clona como o usuário do site, roda o Claude Code como `agent`
+(sem sudo e sem token do GitHub) numa cópia, traz os commits por `git bundle` e publica o branch
+`kanbagent/card-N`.
+
+1. **Plano**: o Sonnet (ou o Opus quando a proposta diz "Tamanho: grande") lê `CARD.md` e o
+   repositório e escreve `PLAN.json`: mini tarefas autocontidas, cada uma com nível
+   `free | haiku | sonnet | opus` pela regra objetiva (`RUBRIC` em `kanbagent_exec.py`; na dúvida o
+   mais barato) e um comando de checagem. O plano vira comentário do `claude` no card.
+2. **Escada**: cada tarefa começa no nível marcado e sobe free → haiku → sonnet → opus, 2 tentativas
+   por nível. Passa quem faz commit e deixa a checagem verde; entre tentativas o branch volta e o erro
+   vai para a próxima. `free` é um modelo gratuito do OpenRouter (`KANBAGENT_FREE_MODEL`) e só vale em
+   repositório público; em privado a escada começa no haiku.
+3. **Entrega**: roda o `final_check`, publica o branch, abre (ou comenta) o PR, liga ao card e move
+   para `revisao_codigo` com os níveis usados. Qualquer falha destrava o card com o motivo e
+   "↻ Pedir de novo". Numa reprovação, o texto do Sato vai para o planejador e o trabalho continua no
+   mesmo branch/PR. Log por card em `~/.hermes/logs/kanbagent-exec/`.
+
 ## Modelo de dados (banco próprio `kanbagent.sqlite3`)
 
 - `projects` — slug, nome, descrição, criado_em, arquivado_em.

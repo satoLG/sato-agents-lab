@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from . import kanbagent as kb
-from . import kanbagent_hermes
+from . import kanbagent_exec, kanbagent_hermes
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -227,16 +227,19 @@ def stage_form(card_id):
 @bp.post("/card/<int:card_id>/repropor")
 def repropose_form(card_id):
     try:
-        _kick(kb.request_proposal(card_id))
+        _kick(kb.request_agent(card_id))
     except (ValueError, kb.NotFound) as error:
         return _back(card_id, error)
     return _back(card_id)
 
 
 def _kick(job_id):
-    """Pedido novo na fila: dispara o worker do Hermes (o crontab cobre se o disparo falhar)."""
+    """Pedido novo na fila: dispara o worker do tipo dele (o crontab cobre se o disparo falhar)."""
     if job_id and os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
-        kanbagent_hermes.spawn()
+        if kb.job(job_id)["kind"] == "execucao":
+            kanbagent_exec.spawn()
+        else:
+            kanbagent_hermes.spawn()
 
 
 @bp.post("/card/<int:card_id>/proposta")
@@ -398,7 +401,7 @@ def api_jobs():
 @bp.post("/api/cards/<int:card_id>/repropor")
 def api_repropose(card_id):
     try:
-        _kick(kb.request_proposal(card_id))
+        _kick(kb.request_agent(card_id))
     except Exception as error:
         return _api_error(error)
     return jsonify(kb.card(card_id))

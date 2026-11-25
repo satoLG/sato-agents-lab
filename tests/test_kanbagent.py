@@ -225,10 +225,46 @@ def test_empty_proposal_cannot_go_to_review_except_from_sync(db):
     kanbagent.change_stage(card, "revisao", "github-sync")
 
 
+def repo_card(stage):
+    project = kanbagent.create_project("lab", "Lab")
+    repo = kanbagent.add_repo_to_project(project, "satoLG/lab")
+    return card_at(stage, project_id=project, repo_id=repo)
+
+
 def test_after_execution_starts_only_code_review_cycle(db):
-    card = card_at("revisao_codigo")
+    card = repo_card("revisao_codigo")
     assert kanbagent.next_stages("revisao_codigo") == ["execucao", "entregue", "descartado"]
     assert kanbagent.next_stages("execucao") == ["revisao_codigo", "descartado"]
     with pytest.raises(kanbagent.InvalidTransition):
         kanbagent.change_stage(card, "execucao", "sato")
-    kanbagent.change_stage(card, "execucao", "sato", text="faltou teste")
+    job = kanbagent.change_stage(card, "execucao", "sato", text="faltou teste")
+    assert kanbagent.job(job)["kind"] == "execucao"
+
+
+def test_execution_needs_repo_and_queues_for_the_exec_worker(db):
+    bare = card_at("aprovado")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.change_stage(bare, "execucao", "sato")
+    card = repo_card("aprovado")
+    job = kanbagent.change_stage(card, "execucao", "sato")
+    assert kanbagent.claim_job("proposta") is None          # cada worker só pega o seu tipo
+    assert kanbagent.claim_job("execucao")["id"] == job
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.change_stage(card, "descartado", "sato")  # travado enquanto o Claude trabalha
+    kanbagent.change_stage(card, "revisao_codigo", "claude", text="PR aberto")
+    assert kanbagent.job(job)["status"] == "done"
+
+
+def test_progress_is_the_heartbeat_of_long_jobs(db):
+    card = repo_card("aprovado")
+    job = kanbagent.change_stage(card, "execucao", "sato")
+    kanbagent.claim_job("execucao", now="2026-01-01T00:00:00+00:00")
+    kanbagent.job_progress(job, "tarefa 3/5 (haiku)")       # sinal de vida agora
+    assert kanbagent.card(card)["job"]["status"] == "running"
+
+
+def test_sync_does_not_move_a_card_while_an_agent_works(db):
+    card = repo_card("revisao_codigo")
+    kanbagent.change_stage(card, "execucao", "sato", text="reprovado")
+    assert kanbagent.advance_to(card, "revisao_codigo", "github-sync") == []
+    assert kanbagent.card(card)["etapa_atual"] == "execucao"
