@@ -86,8 +86,10 @@ def test_domain_modules_do_not_import_the_flask_app():
 
 
 def test_hermes_sqlite_sources_are_opened_read_only():
-    """ADR 0008: only the chat's own queue database may be opened for writing."""
-    own_databases = {"web_chat.py"}
+    """ADR 0008: Hermes sources are read-only; only modules that own a database
+    may open it for writing: the chat queue (web_chat.py) and the kanbagent
+    (kanbagent.py, ADR 0009)."""
+    own_databases = {"web_chat.py", "kanbagent.py"}
     offenders = []
     for path in DOMAIN:
         if path.name in own_databases:
