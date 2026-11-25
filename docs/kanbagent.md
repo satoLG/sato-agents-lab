@@ -118,3 +118,5 @@ Feito: módulo de domínio, API com token, página com quadro/detalhe/métricas/
 Fora deste repo (no Hermes): skill "anota" (Telegram → card em `ideia`) e skill de proposta do Sato
 Agent (lê card + repos + `estilo-sato.md`, escreve em pt-BR, move para `revisao`). Acesso: o login que o
 site já tem (senha do chat) protege dashboard e kanbagent; só a home é pública — ver ADR 0010.
+
+<!-- executor do kanbagent testado -->
