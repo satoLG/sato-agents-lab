@@ -9,8 +9,11 @@
 
 
 
-{% block nav %}
-<nav class="tabs" role="tablist" aria-label="Secoes do dashboard">
+{% block top_title %}Dashboard{% endblock %}
+{% block shortcuts %}<li><a href="/kanbagent">Kanbagent</a></li>{% endblock %}
+{% block side %}
+<p class="app-side-label">Dashboard</p>
+<nav class="side-tabs" role="tablist" aria-orientation="vertical" aria-label="Secoes do dashboard">
   <button class="tab" type="button" role="tab" id="tab-sistema" data-tab="sistema" aria-selected="true" aria-controls="panel-sistema">Sistema</button>
   <button class="tab" type="button" role="tab" id="tab-atividade" data-tab="atividade" aria-selected="false" aria-controls="panel-atividade">Atividade</button>
   <button class="tab" type="button" role="tab" id="tab-providers" data-tab="providers" aria-selected="false" aria-controls="panel-providers">Providers</button>

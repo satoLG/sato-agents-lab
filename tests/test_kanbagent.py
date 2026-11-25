@@ -10,7 +10,7 @@ from hermes_dashboard import kanbagent
 VALID = {
     ("ideia", "proposta"), ("proposta", "revisao"), ("revisao", "aprovado"),
     ("aprovado", "execucao"), ("execucao", "revisao_codigo"), ("revisao_codigo", "entregue"),
-    ("revisao", "proposta"),
+    ("revisao", "proposta"), ("proposta", "ideia"), ("revisao", "ideia"), ("revisao_codigo", "execucao"),
     *{(stage, "descartado") for stage in kanbagent.STAGES if stage not in {"entregue", "descartado"}},
 }
 
@@ -36,6 +36,8 @@ def card_at(stage, **kwargs):
             "entregue": ["proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue"],
             "descartado": ["descartado"]}[stage]
     for step in path:
+        if step == "revisao":
+            kanbagent.update_proposal(card, "proposta pronta", "hermes")
         kanbagent.change_stage(card, step, "hermes")
     return card
 
@@ -61,8 +63,8 @@ def test_all_documented_transitions_are_valid():
 
 @pytest.mark.parametrize("from_stage,to_stage", [
     ("ideia", "entregue"), ("entregue", "descartado"), ("aprovado", "ideia"), ("descartado", "proposta"),
-    ("ideia", "revisao"), ("proposta", "ideia"), ("execucao", "aprovado"), ("descartado", "descartado"),
-    ("revisao_codigo", "execucao"), ("ideia", "ideia"), (None, "ideia"), ("ideia", "desconhecida"),
+    ("ideia", "revisao"), ("execucao", "proposta"), ("execucao", "aprovado"), ("descartado", "descartado"),
+    ("revisao_codigo", "ideia"), ("aprovado", "proposta"), ("execucao", "ideia"), ("ideia", "ideia"), (None, "ideia"), ("ideia", "desconhecida"),
 ])
 def test_invalid_transitions(from_stage, to_stage):
     assert not kanbagent.can_transition(from_stage, to_stage)
@@ -136,6 +138,7 @@ def test_card_repo_must_belong_to_its_project(db):
 def test_stage_durations_sum_an_adjustment_loop(db):
     card = kanbagent.create_card("Kanban", "ideia", "sato", occurred_at="2026-11-01T10:00:00+00:00")
     kanbagent.change_stage(card, "proposta", "hermes", occurred_at="2026-11-01T11:00:00+00:00")
+    kanbagent.update_proposal(card, "proposta", "hermes", occurred_at="2026-11-01T12:00:00+00:00")
     kanbagent.change_stage(card, "revisao", "hermes", occurred_at="2026-11-01T13:00:00+00:00")
     kanbagent.change_stage(card, "proposta", "sato", text="ajuste", occurred_at="2026-11-02T13:00:00+00:00")
     kanbagent.change_stage(card, "revisao", "hermes", occurred_at="2026-11-02T13:30:00+00:00")
@@ -164,3 +167,31 @@ def test_events_are_append_only(db):
             conn.execute("UPDATE events SET author='sato'")
         with pytest.raises(sqlite3.DatabaseError, match="só recebe INSERT"):
             conn.execute("DELETE FROM events")
+
+
+def test_returns_need_comment_and_count_as_adjustments(db):
+    card = card_at("revisao")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.change_stage(card, "ideia", "sato")
+    kanbagent.change_stage(card, "ideia", "sato", text="faltou o mobile")
+    kanbagent.change_stage(card, "proposta", "sato")
+    kanbagent.change_stage(card, "ideia", "sato")  # proposta → ideia não pede texto
+    assert kanbagent.card(card)["ajustes"] == 2
+    assert kanbagent.STAGE_LABELS["aprovado"] == "Fila de execução"
+
+
+def test_empty_proposal_cannot_go_to_review_except_from_sync(db):
+    card = kanbagent.create_card("t", "i", "sato")
+    kanbagent.change_stage(card, "proposta", "sato")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.change_stage(card, "revisao", "sato")
+    kanbagent.change_stage(card, "revisao", "github-sync")
+
+
+def test_after_execution_starts_only_code_review_cycle(db):
+    card = card_at("revisao_codigo")
+    assert kanbagent.next_stages("revisao_codigo") == ["execucao", "entregue", "descartado"]
+    assert kanbagent.next_stages("execucao") == ["revisao_codigo", "descartado"]
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.change_stage(card, "execucao", "sato")
+    kanbagent.change_stage(card, "execucao", "sato", text="faltou teste")

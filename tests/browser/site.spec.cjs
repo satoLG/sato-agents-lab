@@ -16,7 +16,12 @@ for(const width of [1440,393])test(`home and dashboard identity at ${width}px`,a
    await expect(page.locator('a[href="/dashboard"]')).toHaveCount(0);
    expect(await page.locator('noscript').textContent()).not.toContain('/dashboard');
    await expect(page.locator('body')).toHaveAttribute('data-ready','true',{timeout:45000});
-  }else await expect(page.locator('.site-nav a[href="/"]')).toBeVisible();
+  }else{
+   // páginas internas: no celular o menu (com Início, atalhos e sair) fica na gaveta do ☰
+   if(width<900){await expect(page.locator('#app-side')).toBeHidden();await page.locator('.app-menu').click();}
+   await expect(page.locator('.site-nav a[href="/"]')).toBeVisible();
+   await expect(page.getByRole('tab',{name:'Sistema',exact:true})).toBeVisible();
+  }
   await page.screenshot({path:info.outputPath(url==='/'?'home.png':'dashboard.png')});
  }
  for(const url of ['/lab','/orb','/models'])expect((await request.get(url)).status()).toBe(404);

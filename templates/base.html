@@ -1,4 +1,6 @@
-{% from 'fragments/site-ui.html' import navigation, loading, logo_filter %}
+{% from 'fragments/site-ui.html' import navigation, loading, logo_filter -%}
+{% set icons = url_for('static', filename='icons/lucide.svg') -%}
+{% set shell = session.get('web_chat_authenticated') -%}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -13,21 +15,57 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/scene-ui.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sato-ui.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/board-ui.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app-shell.css') }}">
 {% block head %}{% endblock %}
+{% if shell %}<script>try{if(localStorage.getItem('sato-side')==='closed')document.documentElement.dataset.side='closed'}catch{}</script>{% endif %}
 </head>
-<body data-page="dashboard" class="{% block body_class %}{% endblock %}">
+<body data-page="dashboard" class="{% if shell %}app-shell {% endif %}{% block body_class %}{% endblock %}">
 {{ logo_filter() }}
+{% if shell %}
+{# Igual ao app do Claude: o que não é do contexto atual fica na barra lateral (desktop) ou na gaveta (☰ no celular). #}
+<aside class="app-side" id="app-side" aria-label="Navegação">
+  <div class="app-side-head">
+    <a class="site-brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="28" height="28" style="filter:url('#site-logo-ink') invert(1)"></a>
+    <strong class="app-name">Sato Agents</strong>
+    <button class="app-side-close icon-button" type="button" data-side-toggle aria-controls="app-side" aria-label="Recolher menu" title="Recolher menu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+  </div>
+  <div class="app-side-body">
+    {% block side %}{% endblock %}
+    <p class="app-side-label">Atalhos</p>
+    <ul class="app-side-links">
+      {% block shortcuts %}
+      <li><a href="/kanbagent">Kanbagent</a></li>
+      <li><a href="/dashboard">Dashboard</a></li>
+      {% endblock %}
+    </ul>
+  </div>
+  <div class="app-side-foot">
+    {{ navigation('dashboard') }}
+    <button class="sound-toggle icon-button" type="button" aria-pressed="true" aria-label="Desligar sons de clique" title="Sons de clique"><svg class="sound-on" aria-hidden="true"><use href="{{ icons }}#volume-2"/></svg><svg class="sound-off" aria-hidden="true"><use href="{{ icons }}#volume-x"/></svg></button>
+    {% if session.get('web_chat_csrf') %}<form class="logout-form" method="post" action="/logout"><input type="hidden" name="csrf" value="{{ session.get('web_chat_csrf') }}"><button class="btn ghost small" type="submit">Sair</button></form>{% endif %}
+  </div>
+</aside>
+<div class="app-scrim" data-side-close hidden></div>
+<div class="app-main">
+  <header class="app-top">
+    <button class="app-menu icon-button" type="button" data-side-toggle aria-controls="app-side" aria-expanded="false" aria-label="Abrir menu" title="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <span class="app-title">{% block top_title %}{% endblock %}</span>
+    {% block top_actions %}{% endblock %}
+  </header>
+  {% block nav %}{% endblock %}
+  <main>{% block content %}{% endblock %}</main>
+</div>
+{% else %}
 <header class="topbar">
   <a class="site-brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="28" height="28" style="filter:url('#site-logo-ink') invert(1)"></a>
   <div class="topbar-actions">{{ navigation('dashboard') }}
-    <button class="sound-toggle icon-button" type="button" aria-pressed="true" aria-label="Desligar sons de clique" title="Sons de clique"><svg class="sound-on" aria-hidden="true"><use href="{{ url_for('static', filename='icons/lucide.svg') }}#volume-2"/></svg><svg class="sound-off" aria-hidden="true"><use href="{{ url_for('static', filename='icons/lucide.svg') }}#volume-x"/></svg></button>{% if session.get('web_chat_authenticated') and session.get('web_chat_csrf') %}
-    <form class="logout-form" method="post" action="/logout"><input type="hidden" name="csrf" value="{{ session.get('web_chat_csrf') }}"><button class="btn ghost" type="submit">Sair</button></form>{% endif %}</div>
+    <button class="sound-toggle icon-button" type="button" aria-pressed="true" aria-label="Desligar sons de clique" title="Sons de clique"><svg class="sound-on" aria-hidden="true"><use href="{{ icons }}#volume-2"/></svg><svg class="sound-off" aria-hidden="true"><use href="{{ icons }}#volume-x"/></svg></button></div>
 </header>
-{% block nav %}{% endblock %}
-<main>{% block content %}{% endblock %}</main>
-<footer>Sato Agents &middot; {{ stats.month if stats else '' }}</footer>
+<main>{{ self.content() }}</main>
+{% endif %}
 {% block loading %}{% endblock %}
 <script type="module" src="{{ url_for('static', filename='js/ui-sounds.js') }}"></script>
+{% if shell %}<script type="module" src="{{ url_for('static', filename='js/app-shell.js') }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

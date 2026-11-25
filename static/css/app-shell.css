@@ -1,0 +1,99 @@
+/* Casca das páginas internas no jeito do app do Claude: barra lateral fixa no desktop com tudo
+   que é auxiliar (seções, atalhos, som, sair) e a página livre para o contexto atual. No celular a
+   barra vira gaveta (☰). Também o scroll discreto de fundo transparente em todo o site. */
+
+/* ---------- scroll discreto (site todo) ---------- */
+* { scrollbar-width: thin; scrollbar-color: #ffffff38 transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ffffff2e; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #ffffff59; }
+
+/* ---------- casca ---------- */
+.app-shell { --side-w: 248px; min-height: 100dvh; }
+.app-side {
+  position: fixed; inset: 0 auto 0 0; z-index: 60; width: var(--side-w);
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 10px calc(12px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: #15181bf2; border-right: 1px solid #ffffff12;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  color: var(--tile-ink);
+  transition: transform 220ms cubic-bezier(.3, .7, .4, 1), visibility 0s;
+}
+.app-side-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 10px; }
+.app-side-head .site-brand { flex: none; }
+.app-name { font-size: .95rem; color: var(--tile-ink-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-side-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-right: 2px; }
+.app-side-label { margin: 14px 8px 4px; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tile-muted); }
+.app-side-label:first-child { margin-top: 4px; }
+.app-side-links { list-style: none; margin: 0; padding: 0; }
+
+/* itens da barra: abas do dashboard, seções do kanbagent e atalhos têm a mesma cara */
+.app-side .side-tabs, .app-side .kb-nav { display: flex; flex-direction: column; gap: 2px; padding: 0; background: none; position: static; border: 0; margin: 0; }
+body[data-page=dashboard] .app-side .tab,
+body[data-page=dashboard] .app-side .kb-nav a,
+body[data-page=dashboard] .app-side-links a {
+  display: flex; align-items: center; width: 100%; min-height: 36px; padding: 6px 10px; margin: 0;
+  border: 0; border-radius: 8px; background: transparent; text-align: left;
+  color: var(--tile-ink); font-size: .9rem; font-weight: 500; text-decoration: none; cursor: pointer;
+  transition: background .12s, transform 250ms var(--press-settle);
+}
+body[data-page=dashboard] .app-side .tab:hover,
+body[data-page=dashboard] .app-side .kb-nav a:hover,
+body[data-page=dashboard] .app-side-links a:hover { background: #ffffff12; color: var(--tile-ink-strong); }
+body[data-page=dashboard] .app-side .tab[aria-selected=true],
+body[data-page=dashboard] .app-side .kb-nav a[aria-current=page] { background: #ffffff1f; color: #fff; font-weight: 650; }
+body[data-page=dashboard] .app-side .tab:active,
+body[data-page=dashboard] .app-side .kb-nav a:active { transform: scale(.98); transition-duration: 34ms; }
+
+.app-side-foot { display: flex; align-items: center; gap: 6px; padding: 10px 4px 0; border-top: 1px solid #ffffff12; }
+.app-side-foot .site-nav { margin-right: auto; }
+body[data-page=dashboard] .app-side-foot .site-nav a { height: 36px; padding: 0 12px; font-size: .8rem; }
+.app-side-foot .logout-form { margin: 0; }
+body[data-page=dashboard] .app-side-foot .logout-form .btn { margin-bottom: 3px; }
+
+.icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.app-side-close, .app-menu {
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0; margin-left: auto;
+  border: 0; border-radius: 8px; background: transparent; color: var(--tile-ink); cursor: pointer;
+}
+.app-side-close:hover, .app-menu:hover { background: #ffffff14; color: #fff; }
+
+/* conteúdo */
+.app-main { min-width: 0; margin-left: var(--side-w); transition: margin-left 220ms cubic-bezier(.3, .7, .4, 1); }
+.app-top { display: none; }
+.app-scrim { position: fixed; inset: 0; z-index: 55; background: #0008; }
+.app-scrim[hidden] { display: none; }
+
+/* desktop com a barra recolhida: só o botão flutuante no canto */
+html[data-side=closed] .app-side { transform: translateX(-100%); visibility: hidden; transition: transform 220ms cubic-bezier(.3, .7, .4, 1), visibility 0s 220ms; }
+html[data-side=closed] .app-main { margin-left: 0; }
+html[data-side=closed] .app-top { display: flex; position: fixed; top: 10px; left: max(10px, env(safe-area-inset-left)); z-index: 50; padding: 0; background: none; }
+html[data-side=closed] .app-top .app-title { display: none; }
+html[data-side=closed] .app-menu { background: #1d2125cc; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--raise); margin: 0; }
+html[data-side=closed] body.kb-body .kb-boardbar,
+html[data-side=closed] body.kb-body .kb-page { padding-left: 58px; }
+html[data-side=closed] body:not(.kb-body) .app-main main { padding-top: 56px; }
+
+/* celular: gaveta por cima do conteúdo e uma barra fina com ☰ + título */
+@media (max-width: 899px) {
+  .app-side { width: min(84vw, 300px); transform: translateX(-100%); visibility: hidden; box-shadow: 0 0 40px #000a;
+    transition: transform 220ms cubic-bezier(.3, .7, .4, 1), visibility 0s 220ms; }
+  html[data-side=open] .app-side { transform: none; visibility: visible; transition: transform 220ms cubic-bezier(.3, .7, .4, 1), visibility 0s; }
+  .app-main, html[data-side=closed] .app-main { margin-left: 0; }
+  .app-top, html[data-side=closed] .app-top {
+    position: sticky; top: 0; left: auto; z-index: 40; display: flex; align-items: center; gap: 6px;
+    min-height: 52px; padding: 6px max(10px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
+    background: #1d2125d9; border-bottom: 1px solid #ffffff12;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  html[data-side=closed] .app-top .app-title { display: block; }
+  .app-menu, html[data-side=closed] .app-menu { order: -1; margin: 0; background: none; box-shadow: none; }
+  .app-title { font-weight: 700; color: var(--tile-ink-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html[data-side=closed] body.kb-body .kb-boardbar, html[data-side=closed] body.kb-body .kb-page { padding-left: 16px; }
+  html[data-side=closed] body:not(.kb-body) .app-main main { padding-top: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-side, .app-main { transition: none !important; }
+}
