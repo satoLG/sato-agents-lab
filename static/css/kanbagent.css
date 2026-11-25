@@ -12,14 +12,6 @@
 
 body.kb-body main { max-width: none; padding: 0 0 24px; }
 
-/* navegação de seções */
-.kb-nav { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px 16px; background: #00000033; }
-body[data-page=dashboard] .kb-nav a { color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: .875rem; font-weight: 600; transition: background .15s, transform 250ms var(--press-settle); }
-.kb-nav a:hover { background: #ffffff29; text-decoration: none; }
-.kb-nav a:active { transform: translateY(1px) scale(.97); transition-duration: 34ms; }
-body[data-page=dashboard] .kb-nav a[aria-current="page"] { background: #dee4ea; color: #1d2125; }
-.kb-nav .kb-nav-out { margin-left: auto; }
-
 .kb-page { max-width: 1180px; margin: 0 auto; padding: 16px; }
 .kb-flash { margin: 12px 16px 0; border-radius: 8px; background: #22272b; color: var(--tile-ink-strong); border: 0; box-shadow: var(--raise); border-left: 4px solid var(--primary); }
 .kb-flash.error { border-left-color: var(--danger); }
@@ -36,7 +28,7 @@ body[data-page=dashboard] .kb-filters select option { color: #1d2125; }
 
 /* listas */
 .kb-board { display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; padding: 12px 16px 16px; scroll-snap-type: x proximity; }
-.kb-list { flex: 0 0 272px; max-height: calc(100vh - 190px); display: flex; flex-direction: column; background: var(--list); border-radius: 12px; padding: 8px; box-shadow: var(--raise); scroll-snap-align: start; }
+.kb-list { flex: 0 0 272px; max-height: calc(100dvh - 150px); display: flex; flex-direction: column; background: var(--list); border-radius: 12px; padding: 8px; box-shadow: var(--raise); scroll-snap-align: start; }
 .kb-list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 10px; }
 .kb-list-head h2 { margin: 0; font-size: .875rem; font-weight: 700; color: var(--tile-ink-strong); display: flex; align-items: center; gap: 8px; }
 .kb-list-head h2::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--stage); }
@@ -44,7 +36,7 @@ body[data-page=dashboard] .kb-filters select option { color: #1d2125; }
 .kb-cards { list-style: none; margin: 0; padding: 0 2px 2px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 8px; }
 
 /* cartão */
-.kb-card { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; background: var(--tile); color: var(--tile-ink-strong); border-radius: 8px; box-shadow: var(--raise); text-decoration: none; transition: background .12s, box-shadow .12s, transform 250ms var(--press-settle); outline: 2px solid transparent; }
+.kb-card { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: manipulation; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; background: var(--tile); color: var(--tile-ink-strong); border-radius: 8px; box-shadow: var(--raise); text-decoration: none; transition: background .12s, box-shadow .12s, transform 250ms var(--press-settle); outline: 2px solid transparent; }
 .kb-card:hover { background: var(--tile-hover); text-decoration: none; outline-color: #85b8ff; }
 .kb-card:active { transform: scale(.98); transition-duration: 34ms; }
 .kb-card-title { font-size: .875rem; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; color: var(--tile-ink-strong); }
@@ -149,3 +141,45 @@ body[data-page=dashboard] .kb-project { border-left: 6px solid hsl(var(--hue, 21
   .kb-boardbar-end { margin-left: 0; }
 }
 .card > header.kb-detail-head { display: block; margin: 0; }
+
+/* ---------- arrastar e soltar ---------- */
+body.kb-dragging, body.kb-dragging * { cursor: grabbing !important; }
+.kb-ghost {
+  position: fixed; top: 0; left: 0; z-index: 100; pointer-events: none; margin: 0;
+  box-shadow: 0 18px 40px -8px #000c, 0 0 0 2px #85b8ff; outline: 0; opacity: .96;
+}
+.kb-dragging-source { opacity: .3; }
+.kb-busy { opacity: .6; pointer-events: none; }
+.kb-list { transition: opacity .15s, outline-color .15s, background-color .15s, transform .15s; outline: 2px dashed transparent; outline-offset: -2px; }
+.kb-drop-ok { outline-color: var(--stage); background-color: color-mix(in srgb, var(--stage) 16%, #101204f2); }
+.kb-drop-ok .kb-list-head h2::after { content: 'solte aqui'; font-size: .68rem; font-weight: 700; color: #1d2125; background: var(--stage); border-radius: 4px; padding: 0 6px; }
+.kb-drop-hover { outline-style: solid; outline-width: 3px; background-color: color-mix(in srgb, var(--stage) 30%, #101204f2); transform: translateY(-2px); }
+.kb-drop-no { opacity: .35; filter: grayscale(.7); }
+.kb-trash {
+  position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 90; display: none;
+  transform: translateX(-50%); padding: 14px 22px; border-radius: 12px; font-weight: 700; color: #fff;
+  background: #ae2e24e6; outline: 2px dashed #f87168; outline-offset: -4px; box-shadow: 0 10px 30px #0009;
+}
+body.kb-dragging .kb-trash.kb-trash-on { display: block; }
+.kb-trash.kb-drop-hover { background: #f87168; color: #1d2125; transform: translateX(-50%) scale(1.06); }
+.kb-badge-wait { background: color-mix(in srgb, var(--label-proposta) 30%, transparent); color: var(--tile-ink-strong); }
+.kb-hint-drag { padding: 0 16px; font-size: .8rem; }
+@media (pointer: coarse) { .kb-hint-drag { display: block; } }
+
+body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; padding: 20px; border: 0; color: var(--tile-ink); }
+.kb-dialog::backdrop { background: #000a; backdrop-filter: blur(2px); }
+.kb-dialog h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--tile-ink-strong); }
+.kb-dialog textarea { width: 100%; margin-top: 8px; padding: 8px 10px; font: inherit; }
+.kb-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.kb-dialog-error { color: var(--danger); font-size: .85rem; margin: 6px 0 0; }
+.kb-toast { position: fixed; right: 16px; bottom: 16px; z-index: 110; margin: 0; max-width: min(90vw, 420px); }
+/* celular: o título já está na barra do ☰; filtros e sync numa faixa só */
+@media (max-width: 899px) {
+  .kb-boardbar { gap: 8px; padding: 8px 12px; }
+  .kb-boardbar h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .kb-boardbar .kb-filters { gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
+  .kb-filters label { font-size: 0; gap: 0; }
+  body[data-page=dashboard] .kb-boardbar .kb-filters select { font-size: .8rem; max-width: 42vw; }
+  .kb-boardbar-end { margin-left: auto; }
+  .kb-hint-drag { font-size: .75rem; }
+}

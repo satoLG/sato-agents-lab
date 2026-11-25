@@ -17,13 +17,23 @@ quanto tempo as coisas levam e onde emperram.
 | `ideia` | a ideia é anotada | Sato (página) ou Hermes (API, a partir do Telegram) |
 | `proposta` | o Sato Agent escreve/reescreve a proposta | Hermes (API) |
 | `revisao` | proposta pronta para o Sato avaliar | Hermes (API) |
-| `aprovado` | Sato aprova | Sato (página) |
+| `aprovado` (rótulo "Fila de execução") | Sato aprova; espera ser pego para executar | Sato (página) |
 | `execucao` | issue criada / worker começou | sync com GitHub |
 | `revisao_codigo` | PR aberto | sync com GitHub |
 | `entregue` | PR mergeado ou issue fechada como concluída | sync com GitHub |
 | `descartado` | Sato descarta (de qualquer etapa antes de `entregue`) | Sato (página) |
 
-"Pedir ajuste" é `revisao → proposta`, com comentário obrigatório do Sato. Cada volta fica registrada.
+Voltas permitidas (cada uma conta como ajuste e fica registrada):
+
+- `proposta → ideia` (comentário opcional) e `revisao → ideia` (comentário obrigatório): voltar para
+  complementar a ideia; ao ir de novo para `proposta` o Hermes refaz em cima de tudo que já foi escrito.
+- `revisao → proposta` ("Pedir ajuste", comentário obrigatório).
+- `revisao_codigo → execucao` ("Reprovar", comentário obrigatório).
+
+Depois que a execução começa não existe volta para ideia/proposta: só o ciclo
+`execucao ⇄ revisao_codigo` até `entregue`, ou `descartado`. Proposta vazia não vai para `revisao`
+(exceto pelo sync com o GitHub, que pula etapas). Na página os cards se arrastam entre as listas e só
+acendem as listas permitidas por essas regras (no celular: segurar o card e arrastar).
 
 ## Modelo de dados (banco próprio `kanbagent.sqlite3`)
 

@@ -68,13 +68,20 @@ class NotFound(LookupError):
     """Projeto, repositório ou card inexistente."""
 
 
+# Voltas permitidas. Antes da execução a proposta pode ir e voltar; depois que a execução começa,
+# só existe o ciclo execução ⇄ revisão de código até entregar (ou descartar).
+RETURNS = {("proposta", "ideia"), ("revisao", "ideia"), ("revisao", "proposta"), ("revisao_codigo", "execucao")}
+# Voltas que pedem comentário: é o que o Hermes (ou o worker) usa para refazer.
+NEEDS_TEXT = {("revisao", "proposta"), ("revisao", "ideia"), ("revisao_codigo", "execucao")}
+
+
 def can_transition(from_stage, to_stage):
     """Única regra de transições, usada pela página, pela API e pelo sync."""
     if from_stage not in STAGES or to_stage not in STAGES:
         return False
     if to_stage == "descartado":
         return from_stage not in TERMINAL
-    if (from_stage, to_stage) == ("revisao", "proposta"):
+    if (from_stage, to_stage) in RETURNS:
         return True
     index = MAIN_PATH.index(from_stage) if from_stage in MAIN_PATH else -1
     return 0 <= index < len(MAIN_PATH) - 1 and MAIN_PATH[index + 1] == to_stage
@@ -202,11 +209,15 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
     """Valida com `can_transition`, grava o evento e atualiza `etapa_atual` atomicamente."""
     text = text.strip() if isinstance(text, str) else text
     with closing(_connection()) as conn, _transaction(conn):
-        from_stage = _card(conn, card_id)["etapa_atual"]
+        row = _card(conn, card_id)
+        from_stage = row["etapa_atual"]
         if not can_transition(from_stage, to_stage):
             raise InvalidTransition(f"Transição inválida: {from_stage} → {to_stage}.")
-        if (from_stage, to_stage) == ("revisao", "proposta") and not text:
-            raise InvalidTransition("Pedir ajuste (revisao → proposta) exige comentário.")
+        if (from_stage, to_stage) in NEEDS_TEXT and not text:
+            raise InvalidTransition(f"Voltar de {from_stage} para {to_stage} exige comentário.")
+        # Proposta vazia não vai para revisão (o sync com o GitHub pula etapas e fica de fora).
+        if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync"                 and not (row["proposta"] or "").strip():
+            raise InvalidTransition("A proposta ainda está vazia.")
         occurred = _insert_event(conn, card_id, "stage_change", author, from_stage=from_stage,
                                  to_stage=to_stage, text=text or None, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET etapa_atual=?, atualizado_em=? WHERE id=?", (to_stage, occurred, card_id))
@@ -241,11 +252,14 @@ def stage_durations(card_id, now=None):
 # --- leitura, proposta, links e métricas (página, API e sync) -------------------------------------
 
 STAGE_LABELS = {
-    "ideia": "Ideia", "proposta": "Proposta", "revisao": "Em revisão", "aprovado": "Aprovado",
+    "ideia": "Ideia", "proposta": "Proposta", "revisao": "Em revisão", "aprovado": "Fila de execução",
     "execucao": "Em execução", "revisao_codigo": "Revisão de código", "entregue": "Entregue",
     "descartado": "Descartado",
 }
 GITHUB_URL = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/(issues|pull)/(\d+)/?(?:[#?].*)?$")
+
+
+_RETURNS_SQL = ",".join(f"('{a}','{b}')" for a, b in sorted(RETURNS))
 
 
 def next_stages(stage):
@@ -304,7 +318,7 @@ def cards(project_id=None, repo_id=None, stage=None):
     sql = ("SELECT c.*, p.nome AS projeto, p.slug AS projeto_slug, r.full_name AS repo,"
            " (SELECT MAX(occurred_at) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change') AS na_etapa_desde,"
            " (SELECT COUNT(*) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change'"
-           "   AND e.from_stage='revisao' AND e.to_stage='proposta') AS ajustes,"
+           "   AND (e.from_stage, e.to_stage) IN (" + _RETURNS_SQL + ")) AS ajustes,"
            " (SELECT COUNT(*) FROM card_links l WHERE l.card_id=c.id) AS links"
            " FROM cards c LEFT JOIN projects p ON p.id=c.project_id LEFT JOIN repos r ON r.id=c.repo_id")
     if where:
@@ -337,7 +351,7 @@ def card(card_id, now=None):
     row.update(events=events, links=links, durations=durations,
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
-                           and (e["from_stage"], e["to_stage"]) == ("revisao", "proposta")),
+                           and (e["from_stage"], e["to_stage"]) in RETURNS),
                proximas=next_stages(row["etapa_atual"]))
     return row
 
@@ -447,7 +461,7 @@ def metrics(project_id=None, repo_id=None, since=None, now=None):
                 seconds = (_parse(following["occurred_at"]) - _parse(current["occurred_at"])).total_seconds()
                 if start is None or _parse(following["occurred_at"]) >= start:
                     passages[current["to_stage"]].append(max(0.0, seconds))
-                    if (following["from_stage"], following["to_stage"]) == ("revisao", "proposta"):
+                    if (following["from_stage"], following["to_stage"]) in RETURNS:
                         adjustments += 1
             if item["etapa_atual"] == "entregue" and changes:
                 delivered_at = _parse(changes[-1]["occurred_at"])

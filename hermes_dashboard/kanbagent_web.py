@@ -88,9 +88,37 @@ def _since_filter(value):
     return duration(since_now(value))
 
 
+# Rótulo de cada movimento nos botões do card e no diálogo do arrastar.
+ACTIONS = {
+    ("ideia", "proposta"): "✨ Pedir proposta ao Hermes",
+    ("proposta", "revisao"): "→ Enviar para revisão",
+    ("proposta", "ideia"): "↩ Voltar para ideia",
+    ("revisao", "aprovado"): "✓ Aprovar",
+    ("revisao", "proposta"): "↺ Pedir ajuste",
+    ("revisao", "ideia"): "↩ Voltar para ideia",
+    ("aprovado", "execucao"): "▶ Executar agora",
+    ("execucao", "revisao_codigo"): "→ Revisão de código",
+    ("revisao_codigo", "entregue"): "✓ Entregar",
+    ("revisao_codigo", "execucao"): "↺ Reprovar",
+}
+
+
+def action_label(from_stage, to_stage):
+    return ACTIONS.get((from_stage, to_stage), f"→ {kb.STAGE_LABELS.get(to_stage, to_stage)}")
+
+
+def card_moves(item):
+    """Etapas para onde este card pode ir agora (proposta vazia ainda não vai para revisão)."""
+    moves = kb.next_stages(item["etapa_atual"])
+    if item["etapa_atual"] == "proposta" and not (item.get("proposta") or "").strip():
+        moves = [to for to in moves if to != "revisao"]
+    return moves
+
+
 @bp.app_context_processor
 def _labels():
-    return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES}
+    return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
+            "kb_action": action_label, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS}
 
 
 # --- helpers de formulário -------------------------------------------------------------------------
@@ -138,8 +166,12 @@ def board():
     columns = {stage: [] for stage in kb.STAGES}
     for item in items:
         columns[item["etapa_atual"]].append(item)
+    rules = {"labels": {f"{a}>{b}": label for (a, b), label in ACTIONS.items()},
+             "needsText": [f"{a}>{b}" for a, b in sorted(kb.NEEDS_TEXT)],
+             "returns": [f"{a}>{b}" for a, b in sorted(kb.RETURNS)],
+             "stages": kb.STAGE_LABELS}
     return _render("kanbagent/board.html", columns=columns, projects=kb.projects(), filters=filters,
-                   show_discarded=request.args.get("descartados") == "1")
+                   show_discarded=request.args.get("descartados") == "1", rules=rules)
 
 
 @bp.get("/card/<int:card_id>")

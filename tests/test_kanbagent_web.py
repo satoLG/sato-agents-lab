@@ -80,7 +80,8 @@ def test_full_flow_through_the_pages(client):
     card_id = int(re.search(r"/card/(\d+)", response.headers["Location"]).group(1))
 
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
-    assert "quero ver o RAG" in page and "→ Proposta" in page
+    assert "quero ver o RAG" in page and "Pedir proposta ao Hermes" in page
+    assert "→ Proposta" not in page
 
     form(client, f"/kanbagent/card/{card_id}/proposta", proposta="Fazer X e Y")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
@@ -107,10 +108,46 @@ def test_full_flow_through_the_pages(client):
 
 def test_adjust_requires_text(client):
     card_id = kb.create_card("T", "i", "sato")
-    for stage in ("proposta", "revisao"):
-        kb.change_stage(card_id, stage, "hermes")
+    kb.change_stage(card_id, "proposta", "hermes")
+    kb.update_proposal(card_id, "p", "hermes")
+    kb.change_stage(card_id, "revisao", "hermes")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
     assert kb.card(card_id)["etapa_atual"] == "revisao"
+
+
+def test_board_marks_where_each_card_can_be_dropped(client):
+    idea = kb.create_card("Ideia solta", "i", "sato")
+    waiting = kb.create_card("Sem proposta", "i", "sato")
+    kb.change_stage(waiting, "proposta", "sato")
+    page = client.get("/kanbagent").get_data(as_text=True)
+    assert f'data-card="{idea}" data-stage="ideia" data-next="proposta descartado"' in page
+    # proposta vazia ainda não pode ir para revisão
+    assert f'data-card="{waiting}" data-stage="proposta" data-next="ideia descartado"' in page
+    assert "aguardando Hermes" in page
+    assert 'data-drop="aprovado"' in page and "Fila de execução" in page
+    assert 'data-drop="descartado"' in page and 'id="kb-move"' in page
+
+
+def test_returns_from_the_card_page(client):
+    card_id = kb.create_card("T", "i", "sato")
+    kb.change_stage(card_id, "proposta", "hermes")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Voltar para ideia" in page and "Enviar para revisão" not in page
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="ideia", texto="faltou contexto")
+    item = kb.card(card_id)
+    assert item["etapa_atual"] == "ideia" and item["ajustes"] == 1
+
+
+def test_dashboard_and_kanbagent_share_the_side_menu(client):
+    dashboard = client.get("/dashboard").get_data(as_text=True)
+    assert 'class="app-side"' in dashboard and 'role="tablist"' in dashboard
+    assert 'href="/kanbagent"' in dashboard
+    board = client.get("/kanbagent").get_data(as_text=True)
+    assert 'class="app-side"' in board and 'href="/dashboard"' in board and "app-menu" in board
+
+
+def test_login_page_has_no_side_menu(anonymous):
+    assert "app-side" not in anonymous.get("/login").get_data(as_text=True)
 
 
 def test_invalid_transition_flashes_and_keeps_stage(client):
@@ -171,6 +208,7 @@ def test_api_with_session_needs_csrf_header(client):
 
 def test_sync_moves_approved_card_to_delivered(vm):
     card_id = kb.create_card("T", "i", "sato", occurred_at="2026-01-01T00:00:00Z")
+    kb.update_proposal(card_id, "p", "hermes", occurred_at="2026-01-01T12:00:00Z")
     for stage, when in (("proposta", "2026-01-02T00:00:00Z"), ("revisao", "2026-01-03T00:00:00Z"),
                         ("aprovado", "2026-01-04T00:00:00Z")):
         kb.change_stage(card_id, stage, "sato", occurred_at=when)
@@ -198,6 +236,7 @@ def test_sync_ignores_cards_before_approval_and_survives_errors(vm):
     early = kb.create_card("cedo", "i", "sato")
     kb.add_link(early, "https://github.com/o/r/issues/1", "sato")
     late = kb.create_card("tarde", "i", "sato")
+    kb.update_proposal(late, "p", "hermes")
     for stage in ("proposta", "revisao", "aprovado"):
         kb.change_stage(late, stage, "sato")
     kb.add_link(late, "https://github.com/o/r/pull/2", "sato")

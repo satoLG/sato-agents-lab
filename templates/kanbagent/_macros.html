@@ -4,13 +4,13 @@
 <form class="kb-filters" method="get" data-autosubmit>
   <label>Projeto
     <select name="projeto">
-      <option value="">Todos</option>
+      <option value="">Todos os projetos</option>
       {% for p in projects %}<option value="{{ p.id }}" {% if filters.project == p.id %}selected{% endif %}>{{ p.nome }}</option>{% endfor %}
     </select>
   </label>
   <label>Repositório
     <select name="repo">
-      <option value="">Todos</option>
+      <option value="">Todos os repos</option>
       {% for p in projects %}{% for r in p.repos %}<option value="{{ r.id }}" {% if filters.repo == r.id %}selected{% endif %}>{{ r.full_name }}</option>{% endfor %}{% endfor %}
     </select>
   </label>

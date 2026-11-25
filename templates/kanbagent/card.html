@@ -2,6 +2,7 @@
 {% import "kanbagent/_macros.html" as ui %}
 {% set kb_page = 'board' %}
 {% block title %}{{ card.titulo }} · kanbagent{% endblock %}
+{% block top_title %}{{ card.titulo }}{% endblock %}
 {% block kb_content %}
 <article class="kb-detail card" aria-labelledby="kb-title">
   <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro">✕</a>
@@ -78,22 +79,28 @@
 
     <aside class="kb-detail-side" aria-label="Ações">
       <h2>Mover</h2>
+      {% set moves = kb_moves(card) %}
       {% if card.proximas %}
-      {% for to in card.proximas if to != 'descartado' and not (card.etapa_atual == 'revisao' and to == 'proposta') %}
-      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
-        <input type="hidden" name="para" value="{{ to }}">
-        <button class="btn" type="submit">{% if card.etapa_atual == 'revisao' and to == 'aprovado' %}✓ Aprovar{% else %}→ {{ kb_labels[to] }}{% endif %}</button>
-      </form>
-      {% endfor %}
-      {% if card.etapa_atual == 'revisao' %}
+      {% for to in moves if to != 'descartado' %}
+      {% set move = (card.etapa_atual, to) %}
+      {% if move in kb_returns %}
       <details class="kb-inline-edit">
-        <summary class="btn ghost">↺ Pedir ajuste</summary>
+        <summary class="btn ghost">{{ kb_action(card.etapa_atual, to) }}</summary>
         <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
-          <input type="hidden" name="para" value="proposta">
-          <textarea name="texto" rows="3" required placeholder="O que mudar na proposta?" aria-label="Pedir ajuste"></textarea>
-          <button class="btn small" type="submit">Pedir ajuste</button>
+          <input type="hidden" name="para" value="{{ to }}">
+          <textarea name="texto" rows="3" {% if move in kb_needs_text %}required placeholder="O que mudar?"{% else %}placeholder="Comentário (opcional)"{% endif %} aria-label="{{ kb_action(card.etapa_atual, to) }}"></textarea>
+          <button class="btn small" type="submit">{{ kb_action(card.etapa_atual, to)[2:] }}</button>
         </form>
       </details>
+      {% else %}
+      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
+        <input type="hidden" name="para" value="{{ to }}">
+        <button class="btn" type="submit">{{ kb_action(card.etapa_atual, to) }}</button>
+      </form>
+      {% endif %}
+      {% endfor %}
+      {% if card.etapa_atual == 'proposta' and not (card.proposta or '').strip() %}
+      <p class="muted kb-hint">⏳ Esperando a proposta do Hermes. Ela também pode ser escrita aqui ao lado.</p>
       {% endif %}
       {% if 'descartado' in card.proximas %}
       <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
