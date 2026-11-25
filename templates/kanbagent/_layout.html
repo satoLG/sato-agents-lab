@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_class %}kb-body{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/kanbagent.css') }}">{% endblock %}
 {% block nav %}
 <nav class="kb-nav" aria-label="kanbagent">
@@ -9,9 +10,11 @@
 </nav>
 {% endblock %}
 {% block content %}
+<div class="{{ 'kb-full' if kb_full else 'kb-page' }}">
 {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}
 <p class="notice kb-flash {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
 {% endfor %}{% endwith %}
 {% block kb_content %}{% endblock %}
+</div>
 {% endblock %}
 {% block scripts %}<script type="module" src="{{ url_for('static', filename='js/kanbagent.js') }}"></script>{% endblock %}

@@ -12,19 +12,22 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/identity.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/scene-ui.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/sato-ui.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/board-ui.css') }}">
 {% block head %}{% endblock %}
 </head>
-<body data-page="dashboard">
+<body data-page="dashboard" class="{% block body_class %}{% endblock %}">
 {{ logo_filter() }}
 <header class="topbar">
   <a class="site-brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="28" height="28" style="filter:url('#site-logo-ink') invert(1)"></a>
-  <div class="topbar-actions">{{ navigation('dashboard') }}{% if session.get('web_chat_authenticated') and session.get('web_chat_csrf') %}
+  <div class="topbar-actions">{{ navigation('dashboard') }}
+    <button class="sound-toggle icon-button" type="button" aria-pressed="true" aria-label="Desligar sons de clique" title="Sons de clique"><svg class="sound-on" aria-hidden="true"><use href="{{ url_for('static', filename='icons/lucide.svg') }}#volume-2"/></svg><svg class="sound-off" aria-hidden="true"><use href="{{ url_for('static', filename='icons/lucide.svg') }}#volume-x"/></svg></button>{% if session.get('web_chat_authenticated') and session.get('web_chat_csrf') %}
     <form class="logout-form" method="post" action="/logout"><input type="hidden" name="csrf" value="{{ session.get('web_chat_csrf') }}"><button class="btn ghost" type="submit">Sair</button></form>{% endif %}</div>
 </header>
 {% block nav %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
 <footer>Sato Agents &middot; {{ stats.month if stats else '' }}</footer>
 {% block loading %}{% endblock %}
+<script type="module" src="{{ url_for('static', filename='js/ui-sounds.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

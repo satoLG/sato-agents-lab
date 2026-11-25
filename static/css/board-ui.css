@@ -1,0 +1,156 @@
+/* Camada visual das páginas internas (dashboard, kanbagent, login), inspirada no Trello
+   em modo escuro: fundo de "board" colorido, superfícies sólidas com sombra curta,
+   cartões com etiquetas coloridas. Botões em 3D que afundam ao clicar, no padrão do
+   playground de button-sounds (buttons.joshwcomeau.com). Carregada por último no base.html. */
+
+:root {
+  --board-bg: linear-gradient(135deg, #0b3b5a 0%, #1d2b64 48%, #4a2b6b 100%);
+  --list: #101204f2;
+  --tile: #22272b;
+  --tile-hover: #2c333a;
+  --tile-ink: #b6c2cf;
+  --tile-ink-strong: #dee4ea;
+  --tile-muted: #8c9bab;
+  --tile-line: #a6c5e229;
+  --raise: 0 1px 1px #03040480, 0 0 1px #03040480;
+  --raise-hover: 0 8px 16px -4px #03040499, 0 0 1px #03040480;
+  --primary: #579dff;
+  --primary-edge: #1d5fbf;
+  --primary-ink: #1d2125;
+  --danger: #f87168;
+  --danger-edge: #ae2e24;
+  --neutral: #3b444c;
+  --neutral-edge: #161a1d;
+  --press-spring: cubic-bezier(.3, .7, .4, 1.5);
+  --press-settle: cubic-bezier(.3, .7, .4, 1);
+  --label-ideia: #9f8fef; --label-proposta: #579dff; --label-revisao: #e2b203;
+  --label-aprovado: #4bce97; --label-execucao: #fea362; --label-revisao_codigo: #e774bb;
+  --label-entregue: #94c748; --label-descartado: #8c9bab;
+}
+
+body[data-page=dashboard] {
+  background: linear-gradient(#0000002e, #0000002e), var(--board-bg) fixed;
+  color: var(--tile-ink);
+}
+
+/* topo: barra escura translúcida, como a navegação do Trello */
+body[data-page=dashboard] .topbar {
+  background: #1d2125cc;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid #ffffff14;
+  min-height: 64px;
+  padding: 10px max(16px, env(safe-area-inset-right));
+}
+.sound-toggle {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border: 0; border-radius: 10px; background: #ffffff14; color: var(--tile-ink-strong); cursor: pointer;
+}
+.sound-toggle:hover { background: #ffffff29; }
+.sound-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sound-toggle .sound-off, html[data-ui-sound=off] .sound-toggle .sound-on { display: none; }
+html[data-ui-sound=off] .sound-toggle .sound-off { display: block; }
+html[data-ui-sound=off] .sound-toggle { color: var(--tile-muted); }
+
+/* abas do dashboard: botões de cabeçalho de board */
+body[data-page=dashboard] .tabs {
+  background: #00000040; border-radius: 12px; padding: 6px; margin: 16px 22px 0; gap: 6px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+body[data-page=dashboard] .tab {
+  border-radius: 8px; padding: 8px 14px; color: var(--tile-ink-strong); font-weight: 600;
+  transition: background .15s, transform 250ms var(--press-settle);
+}
+body[data-page=dashboard] .tab:hover { background: #ffffff29; }
+body[data-page=dashboard] .tab[aria-selected=true] { background: #dee4ea; color: #1d2125; }
+body[data-page=dashboard] .tab:active { transform: translateY(1px) scale(.97); transition-duration: 34ms; }
+
+/* superfícies sólidas */
+body[data-page=dashboard] .card,
+body[data-page=dashboard] .stat,
+body[data-page=dashboard] .graph-shell {
+  background: var(--tile);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: var(--raise);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  color: var(--tile-ink);
+}
+body[data-page=dashboard] .card > header h2,
+body[data-page=dashboard] .card h2,
+body[data-page=dashboard] h1 { color: var(--tile-ink-strong); }
+body[data-page=dashboard] .panel-head h1 { color: #fff; text-shadow: 0 1px 2px #0006; }
+body[data-page=dashboard] .panel-head p,
+body[data-page=dashboard] .muted { color: var(--tile-muted); }
+body[data-page=dashboard] .panel-head p { color: #dee4eacc; }
+body[data-page=dashboard] .stat { border-top: 4px solid var(--stat-color, var(--primary)); }
+body[data-page=dashboard] .stat-grid > :nth-child(4n+2) { --stat-color: var(--label-aprovado); }
+body[data-page=dashboard] .stat-grid > :nth-child(4n+3) { --stat-color: var(--label-revisao); }
+body[data-page=dashboard] .stat-grid > :nth-child(4n+4) { --stat-color: var(--label-ideia); }
+body[data-page=dashboard] a { color: #85b8ff; }
+body[data-page=dashboard] .execution-history details { background: var(--tile); box-shadow: var(--raise); border-radius: 12px; }
+body[data-page=dashboard] th { background: transparent; color: var(--tile-muted); }
+body[data-page=dashboard] select,
+body[data-page=dashboard] input:not([type=checkbox]):not([type=radio]),
+body[data-page=dashboard] textarea {
+  background: #22272b; color: var(--tile-ink-strong); border: 1px solid #738496; border-radius: 6px;
+}
+body[data-page=dashboard] select:focus,
+body[data-page=dashboard] input:focus,
+body[data-page=dashboard] textarea:focus { border-color: #85b8ff; outline: 2px solid #85b8ff55; outline-offset: 0; }
+body[data-page=dashboard] .seg { background: #00000040; border-radius: 10px; }
+body[data-page=dashboard] .seg button { border-radius: 8px; color: var(--tile-ink-strong); background: transparent; transition: transform 250ms var(--press-settle); }
+body[data-page=dashboard] .seg button[aria-pressed=true] { background: #dee4ea; color: #1d2125; }
+body[data-page=dashboard] .seg button:active { transform: translateY(1px) scale(.96); transition-duration: 34ms; }
+body[data-page=dashboard] footer { color: #dee4ea99; }
+
+/* ---------- botão 3D que afunda (button-sounds playground) ---------- */
+body[data-page=dashboard] .btn,
+.login-form button {
+  --face: var(--primary); --edge: var(--primary-edge); --lift: 4px;
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; padding: 8px 18px; margin-bottom: var(--lift);
+  border: 0; border-radius: 10px;
+  background: linear-gradient(#ffffff2e, #ffffff00 55%), var(--face);
+  color: var(--primary-ink); font-weight: 700; letter-spacing: .01em;
+  box-shadow: 0 var(--lift) 0 var(--edge), 0 calc(var(--lift) + 3px) 10px -2px #0009;
+  transform: translateY(0);
+  transition: transform 250ms var(--press-settle), box-shadow 250ms var(--press-settle), filter .15s;
+  cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+body[data-page=dashboard] .btn:hover,
+.login-form button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 calc(var(--lift) + 2px) 0 var(--edge), 0 calc(var(--lift) + 6px) 14px -2px #0009;
+  transition: transform 250ms var(--press-spring), box-shadow 250ms var(--press-spring);
+}
+body[data-page=dashboard] .btn:active,
+.login-form button:active {
+  transform: translateY(calc(var(--lift) - 1px));
+  box-shadow: 0 1px 0 var(--edge), 0 2px 4px -1px #0009;
+  transition-duration: 34ms;
+}
+body[data-page=dashboard] .btn.ghost { --face: var(--neutral); --edge: var(--neutral-edge); color: var(--tile-ink-strong); border: 0; }
+body[data-page=dashboard] .btn.danger { --face: var(--danger); --edge: var(--danger-edge); color: #1d2125; }
+body[data-page=dashboard] .btn.small { min-height: 32px; padding: 4px 12px; --lift: 3px; font-size: .8rem; }
+body[data-page=dashboard] .logout-form .btn { min-height: 36px; padding: 0 14px; }
+body[data-page=dashboard] .btn:disabled { filter: grayscale(.6) brightness(.8); cursor: not-allowed; transform: none; }
+body[data-page=dashboard] .btn:focus-visible { outline: 2px solid #85b8ff; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-page=dashboard] .btn, body[data-page=dashboard] .tab, body[data-page=dashboard] .seg button, .login-form button { transition: none; }
+  body[data-page=dashboard] .btn:hover { transform: none; }
+}
+
+@media (max-width: 700px) {
+  body[data-page=dashboard] .tabs { margin: 12px 12px 0; }
+  body[data-page=dashboard] .topbar { padding: 8px 12px; }
+}
+
+/* link "Início" do topo no mesmo estilo dos botões de cabeçalho */
+body[data-page=dashboard] .site-nav { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0; }
+body[data-page=dashboard] .site-nav a { height: 40px; padding: 0 14px; border-radius: 10px; background: #ffffff14; color: var(--tile-ink-strong); font-size: .85rem; }
+body[data-page=dashboard] .site-nav a:hover { background: #ffffff29; text-decoration: none; }
+body[data-page=dashboard] .site-nav svg { stroke: currentColor; }

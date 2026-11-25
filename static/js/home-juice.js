@@ -179,10 +179,10 @@ export function createHomeJuice(root,audio){
   const el=event.target.closest?.(pressable);if(!el||!root.contains(el)||el.id==='robot-touch'||el.disabled||event.button>0)return;
   const kind=clickKind(el);pressed={el:pressTarget(el),kind};lastPointer=performance.now();press(pressed.el,kind);sound(kind);
  }
- function pointerUp(){if(pressed){release(pressed.el,pressed.kind);pressed=null;}}
+ function pointerUp(){if(pressed){release(pressed.el,pressed.kind);sound(pressed.kind,{phase:'up'});pressed=null;}}
  function click(event){
   if(event.detail!==0)return;const el=event.target.closest?.('button,a[href]');if(!el||!root.contains(el)||el.id==='robot-touch')return;
-  const kind=clickKind(el);sound(kind);release(el,kind);
+  const kind=clickKind(el);sound(kind);setTimeout(()=>sound(kind,{phase:'up'}),90);release(el,kind);
  }
  function radioChange(event){if(event.target.type==='radio'&&performance.now()-lastPointer>350){sound('toggle');const option=event.target.closest('.scene-option,.theme-option');if(option)release(pressTarget(option),'toggle');}}
  const typingKeys=new Set(['Backspace','Delete','Enter',' ']);
