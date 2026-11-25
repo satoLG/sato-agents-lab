@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from . import kanbagent as kb
+from . import kanbagent_hermes
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -217,10 +218,25 @@ def create_card_form():
 @bp.post("/card/<int:card_id>/etapa")
 def stage_form(card_id):
     try:
-        kb.change_stage(card_id, _text("para", True, 40), "sato", text=_text("texto") or None)
+        _kick(kb.change_stage(card_id, _text("para", True, 40), "sato", text=_text("texto") or None))
     except (ValueError, kb.NotFound) as error:
         return _back(card_id, error)
     return _back(card_id)
+
+
+@bp.post("/card/<int:card_id>/repropor")
+def repropose_form(card_id):
+    try:
+        _kick(kb.request_proposal(card_id))
+    except (ValueError, kb.NotFound) as error:
+        return _back(card_id, error)
+    return _back(card_id)
+
+
+def _kick(job_id):
+    """Pedido novo na fila: dispara o worker do Hermes (o crontab cobre se o disparo falhar)."""
+    if job_id and os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
+        kanbagent_hermes.spawn()
 
 
 @bp.post("/card/<int:card_id>/proposta")
@@ -372,11 +388,27 @@ def api_proposal(card_id):
     return jsonify(kb.card(card_id))
 
 
+@bp.get("/api/jobs")
+def api_jobs():
+    """Último pedido ao Hermes de cada card pedido (`?cards=1,2`): o quadro acompanha ao vivo."""
+    ids = [int(x) for x in request.args.get("cards", "").split(",") if x.strip().isdigit()][:100]
+    return jsonify({str(card_id): job for card_id, job in kb.latest_jobs(ids).items()})
+
+
+@bp.post("/api/cards/<int:card_id>/repropor")
+def api_repropose(card_id):
+    try:
+        _kick(kb.request_proposal(card_id))
+    except Exception as error:
+        return _api_error(error)
+    return jsonify(kb.card(card_id))
+
+
 @bp.post("/api/cards/<int:card_id>/stage")
 def api_stage(card_id):
     data = request.get_json(silent=True) or {}
     try:
-        kb.change_stage(card_id, str(data.get("para", "")), _author(), text=data.get("texto"))
+        _kick(kb.change_stage(card_id, str(data.get("para", "")), _author(), text=data.get("texto")))
     except Exception as error:
         return _api_error(error)
     return jsonify(kb.card(card_id))

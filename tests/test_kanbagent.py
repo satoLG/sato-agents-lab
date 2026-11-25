@@ -174,10 +174,47 @@ def test_returns_need_comment_and_count_as_adjustments(db):
     with pytest.raises(kanbagent.InvalidTransition):
         kanbagent.change_stage(card, "ideia", "sato")
     kanbagent.change_stage(card, "ideia", "sato", text="faltou o mobile")
-    kanbagent.change_stage(card, "proposta", "sato")
+    job = kanbagent.change_stage(card, "proposta", "sato")
+    kanbagent.finish_job(job, error="sem rede")
     kanbagent.change_stage(card, "ideia", "sato")  # proposta → ideia não pede texto
     assert kanbagent.card(card)["ajustes"] == 2
     assert kanbagent.STAGE_LABELS["aprovado"] == "Fila de execução"
+
+
+def test_moving_to_proposal_queues_hermes_and_locks_the_card(db):
+    card = kanbagent.create_card("t", "i", "sato")
+    job = kanbagent.change_stage(card, "proposta", "sato")
+    assert kanbagent.card(card)["job"]["status"] == "queued"
+    for attempt in (lambda: kanbagent.change_stage(card, "ideia", "sato"),
+                    lambda: kanbagent.change_stage(card, "descartado", "sato"),
+                    lambda: kanbagent.update_proposal(card, "eu escrevo", "sato"),
+                    lambda: kanbagent.request_proposal(card)):
+        with pytest.raises(kanbagent.InvalidTransition):
+            attempt()
+    claimed = kanbagent.claim_job()
+    assert claimed["id"] == job and kanbagent.claim_job() is None
+    kanbagent.job_progress(job, "lendo o card")
+    assert kanbagent.card(card)["job"]["progress"] == "lendo o card"
+    # o Hermes escreve e manda para revisão: o pedido fecha sozinho e o card destrava
+    kanbagent.update_proposal(card, "proposta do hermes", "hermes")
+    kanbagent.change_stage(card, "revisao", "hermes")
+    assert kanbagent.job(job)["status"] == "done"
+    kanbagent.change_stage(card, "proposta", "sato", text="mais curto")
+    assert kanbagent.card(card)["job"]["status"] == "queued"
+
+
+def test_failed_or_stale_job_unlocks_and_can_be_retried(db):
+    card = kanbagent.create_card("t", "i", "sato")
+    job = kanbagent.change_stage(card, "proposta", "sato")
+    kanbagent.claim_job(now="2026-01-01T00:00:00+00:00")
+    # rodando há mais de 20 min: conta como morto
+    assert kanbagent.card(card)["job"]["status"] == "failed"
+    retry = kanbagent.request_proposal(card)
+    assert retry != job and kanbagent.job(job)["status"] == "failed"
+    kanbagent.finish_job(retry, error="hermes saiu com erro 1")
+    item = kanbagent.card(card)
+    assert item["job"]["status"] == "failed" and "erro 1" in item["job"]["error"]
+    kanbagent.change_stage(card, "ideia", "sato")
 
 
 def test_empty_proposal_cannot_go_to_review_except_from_sync(db):

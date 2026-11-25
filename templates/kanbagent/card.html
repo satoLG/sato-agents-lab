@@ -4,7 +4,10 @@
 {% block title %}{{ card.titulo }} · kanbagent{% endblock %}
 {% block top_title %}{{ card.titulo }}{% endblock %}
 {% block kb_content %}
-<article class="kb-detail card" aria-labelledby="kb-title">
+{% set job = card.job %}
+{% set locked = job and job.status in ('queued', 'running') %}
+{% set failed = job and job.status == 'failed' and card.etapa_atual == 'proposta' %}
+<article class="kb-detail card{% if locked %} kb-locked{% endif %}" aria-labelledby="kb-title"{% if locked %} data-watch-job="{{ card.id }}"{% endif %}>
   <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro">✕</a>
   <header class="kb-detail-head">
     <h1 id="kb-title">{{ card.titulo }}</h1>
@@ -17,6 +20,21 @@
     </div>
   </header>
 
+  {% if locked %}
+  <p class="kb-working" role="status" aria-live="polite">
+    <span class="kb-spinner" aria-hidden="true"></span>
+    <span><strong>O Hermes está escrevendo a proposta.</strong> O card fica travado até ele terminar; esta página atualiza sozinha.
+    <span class="kb-working-step" data-job-progress>{{ job.progress or ('na fila' if job.status == 'queued' else 'começando') }}</span></span>
+  </p>
+  {% elif failed %}
+  <div class="kb-failed" role="alert">
+    <p><strong>O Hermes não conseguiu escrever a proposta.</strong> {{ job.error }}</p>
+    <form method="post" action="{{ url_for('kanbagent.repropose_form', card_id=card.id) }}">{{ ui.csrf() }}
+      <button class="btn small" type="submit">↻ Pedir de novo</button>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="kb-detail-body">
     <div class="kb-detail-main">
       <section aria-labelledby="kb-idea">
@@ -27,6 +45,7 @@
       <section aria-labelledby="kb-proposal">
         <h2 id="kb-proposal"><span aria-hidden="true">≡</span> Proposta</h2>
         {% if card.proposta %}<div class="kb-pre kb-box">{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
+        {% if not locked %}
         <details class="kb-inline-edit">
           <summary class="btn ghost small">{% if card.proposta %}Editar proposta{% else %}Escrever proposta{% endif %}</summary>
           <form method="post" action="{{ url_for('kanbagent.proposal_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
@@ -34,6 +53,7 @@
             <button class="btn small" type="submit">Salvar proposta</button>
           </form>
         </details>
+        {% endif %}
       </section>
 
       <section aria-labelledby="kb-durations">
@@ -79,8 +99,10 @@
 
     <aside class="kb-detail-side" aria-label="Ações">
       <h2>Mover</h2>
-      {% set moves = kb_moves(card) %}
-      {% if card.proximas %}
+      {% set moves = [] if locked else kb_moves(card) %}
+      {% if locked %}
+      <p class="muted kb-hint">Travado enquanto o Hermes escreve.</p>
+      {% elif card.proximas %}
       {% for to in moves if to != 'descartado' %}
       {% set move = (card.etapa_atual, to) %}
       {% if move in kb_returns %}
@@ -99,9 +121,6 @@
       </form>
       {% endif %}
       {% endfor %}
-      {% if card.etapa_atual == 'proposta' and not (card.proposta or '').strip() %}
-      <p class="muted kb-hint">⏳ Esperando a proposta do Hermes. Ela também pode ser escrita aqui ao lado.</p>
-      {% endif %}
       {% if 'descartado' in card.proximas %}
       <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
         <input type="hidden" name="para" value="descartado">

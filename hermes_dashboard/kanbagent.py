@@ -8,7 +8,7 @@ import os
 import re
 import sqlite3
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config
@@ -50,6 +50,14 @@ _SCHEMA = (
         kind TEXT NOT NULL, from_stage TEXT, to_stage TEXT, author TEXT NOT NULL,
         text TEXT, occurred_at TEXT NOT NULL
     )""",
+    # Pedidos ao Hermes (hoje: escrever a proposta). Enquanto um está aberto o card fica travado
+    # para o Sato; o worker (kanbagent_hermes.py) pega da fila e anota o progresso.
+    """CREATE TABLE IF NOT EXISTS agent_jobs (
+        id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id), kind TEXT NOT NULL,
+        status TEXT NOT NULL, requested_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
+        progress TEXT NOT NULL DEFAULT '', error TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS agent_jobs_card ON agent_jobs(card_id, id)",
     "CREATE INDEX IF NOT EXISTS events_card ON events(card_id, occurred_at, id)",
     "CREATE INDEX IF NOT EXISTS cards_stage ON cards(etapa_atual)",
     # Defesa no próprio banco: eventos são imutáveis (regra 1 do docs/kanbagent.md).
@@ -206,21 +214,121 @@ def create_card(titulo, ideia_original, author, project_id=None, repo_id=None, o
 
 
 def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
-    """Valida com `can_transition`, grava o evento e atualiza `etapa_atual` atomicamente."""
+    """Valida com `can_transition`, grava o evento e atualiza `etapa_atual` atomicamente.
+
+    Quando o Sato leva o card para `proposta`, abre um pedido ao Hermes (devolve o id do pedido);
+    enquanto ele está aberto, o Sato não move o card. Sair de `proposta` encerra o pedido.
+    """
     text = text.strip() if isinstance(text, str) else text
     with closing(_connection()) as conn, _transaction(conn):
         row = _card(conn, card_id)
         from_stage = row["etapa_atual"]
         if not can_transition(from_stage, to_stage):
             raise InvalidTransition(f"Transição inválida: {from_stage} → {to_stage}.")
+        if author == "sato" and _open_job(conn, card_id):
+            raise InvalidTransition("O Hermes está escrevendo a proposta deste card; espere terminar.")
         if (from_stage, to_stage) in NEEDS_TEXT and not text:
             raise InvalidTransition(f"Voltar de {from_stage} para {to_stage} exige comentário.")
         # Proposta vazia não vai para revisão (o sync com o GitHub pula etapas e fica de fora).
-        if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync"                 and not (row["proposta"] or "").strip():
+        empty = not (row["proposta"] or "").strip()
+        if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync" and empty:
             raise InvalidTransition("A proposta ainda está vazia.")
         occurred = _insert_event(conn, card_id, "stage_change", author, from_stage=from_stage,
                                  to_stage=to_stage, text=text or None, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET etapa_atual=?, atualizado_em=? WHERE id=?", (to_stage, occurred, card_id))
+        if from_stage == "proposta":
+            conn.execute("UPDATE agent_jobs SET status='done', finished_at=? WHERE card_id=?"
+                         " AND status IN ('queued','running')", (occurred, card_id))
+        if to_stage == "proposta" and author == "sato":
+            return _queue_job(conn, card_id, occurred)
+        return None
+
+
+# --- pedidos ao Hermes ------------------------------------------------------------------------------
+
+JOB_STALE = timedelta(minutes=20)   # pedido rodando há mais que isso morreu (deploy, queda)
+STALE_ERROR = "O Hermes parou no meio (tempo esgotado)."
+
+
+def _queue_job(conn, card_id, when=None):
+    cursor = conn.execute("INSERT INTO agent_jobs (card_id, kind, status, requested_at) VALUES (?,?,?,?)",
+                          (card_id, "proposta", "queued", _iso(when)))
+    return cursor.lastrowid
+
+
+def _stale(row, now=None):
+    return row["status"] == "running" and bool(row["started_at"]) \
+        and _parse(row["started_at"]) < _parse(_iso(now)) - JOB_STALE
+
+
+def _expire_stale(conn, now=None):
+    limit = (_parse(_iso(now)) - JOB_STALE).isoformat(timespec="seconds")
+    conn.execute("UPDATE agent_jobs SET status='failed', finished_at=?, error=?"
+                 " WHERE status='running' AND started_at < ?", (_iso(now), STALE_ERROR, limit))
+
+
+def _open_job(conn, card_id):
+    row = conn.execute("SELECT * FROM agent_jobs WHERE card_id=? AND status IN ('queued','running')"
+                       " ORDER BY id DESC LIMIT 1", (card_id,)).fetchone()
+    return None if row is None or _stale(row) else row
+
+
+def request_proposal(card_id):
+    """Pede (de novo) ao Hermes a proposta de um card que está em `proposta`."""
+    with closing(_connection()) as conn, _transaction(conn):
+        row = _card(conn, card_id)
+        if row["etapa_atual"] != "proposta":
+            raise InvalidTransition("Só cards em Proposta pedem proposta ao Hermes.")
+        _expire_stale(conn)
+        if _open_job(conn, card_id):
+            raise InvalidTransition("O Hermes já está escrevendo a proposta deste card.")
+        return _queue_job(conn, card_id)
+
+
+def claim_job(now=None):
+    """O worker pega o pedido mais antigo da fila (e marca como morto o que travou)."""
+    with closing(_connection()) as conn, _transaction(conn):
+        _expire_stale(conn, now)
+        row = conn.execute("SELECT * FROM agent_jobs WHERE status='queued' ORDER BY id LIMIT 1").fetchone()
+        if row is None:
+            return None
+        started = _iso(now)
+        conn.execute("UPDATE agent_jobs SET status='running', started_at=?, progress='começando' WHERE id=?",
+                     (started, row["id"]))
+        return dict(row, status="running", started_at=started)
+
+
+def job_progress(job_id, text):
+    with closing(_connection()) as conn, _transaction(conn):
+        conn.execute("UPDATE agent_jobs SET progress=? WHERE id=? AND status='running'", (str(text)[:200], job_id))
+
+
+def finish_job(job_id, error=None, now=None):
+    """Fecha o pedido: sem erro = feito; com erro o card destrava e mostra o motivo."""
+    with closing(_connection()) as conn, _transaction(conn):
+        conn.execute("UPDATE agent_jobs SET status=?, finished_at=?, error=? WHERE id=?"
+                     " AND status IN ('queued','running')",
+                     ("failed" if error else "done", _iso(now), str(error)[:500] if error else None, job_id))
+
+
+def job(job_id):
+    with closing(_connection()) as conn:
+        row = conn.execute("SELECT * FROM agent_jobs WHERE id=?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def latest_jobs(card_ids=None):
+    """Último pedido de cada card (o quadro mostra 'propondo…' e acompanha ao vivo)."""
+    sql = ("SELECT j.* FROM agent_jobs j JOIN (SELECT card_id, MAX(id) AS id FROM agent_jobs GROUP BY card_id) last"
+           " ON last.id=j.id")
+    with closing(_connection()) as conn:
+        rows = [dict(r) for r in conn.execute(sql).fetchall()]
+    for row in rows:
+        if _stale(row):
+            row.update(status="failed", error=STALE_ERROR)
+    if card_ids is not None:
+        rows = [r for r in rows if r["card_id"] in set(card_ids)]
+    return {r["card_id"]: r for r in rows}
 
 
 def add_comment(card_id, author, text, occurred_at=None):
@@ -325,7 +433,11 @@ def cards(project_id=None, repo_id=None, stage=None):
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY c.atualizado_em DESC, c.id DESC"
     with closing(_connection()) as conn:
-        return [dict(row) for row in conn.execute(sql, args).fetchall()]
+        rows = [dict(row) for row in conn.execute(sql, args).fetchall()]
+    jobs = latest_jobs()
+    for row in rows:
+        row["job"] = jobs.get(row["id"])
+    return rows
 
 
 def card(card_id, now=None):
@@ -352,7 +464,8 @@ def card(card_id, now=None):
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),
-               proximas=next_stages(row["etapa_atual"]))
+               proximas=next_stages(row["etapa_atual"]),
+               job=latest_jobs([card_id]).get(card_id))
     return row
 
 
@@ -363,6 +476,8 @@ def update_proposal(card_id, proposta, author, occurred_at=None):
         raise ValueError("Proposta vazia.")
     with closing(_connection()) as conn, _transaction(conn):
         _card(conn, card_id)
+        if author == "sato" and _open_job(conn, card_id):
+            raise InvalidTransition("O Hermes está escrevendo a proposta deste card; espere terminar.")
         occurred = _insert_event(conn, card_id, "proposal_updated", author, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET proposta=?, atualizado_em=? WHERE id=?", (proposta, occurred, card_id))
 

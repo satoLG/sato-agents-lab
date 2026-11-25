@@ -83,14 +83,16 @@ def test_full_flow_through_the_pages(client):
     assert "quero ver o RAG" in page and "Pedir proposta ao Hermes" in page
     assert "→ Proposta" not in page
 
-    form(client, f"/kanbagent/card/{card_id}/proposta", proposta="Fazer X e Y")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
-    form(client, f"/kanbagent/card/{card_id}/etapa", para="revisao")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Hermes está escrevendo" in page
+    kb.update_proposal(card_id, "Fazer X e Y", "hermes")
+    kb.change_stage(card_id, "revisao", "hermes")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "Aprovar" in page and "Pedir ajuste" in page
 
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta", texto="menos escopo")
-    form(client, f"/kanbagent/card/{card_id}/etapa", para="revisao")
+    kb.change_stage(card_id, "revisao", "hermes")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="aprovado")
     form(client, f"/kanbagent/card/{card_id}/comentario", texto="bora")
     form(client, f"/kanbagent/card/{card_id}/link", url="https://github.com/satoLG/sato-agents-lab/issues/42")
@@ -117,15 +119,33 @@ def test_adjust_requires_text(client):
 
 def test_board_marks_where_each_card_can_be_dropped(client):
     idea = kb.create_card("Ideia solta", "i", "sato")
-    waiting = kb.create_card("Sem proposta", "i", "sato")
-    kb.change_stage(waiting, "proposta", "sato")
+    empty = kb.create_card("Sem proposta", "i", "sato")
+    kb.change_stage(empty, "proposta", "hermes")
+    writing = kb.create_card("Hermes escrevendo", "i", "sato")
+    kb.change_stage(writing, "proposta", "sato")
+    kb.job_progress(kb.claim_job()["id"], "lendo o card")
     page = client.get("/kanbagent").get_data(as_text=True)
     assert f'data-card="{idea}" data-stage="ideia" data-next="proposta descartado"' in page
     # proposta vazia ainda não pode ir para revisão
-    assert f'data-card="{waiting}" data-stage="proposta" data-next="ideia descartado"' in page
-    assert "aguardando Hermes" in page
+    assert f'data-card="{empty}" data-stage="proposta" data-next="ideia descartado"' in page
+    # enquanto o Hermes escreve, o card não vai para lugar nenhum e mostra o progresso
+    assert f'data-card="{writing}" data-stage="proposta" data-next="" data-watch-job="{writing}"' in page
+    assert "propondo…" in page and "lendo o card" in page
     assert 'data-drop="aprovado"' in page and "Fila de execução" in page
     assert 'data-drop="descartado"' in page and 'id="kb-move"' in page
+
+
+def test_failed_job_offers_retry_and_jobs_api_reports_progress(client):
+    card_id = kb.create_card("T", "i", "sato")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
+    job = kb.claim_job()
+    jobs = client.get(f"/kanbagent/api/jobs?cards={card_id}").get_json()
+    assert jobs[str(card_id)]["status"] == "running"
+    kb.finish_job(job["id"], error="Hermes saiu com código 1.")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "não conseguiu" in page and "código 1" in page and "Pedir de novo" in page
+    form(client, f"/kanbagent/card/{card_id}/repropor")
+    assert kb.card(card_id)["job"]["status"] == "queued"
 
 
 def test_returns_from_the_card_page(client):
@@ -211,7 +231,7 @@ def test_sync_moves_approved_card_to_delivered(vm):
     kb.update_proposal(card_id, "p", "hermes", occurred_at="2026-01-01T12:00:00Z")
     for stage, when in (("proposta", "2026-01-02T00:00:00Z"), ("revisao", "2026-01-03T00:00:00Z"),
                         ("aprovado", "2026-01-04T00:00:00Z")):
-        kb.change_stage(card_id, stage, "sato", occurred_at=when)
+        kb.change_stage(card_id, stage, "hermes", occurred_at=when)
     kb.add_link(card_id, "https://github.com/o/r/issues/7", "sato")
 
     def fake(link):
@@ -238,7 +258,7 @@ def test_sync_ignores_cards_before_approval_and_survives_errors(vm):
     late = kb.create_card("tarde", "i", "sato")
     kb.update_proposal(late, "p", "hermes")
     for stage in ("proposta", "revisao", "aprovado"):
-        kb.change_stage(late, stage, "sato")
+        kb.change_stage(late, stage, "hermes")
     kb.add_link(late, "https://github.com/o/r/pull/2", "sato")
 
     def broken(link):
