@@ -67,4 +67,5 @@ Uma issue por vez para o worker do Claude; a próxima só depois do merge da ant
 
 Fora deste repo (no Hermes): skill "anota" (Telegram → card em `ideia`) e skill de proposta do Sato
 Agent (lê card + repos + `estilo-sato.md`, escreve em pt-BR, move para `revisao`). O Sato configura o
-Cloudflare Access para o caminho `/kanbagent` antes de o PR da página ir para produção.
+Cloudflare Access (site inteiro protegido, só a home e o chat dela públicos — ver ADR 0009) antes de o
+PR da página ir para produção.

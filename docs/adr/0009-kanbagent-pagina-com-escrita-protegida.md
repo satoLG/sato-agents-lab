@@ -19,16 +19,28 @@ pegos por workers) e não modela projeto com vários repos nem entrega no GitHub
   ADR 0008 vale para elas sem alteração. `tests/test_architecture.py` passa a listar `kanbagent.py` entre
   os módulos donos de banco próprio, ao lado de `web_chat.py`.
 - Não lê nem escreve no `kanban.db` do Hermes.
-- **Acesso**: `/kanbagent` e `/kanbagent/*` ficam atrás de Cloudflare Access (login pelo e-mail do Sato),
-  configurado no painel da Cloudflare por caminho. A API (`/kanbagent/api/*`) exige também
-  `Authorization: Bearer <KANBAGENT_API_TOKEN>`, porque o Hermes chama pela rede local sem passar pelo
-  Access; sem token configurado, a API responde 503 e não aceita escrita.
+- **Acesso: só a página principal é pública.** O domínio inteiro fica atrás de Cloudflare Access (login
+  pelo e-mail do Sato), e o que é público é uma lista explícita de bypass, para que rota nova nasça
+  protegida:
+  - `/` (home), `/assets/*`, `/static/*`;
+  - APIs do chat da home: `/api/lab/hermes-chat/*`, `/api/lab/chat`, `/api/sato-agent/*`.
+
+  Ficam protegidos o dashboard (`/dashboard`, `/fragments/*` e as demais `/api/*`) e o kanbagent
+  (`/kanbagent`, `/kanbagent/*`). Configuração no painel da Cloudflare, feita pelo Sato. A lista acima
+  é mantida junto com `app.py`: rota pública nova exige atualizar este ADR (ou um substituto) e o Access.
+- A API do kanbagent (`/kanbagent/api/*`) exige também `Authorization: Bearer <KANBAGENT_API_TOKEN>`,
+  porque o Hermes chama pela rede local sem passar pelo Access; sem token configurado, a API responde 503
+  e não aceita escrita.
 - Todas as ações de escrita são POST, como no resto do site (ADR 0002).
 
 ## Consequências
 - Um deploy, um `pytest`, mesmo stack (Flask + HTMX + SQLite).
 - Primeira área do site com escrita: depende do Access estar configurado antes da página ir para
   produção. Sem Access, a página fica exposta; o PR da página precisa dizer isso em destaque.
+- O dashboard deixa de ser público: telemetria, memória, RAG e cron passam a exigir login. A home e
+  o chat público continuam abertos (ADR 0003 sem mudança).
+- A proteção mora no Cloudflare; quem acessa pela rede local (porta 8080) não passa pelo Access.
+  Validar o JWT do Access dentro do app fica como reforço futuro.
 - O kanbagent sobe e cai junto com o dashboard.
 
 ## Alternativas consideradas
