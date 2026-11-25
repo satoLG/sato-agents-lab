@@ -5,6 +5,7 @@ verdade do tempo e só recebe INSERT; `cards.etapa_atual` é cache do último
 `stage_change`, gravado na mesma transação. Desenho em docs/kanbagent.md.
 """
 import os
+import re
 import sqlite3
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
@@ -111,7 +112,12 @@ def _connection():
     with _transaction(conn):
         for statement in _SCHEMA:
             conn.execute(statement)
-    # Migrações futuras: só ALTER TABLE ... ADD COLUMN, checando PRAGMA table_info antes.
+        # Migrações: só ALTER TABLE ... ADD COLUMN, checando PRAGMA table_info antes.
+        link_columns = {column[1] for column in conn.execute("PRAGMA table_info(card_links)")}
+        if "tipo" not in link_columns:
+            conn.execute("ALTER TABLE card_links ADD COLUMN tipo TEXT NOT NULL DEFAULT 'issue'")
+        if "atualizado_em" not in link_columns:
+            conn.execute("ALTER TABLE card_links ADD COLUMN atualizado_em TEXT")
     if DB_PATH.exists():
         os.chmod(DB_PATH, 0o600)
     return conn
@@ -230,3 +236,237 @@ def stage_durations(card_id, now=None):
         seconds = max(0.0, (until - _parse(current["occurred_at"])).total_seconds())
         durations[current["to_stage"]] = durations.get(current["to_stage"], 0.0) + seconds
     return durations
+
+
+# --- leitura, proposta, links e métricas (página, API e sync) -------------------------------------
+
+STAGE_LABELS = {
+    "ideia": "Ideia", "proposta": "Proposta", "revisao": "Em revisão", "aprovado": "Aprovado",
+    "execucao": "Em execução", "revisao_codigo": "Revisão de código", "entregue": "Entregue",
+    "descartado": "Descartado",
+}
+GITHUB_URL = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/(issues|pull)/(\d+)/?(?:[#?].*)?$")
+
+
+def next_stages(stage):
+    """Etapas para onde o card pode ir a partir de `stage`, na ordem do ciclo."""
+    return [to for to in STAGES if can_transition(stage, to)]
+
+
+def projects():
+    """Projetos ativos com seus repositórios."""
+    with closing(_connection()) as conn:
+        rows = conn.execute("SELECT * FROM projects WHERE arquivado_em IS NULL ORDER BY nome").fetchall()
+        repos = conn.execute(
+            "SELECT pr.project_id, r.id, r.full_name FROM project_repos pr JOIN repos r ON r.id = pr.repo_id"
+            " ORDER BY r.full_name").fetchall()
+    by_project = {}
+    for repo in repos:
+        by_project.setdefault(repo["project_id"], []).append({"id": repo["id"], "full_name": repo["full_name"]})
+    return [dict(row, repos=by_project.get(row["id"], [])) for row in rows]
+
+
+def project_by_slug(slug):
+    with closing(_connection()) as conn:
+        row = conn.execute("SELECT id FROM projects WHERE slug=?", (slug,)).fetchone()
+    if row is None:
+        raise NotFound(f"Projeto {slug!r} não existe.")
+    return row["id"]
+
+
+def repo_id(full_name):
+    with closing(_connection()) as conn:
+        row = conn.execute("SELECT id FROM repos WHERE full_name=?", (full_name,)).fetchone()
+    if row is None:
+        raise NotFound(f"Repositório {full_name!r} não existe.")
+    return row["id"]
+
+
+def _entered_current(conn, card_id):
+    row = conn.execute(
+        "SELECT occurred_at FROM events WHERE card_id=? AND kind='stage_change' ORDER BY occurred_at DESC, id DESC"
+        " LIMIT 1", (card_id,)).fetchone()
+    return row["occurred_at"] if row else None
+
+
+def cards(project_id=None, repo_id=None, stage=None):
+    """Cards para o quadro, com projeto, repositório e quando entraram na etapa atual."""
+    where, args = [], []
+    if project_id is not None:
+        where.append("c.project_id=?")
+        args.append(project_id)
+    if repo_id is not None:
+        where.append("(c.repo_id=? OR EXISTS (SELECT 1 FROM card_links l WHERE l.card_id=c.id AND l.repo_id=?))")
+        args.extend([repo_id, repo_id])
+    if stage is not None:
+        where.append("c.etapa_atual=?")
+        args.append(stage)
+    sql = ("SELECT c.*, p.nome AS projeto, p.slug AS projeto_slug, r.full_name AS repo,"
+           " (SELECT MAX(occurred_at) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change') AS na_etapa_desde,"
+           " (SELECT COUNT(*) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change'"
+           "   AND e.from_stage='revisao' AND e.to_stage='proposta') AS ajustes,"
+           " (SELECT COUNT(*) FROM card_links l WHERE l.card_id=c.id) AS links"
+           " FROM cards c LEFT JOIN projects p ON p.id=c.project_id LEFT JOIN repos r ON r.id=c.repo_id")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY c.atualizado_em DESC, c.id DESC"
+    with closing(_connection()) as conn:
+        return [dict(row) for row in conn.execute(sql, args).fetchall()]
+
+
+def card(card_id, now=None):
+    """Card completo: dados, eventos em ordem, links, tempo por etapa e total."""
+    with closing(_connection()) as conn:
+        row = dict(_card(conn, card_id))
+        extra = conn.execute(
+            "SELECT p.nome AS projeto, p.slug AS projeto_slug, r.full_name AS repo FROM cards c"
+            " LEFT JOIN projects p ON p.id=c.project_id LEFT JOIN repos r ON r.id=c.repo_id WHERE c.id=?",
+            (card_id,)).fetchone()
+        events = [dict(e) for e in conn.execute(
+            "SELECT * FROM events WHERE card_id=? ORDER BY occurred_at, id", (card_id,)).fetchall()]
+        links = [dict(link) for link in conn.execute(
+            "SELECT l.*, r.full_name AS repo FROM card_links l LEFT JOIN repos r ON r.id=l.repo_id"
+            " WHERE l.card_id=? ORDER BY l.id", (card_id,)).fetchall()]
+        row["na_etapa_desde"] = _entered_current(conn, card_id)
+    row.update(dict(extra))
+    durations = stage_durations(card_id, now=now)
+    end = _parse(_iso(now))
+    final = next((e["occurred_at"] for e in reversed(events)
+                  if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
+    total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
+    row.update(events=events, links=links, durations=durations,
+               total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
+               ajustes=sum(1 for e in events if e["kind"] == "stage_change"
+                           and (e["from_stage"], e["to_stage"]) == ("revisao", "proposta")),
+               proximas=next_stages(row["etapa_atual"]))
+    return row
+
+
+def update_proposal(card_id, proposta, author, occurred_at=None):
+    """Reescreve a proposta (a ideia original nunca muda) e registra `proposal_updated`."""
+    proposta = proposta.strip() if isinstance(proposta, str) else ""
+    if not proposta:
+        raise ValueError("Proposta vazia.")
+    with closing(_connection()) as conn, _transaction(conn):
+        _card(conn, card_id)
+        occurred = _insert_event(conn, card_id, "proposal_updated", author, occurred_at=occurred_at)
+        conn.execute("UPDATE cards SET proposta=?, atualizado_em=? WHERE id=?", (proposta, occurred, card_id))
+
+
+def parse_github_url(url):
+    """`(owner/repo, 'issue'|'pr', número)` de uma URL de issue ou PR do GitHub."""
+    match = GITHUB_URL.match((url or "").strip())
+    if not match:
+        raise ValueError("Use a URL de uma issue ou PR do GitHub (https://github.com/owner/repo/issues/N).")
+    full_name, kind, number = match.groups()
+    return full_name, "pr" if kind == "pull" else "issue", int(number)
+
+
+def add_link(card_id, url, author, occurred_at=None):
+    """Liga uma issue ou PR ao card. Repetir a mesma URL não duplica; devolve o id do link."""
+    full_name, kind, number = parse_github_url(url)
+    clean = f"https://github.com/{full_name}/{'pull' if kind == 'pr' else 'issues'}/{number}"
+    with closing(_connection()) as conn, _transaction(conn):
+        _card(conn, card_id)
+        conn.execute("INSERT OR IGNORE INTO repos (full_name) VALUES (?)", (full_name,))
+        rid = conn.execute("SELECT id FROM repos WHERE full_name=?", (full_name,)).fetchone()[0]
+        existing = conn.execute("SELECT id FROM card_links WHERE card_id=? AND url=?", (card_id, clean)).fetchone()
+        if existing:
+            return existing["id"]
+        occurred = _insert_event(conn, card_id, "link_added", author, text=clean, occurred_at=occurred_at)
+        cursor = conn.execute(
+            "INSERT INTO card_links (card_id, repo_id, numero, url, tipo, criado_em) VALUES (?,?,?,?,?,?)",
+            (card_id, rid, number, clean, kind, occurred))
+        conn.execute("UPDATE cards SET atualizado_em=? WHERE id=?", (occurred, card_id))
+        return cursor.lastrowid
+
+
+def set_link_state(link_id, estado):
+    """Estado observado no GitHub (open, closed, merged...). Não é evento: é só o último visto."""
+    with closing(_connection()) as conn, _transaction(conn):
+        conn.execute("UPDATE card_links SET estado=?, atualizado_em=? WHERE id=?", (estado, _now(), link_id))
+
+
+def links_to_sync():
+    """Links de cards ainda em andamento depois da aprovação."""
+    with closing(_connection()) as conn:
+        return [dict(row) for row in conn.execute(
+            "SELECT l.*, r.full_name AS repo, c.etapa_atual FROM card_links l JOIN cards c ON c.id=l.card_id"
+            " JOIN repos r ON r.id=l.repo_id WHERE c.etapa_atual IN ('aprovado','execucao','revisao_codigo')"
+            " ORDER BY l.card_id, l.id").fetchall()]
+
+
+def advance_to(card_id, target, author, occurred_at=None, text=None):
+    """Avança pelo caminho principal até `target`, gravando cada passagem; no-op se já passou.
+
+    As datas vêm do GitHub e nunca ficam antes do último evento do card, para a linha do tempo não
+    andar para trás. Devolve as etapas gravadas.
+    """
+    if target not in MAIN_PATH:
+        raise ValueError(f"{target!r} não está no caminho principal.")
+    moved = []
+    with closing(_connection()) as conn:
+        current = _card(conn, card_id)["etapa_atual"]
+        last = _entered_current(conn, card_id)
+    if current not in MAIN_PATH or MAIN_PATH.index(current) >= MAIN_PATH.index(target):
+        return moved
+    when = _parse(_iso(occurred_at))
+    if last and when < _parse(last):
+        when = _parse(last)
+    for stage in MAIN_PATH[MAIN_PATH.index(current) + 1: MAIN_PATH.index(target) + 1]:
+        change_stage(card_id, stage, author, text=text, occurred_at=when)
+        moved.append(stage)
+    return moved
+
+
+def metrics(project_id=None, repo_id=None, since=None, now=None):
+    """Tempos por etapa e gargalos a partir dos eventos.
+
+    - `por_etapa`: média e soma de segundos das passagens **concluídas** em cada etapa;
+    - `parados`: cards abertos ordenados por tempo na etapa atual;
+    - `entregues`: cards entregues desde `since`, com tempo total ideia → entrega.
+    """
+    end = _parse(_iso(now))
+    start = _parse(_iso(since)) if since else None
+    selected = cards(project_id=project_id, repo_id=repo_id)
+    ids = [c["id"] for c in selected]
+    passages = {stage: [] for stage in STAGES}
+    delivered, open_cards, adjustments = [], [], 0
+    if ids:
+        with closing(_connection()) as conn:
+            marks = ",".join("?" * len(ids))
+            rows = conn.execute(
+                f"SELECT card_id, from_stage, to_stage, occurred_at FROM events WHERE kind='stage_change'"
+                f" AND card_id IN ({marks}) ORDER BY card_id, occurred_at, id", ids).fetchall()
+        by_card = {}
+        for row in rows:
+            by_card.setdefault(row["card_id"], []).append(row)
+        for item in selected:
+            changes = by_card.get(item["id"], [])
+            for current, following in zip(changes, changes[1:]):
+                seconds = (_parse(following["occurred_at"]) - _parse(current["occurred_at"])).total_seconds()
+                if start is None or _parse(following["occurred_at"]) >= start:
+                    passages[current["to_stage"]].append(max(0.0, seconds))
+                    if (following["from_stage"], following["to_stage"]) == ("revisao", "proposta"):
+                        adjustments += 1
+            if item["etapa_atual"] == "entregue" and changes:
+                delivered_at = _parse(changes[-1]["occurred_at"])
+                if start is None or delivered_at >= start:
+                    delivered.append(dict(item, entregue_em=changes[-1]["occurred_at"],
+                                          total_seconds=(delivered_at - _parse(item["criado_em"])).total_seconds()))
+            elif item["etapa_atual"] not in TERMINAL and item["na_etapa_desde"]:
+                open_cards.append(dict(item, parado_seconds=(end - _parse(item["na_etapa_desde"])).total_seconds()))
+    por_etapa = {stage: {"passagens": len(values), "media_seconds": (sum(values) / len(values)) if values else None,
+                         "total_seconds": sum(values)} for stage, values in passages.items() if stage not in TERMINAL}
+    totals = [d["total_seconds"] for d in delivered]
+    return {
+        "cards": len(selected),
+        "por_etapa": por_etapa,
+        "gargalo": max((s for s in por_etapa if por_etapa[s]["media_seconds"] is not None),
+                       key=lambda s: por_etapa[s]["media_seconds"], default=None),
+        "parados": sorted(open_cards, key=lambda c: c["parado_seconds"], reverse=True),
+        "entregues": sorted(delivered, key=lambda c: c["entregue_em"], reverse=True),
+        "lead_time_medio_seconds": (sum(totals) / len(totals)) if totals else None,
+        "ajustes": adjustments,
+        "por_etapa_agora": {stage: sum(1 for c in selected if c["etapa_atual"] == stage) for stage in STAGES},
+    }

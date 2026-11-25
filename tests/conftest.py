@@ -37,6 +37,8 @@ def vm(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", hermes / "config.yaml")
     monkeypatch.setattr(config, "CRON_DIR", hermes / "cron")
     monkeypatch.setattr(config, "LOG_PATH", None)
+    from hermes_dashboard import kanbagent
+    monkeypatch.setattr(kanbagent, "DB_PATH", tmp_path / "kanbagent.sqlite3")
     return Fake(tmp_path, hermes, obs, monkeypatch)
 
 

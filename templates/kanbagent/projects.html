@@ -1,0 +1,37 @@
+{% extends "kanbagent/_layout.html" %}
+{% import "kanbagent/_macros.html" as ui %}
+{% set kb_page = 'projects' %}
+{% block title %}Projetos · kanbagent{% endblock %}
+{% block kb_content %}
+<div class="kb-head"><div><h1>Projetos</h1><p class="muted">Um projeto pode envolver vários repositórios.</p></div></div>
+
+<details class="card kb-new" {% if not projects %}open{% endif %}>
+  <summary>Novo projeto</summary>
+  <form method="post" action="{{ url_for('kanbagent.create_project_form') }}" class="kb-form">{{ ui.csrf() }}
+    <div class="kb-row">
+      <label>Nome <input name="nome" maxlength="120" required placeholder="Sato Agents"></label>
+      <label>Slug <input name="slug" maxlength="60" required pattern="[a-z0-9-]+" placeholder="sato-agents"></label>
+    </div>
+    <label>Descrição <input name="descricao" maxlength="500"></label>
+    <label>Repositórios <input name="repos" placeholder="satoLG/sato-agents-lab, satoLG/outro-repo"></label>
+    <button class="btn" type="submit">Criar projeto</button>
+  </form>
+</details>
+
+{% for p in projects %}
+<section class="card kb-project">
+  <header><h2>{{ p.nome }}</h2><span class="muted mono">{{ p.slug }}</span></header>
+  {% if p.descricao %}<p>{{ p.descricao }}</p>{% endif %}
+  <ul class="kb-links">
+    {% for r in p.repos %}<li><a href="https://github.com/{{ r.full_name }}" rel="noopener" target="_blank">{{ r.full_name }}</a> · <a href="{{ url_for('kanbagent.board', repo=r.id) }}">cards</a></li>{% else %}<li class="muted">Sem repositórios.</li>{% endfor %}
+  </ul>
+  <div class="kb-row">
+    <form method="post" action="{{ url_for('kanbagent.add_repo_form', project_id=p.id) }}" class="kb-form kb-inline">{{ ui.csrf() }}
+      <input name="repo" required placeholder="owner/repo" aria-label="Adicionar repositório a {{ p.nome }}">
+      <button class="btn ghost" type="submit">Adicionar repo</button>
+    </form>
+    <p><a href="{{ url_for('kanbagent.board', projeto=p.id) }}">Quadro do projeto</a> · <a href="{{ url_for('kanbagent.metrics_page', projeto=p.id) }}">Métricas</a></p>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}
