@@ -3,33 +3,24 @@ import json
 import logging
 import os
 import re
-import secrets
 import sqlite3
 import threading
 import time
 import uuid
-from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
 
-from flask import jsonify, request, session
-from werkzeug.security import check_password_hash
+from flask import jsonify, request
 
-from . import config, lab, streaming, chat_context, sato_agent, mimic
+from . import auth, config, lab, streaming, chat_context, sato_agent, mimic
 from .warm_runner import WarmRunner
 
 LOG = logging.getLogger(__name__)
-PASSWORD_HASH = os.getenv("HERMES_WEB_CHAT_PASSWORD_HASH", "")
-SESSION_SECRET = os.getenv("HERMES_WEB_CHAT_SESSION_SECRET", "")
-ENABLED = bool(PASSWORD_HASH and SESSION_SECRET)
 DB_PATH = Path(os.getenv("HERMES_WEB_CHAT_DB", str(config.HERMES_HOME / "web-chat.sqlite3")))
 HERMES_ROOT = Path(os.getenv("HERMES_AGENT_ROOT", str(config.HERMES_HOME / "hermes-agent")))
 HERMES_BIN = HERMES_ROOT / "venv/bin/hermes"
 HERMES_PYTHON = HERMES_ROOT / "venv/bin/python"
 MAX_ATTEMPTS = 3
-LOGIN_ATTEMPTS = defaultdict(deque)
-LOGIN_LOCK = threading.Lock()
 WORKER_LOCK = threading.Lock()
 WORKER_STARTED = False
 WORKER_WAKE = threading.Event()
@@ -38,17 +29,15 @@ LEGACY_CONVERSATION = "00000000000000000000000000000001"
 
 
 def configure(app):
-    if not ENABLED:
+    auth.configure(app)
+    if not auth.enabled():
         return
     from flask.logging import default_handler
-    for logger in (LOG, logging.getLogger('hermes_dashboard.warm_runner')):
+    for logger in (LOG, auth.LOG, logging.getLogger('hermes_dashboard.warm_runner')):
         if not logger.handlers:
             logger.addHandler(default_handler)
         logger.setLevel(logging.INFO)
         logger.propagate = False
-    app.secret_key = SESSION_SECRET
-    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
-                      SESSION_COOKIE_SECURE=True, PERMANENT_SESSION_LIFETIME=timedelta(days=7))
 
 
 def _connection():
@@ -93,51 +82,15 @@ def _connection():
     return conn
 
 
-def _origin_ok():
-    origin = request.headers.get("Origin")
-    return not origin or urlsplit(origin).netloc == request.host
-
-
-def _authorized():
-    return ENABLED and session.get("web_chat_authenticated") is True
-
-
-def session_status():
-    return jsonify({"available": ENABLED, "authenticated": _authorized(),
-                    "csrf": session.get("web_chat_csrf") if _authorized() else None})
-
-
-def login():
-    if not ENABLED:
-        return jsonify({"error": "Chat privado não configurado."}), 503
-    if not _origin_ok():
-        return jsonify({"error": "Origem inválida."}), 403
-    data = request.get_json(silent=True)
-    password = data.get("password") if isinstance(data, dict) else None
-    if not isinstance(password, str) or len(password) > 256:
-        return jsonify({"error": "Senha inválida."}), 400
-    key = request.remote_addr or "unknown"
-    now = time.time()
-    with LOGIN_LOCK:
-        attempts = LOGIN_ATTEMPTS[key]
-        while attempts and attempts[0] < now - 900:
-            attempts.popleft()
-        if len(attempts) >= 12:
-            return jsonify({"error": "Muitas tentativas. Aguarde 15 minutos."}), 429
-        attempts.append(now)
-    if not check_password_hash(PASSWORD_HASH, password):
-        return jsonify({"error": "Senha incorreta."}), 401
-    session.clear()
-    session.permanent = True
-    session["web_chat_authenticated"] = True
-    session["web_chat_csrf"] = secrets.token_urlsafe(24)
-    return session_status()
+# Sessão e login moram em auth.py (ADR 0010); o chat só aplica as próprias mensagens.
+session_status = auth.session_status
+login = auth.login
 
 
 def _private(write=False):
-    if not _authorized():
+    if not auth.authorized():
         return jsonify({"error": "Entre para conversar com o Sato Agent."}), 401
-    if write and (not _origin_ok() or request.headers.get("X-Chat-CSRF") != session.get("web_chat_csrf")):
+    if write and not auth.csrf_ok():
         return jsonify({"error": "Sessão inválida; recarregue a página."}), 403
     return None
 
@@ -502,7 +455,7 @@ def _worker():
 
 def start_worker():
     global WORKER_STARTED
-    if not ENABLED or os.getenv("HERMES_WEB_CHAT_WORKER", "1") == "0":
+    if not auth.enabled() or os.getenv("HERMES_WEB_CHAT_WORKER", "1") == "0":
         return
     with WORKER_LOCK:
         if WORKER_STARTED:

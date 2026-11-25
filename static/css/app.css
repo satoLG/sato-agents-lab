@@ -387,3 +387,17 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: v
 @media (min-width: 1100px) {
   .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* ---------- login do site (sem animação) ---------- */
+.login-card { max-width: 380px; margin: var(--sp-5) auto; }
+.login-card h1 { margin-bottom: var(--sp-2); }
+.login-form { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+.login-form label { font-size: 0.8rem; color: var(--ink-2); }
+.login-form input[type="password"] {
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-1);
+  padding: 10px 12px; font: inherit; font-size: 0.85rem; min-height: 40px; width: 100%;
+}
+.login-error { color: var(--serious); font-size: 0.8rem; }
+.logout-form { display: inline-flex; margin: 0; }
+.logout-form .btn { min-height: 36px; padding: 0 var(--sp-3); }

@@ -10,14 +10,14 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import app
-from hermes_dashboard import web_chat
+from hermes_dashboard import auth, web_chat
 
 
 @pytest.fixture
 def private_chat(vm, tmp_path, monkeypatch):
-    monkeypatch.setattr(web_chat, "LOGIN_ATTEMPTS", defaultdict(deque))
-    monkeypatch.setattr(web_chat, "ENABLED", True)
-    monkeypatch.setattr(web_chat, "PASSWORD_HASH", generate_password_hash("senha-forte-de-teste"))
+    monkeypatch.setattr(auth, "LOGIN_ATTEMPTS", defaultdict(deque))
+    monkeypatch.setattr(auth, "SESSION_SECRET", "test-session-secret")
+    monkeypatch.setattr(auth, "PASSWORD_HASH", generate_password_hash("senha-forte-de-teste"))
     monkeypatch.setattr(web_chat, "DB_PATH", tmp_path / "private" / "queue.db")
     monkeypatch.setattr(web_chat.chat_context.vm, "snapshot", lambda **_: {"cpu": {"total": 42}})
     monkeypatch.setattr(web_chat.chat_context.memory, "catalog", lambda: {"documents": [], "skills": []})

@@ -3,7 +3,7 @@
 Interface web do **Sato Agent**, o nome do agente [Hermes](https://github.com/NousResearch/hermes-agent) do Sato neste projeto.
 
 - **`/`: chat com o Sato Agent.** É a parte principal: um robô 3D que conversa usando o Hermes, com histórico de sessões, cenários (Padrão, Laboratório e Floresta) e modo de exploração.
-- **`/dashboard`: painel de observabilidade.** É privado e só lê dados. Mostra o que acontece na estrutura de agentes: atividade, modelos, tools, MCPs, memória, RAG, cron e VM.
+- **`/dashboard`: painel de observabilidade.** É privado (exige o login do site em `/login`, a mesma senha do chat; [ADR 0010](docs/adr/0010-login-do-site-protege-dashboard-e-kanbagent.md)) e só lê dados. Mostra o que acontece na estrutura de agentes: atividade, modelos, tools, MCPs, memória, RAG, cron e VM.
 
 Tudo roda na mesma máquina do Hermes e lê os arquivos reais dele. Não há CDN nem serviço externo além do provedor de modelo que o próprio Hermes usa.
 
@@ -53,7 +53,8 @@ Todas as dependências de front ficam em `static/vendor/`, com as licenças ao l
 ```
 app.py                  rotas Flask
 hermes_dashboard/
-  web_chat.py           API do chat privado: login, fila, jobs, SSE
+  auth.py               login único do site: sessão, CSRF, limite de tentativas
+  web_chat.py           API do chat privado: fila, jobs, SSE
   warm_runner.py        processo Hermes aquecido e sem tools
   chat_context.py       contexto por pergunta (dashboard, memória, RAG)
   context_cache.py      cache de fontes (30 s, invalidação por mtime)
@@ -92,9 +93,9 @@ Fora da máquina do Hermes, as abas mostram os recursos da máquina local, ou "s
 | `HERMES_CRON_DIR` | `~/.hermes/cron` |
 | `HERMES_LOG_PATH` | autodetectado em `~/.hermes/logs/` |
 
-### Chat privado
+### Chat privado e login do site
 
-O chat só funciona com `HERMES_WEB_CHAT_PASSWORD_HASH` e `HERMES_WEB_CHAT_SESSION_SECRET` definidas no `.env`. Para criar ou trocar a senha sem que ela passe pelo Git ou pela linha de comando:
+O chat e o login do site só funcionam com `HERMES_WEB_CHAT_PASSWORD_HASH` e `HERMES_WEB_CHAT_SESSION_SECRET` definidas no `.env`. Sem elas, só a home fica disponível: `/dashboard` e as demais rotas fora da lista pública do `app.py` respondem 503 (fecham, nunca abrem). Para criar ou trocar a senha sem que ela passe pelo Git ou pela linha de comando:
 
 ```bash
 python3 tools/set_chat_password.py ~/.hermes/.env
@@ -106,10 +107,10 @@ python3 tools/set_chat_password.py ~/.hermes/.env
 python3 -m pytest tests/ -q
 python3 tools/check_html.py          # Jinja, balanço de tags, atributos hx-*
 npm ci && npm run test:unit
-npm run test:browser                 # com app.py rodando
+npm run test:browser                 # com app.py rodando e login configurado
 ```
 
-O Playwright tem dois projetos: `ui` (chat, dashboard, interface) e `scenes` (WebGL, marcado com `@scene`). O CI (`.github/workflows/lab-checks.yml`) roda os testes de navegador só quando a mudança toca a web. `tools/selfcheck.py` faz um diagnóstico rápido: versões, caminhos, schema e o status de cada rota.
+Os testes do dashboard entram com a senha `SITE_TEST_PASSWORD` (padrão `senha-de-teste-do-site`); suba o `app.py` com o hash dela, como faz o CI. O Playwright tem dois projetos: `ui` (chat, dashboard, interface) e `scenes` (WebGL, marcado com `@scene`). O CI (`.github/workflows/lab-checks.yml`) roda os testes de navegador só quando a mudança toca a web. `tools/selfcheck.py` faz um diagnóstico rápido: versões, caminhos, schema e o status de cada rota.
 
 ## Deploy e fluxo
 

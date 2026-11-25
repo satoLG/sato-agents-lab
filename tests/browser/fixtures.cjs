@@ -30,4 +30,13 @@ const test=base.extend({
   try{await use(browser);}finally{browser.newContext=createContext;}
  },{scope:'worker'}],
 });
-module.exports={test,expect,frameLimitedSource};
+// ADR 0010: o dashboard exige o login do site. O servidor de teste sobe com o
+// hash desta senha (veja .github/workflows/lab-checks.yml).
+const SITE_PASSWORD=process.env.SITE_TEST_PASSWORD||'senha-de-teste-do-site';
+async function login(page,next='/dashboard'){
+ await page.goto(`/login?next=${encodeURIComponent(next)}`);
+ await page.getByLabel('Senha').fill(SITE_PASSWORD);
+ await page.getByRole('button',{name:'Entrar'}).click();
+ await page.waitForURL(url=>url.pathname!=='/login');
+}
+module.exports={test,expect,frameLimitedSource,login};

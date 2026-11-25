@@ -1,4 +1,7 @@
-const {test,expect}=require('./fixtures.cjs');
+const {test,expect,login}=require('./fixtures.cjs');
+
+// ADR 0010: o dashboard é privado; cada teste entra com a senha do site antes de navegar.
+test.beforeEach(async({page})=>{await login(page);});
 
 test('dashboard keeps live readings and execution history without the lab page',async({page})=>{
  const channels={vm:{data:{cpu:{total:42},memory:{total:1024,used_percent:61},uptime_seconds:3600}}};

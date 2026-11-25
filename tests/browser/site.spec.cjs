@@ -1,9 +1,10 @@
-const {test,expect}=require('./fixtures.cjs');
+const {test,expect,login}=require('./fixtures.cjs');
 
 for(const width of [1440,393])test(`home and dashboard identity at ${width}px`,async({page,request},info)=>{
  await page.setViewportSize({width,height:852});
  await page.route('**/api/lab/hermes-chat/session',route=>route.fulfill({json:{available:false,authenticated:false}}));
  for(const url of ['/','/dashboard']){
+  if(url==='/dashboard')await login(page,url);
   await page.goto(url);await page.evaluate(()=>document.fonts.ready);
   const brand=page.locator('a.brand,a.site-brand');
   await expect(brand.locator('img')).toHaveAttribute('src',/sato-logo\.png$/);
