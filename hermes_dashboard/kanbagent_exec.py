@@ -195,7 +195,10 @@ def execute(job, box):
     with heartbeat(job["id"], "abrindo o PR"):
         url = box.publish(item, f"Tarefas e níveis usados:\n{summary}")
     kb.add_link(item["id"], url, "claude")
-    kb.change_stage(item["id"], "revisao_codigo", "claude", text=f"PR pronto: {url}\n{summary}")
+    review = kb.change_stage(item["id"], "revisao_codigo", "claude", text=f"PR pronto: {url}\n{summary}")
+    if review and os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
+        from .kanbagent_review import spawn as spawn_review
+        spawn_review()      # a entrega pede revisão do Hermes
     return url
 
 

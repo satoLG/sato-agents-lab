@@ -136,6 +136,8 @@ def _connection():
         job_columns = {column[1] for column in conn.execute("PRAGMA table_info(agent_jobs)")}
         if "heartbeat_at" not in job_columns:
             conn.execute("ALTER TABLE agent_jobs ADD COLUMN heartbeat_at TEXT")
+        if "result" not in job_columns:
+            conn.execute("ALTER TABLE agent_jobs ADD COLUMN result TEXT")
     if DB_PATH.exists():
         os.chmod(DB_PATH, 0o600)
     return conn
@@ -244,7 +246,7 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         if from_stage in JOB_STAGES:
             conn.execute("UPDATE agent_jobs SET status='done', finished_at=? WHERE card_id=?"
                          " AND status IN ('queued','running')", (occurred, card_id))
-        if to_stage in JOB_STAGES and author == "sato":
+        if to_stage in JOB_STAGES and (author == "sato" or (author, to_stage) == ("claude", "revisao_codigo")):
             return _queue_job(conn, card_id, occurred, to_stage)
         return None
 
@@ -253,7 +255,8 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
 
 # Etapa → tipo de pedido: entrar nela (pelo Sato) pede ao agente; sair dela fecha o pedido.
 # `proposta`: o Hermes escreve a proposta. `execucao`: o Claude planeja e executa (kanbagent_exec.py).
-JOB_STAGES = ("proposta", "execucao")
+# `revisao_codigo`: o Hermes revisa o PR (kanbagent_review.py); também quando o Claude entrega.
+JOB_STAGES = ("proposta", "execucao", "revisao_codigo")
 # Pedido rodando sem sinal de vida (progresso) há mais que isso morreu (deploy, queda).
 JOB_STALE = timedelta(minutes=20)
 STALE_ERROR = "O agente parou no meio (sem sinal há 20 min)."
@@ -292,7 +295,7 @@ def request_agent(card_id):
     with closing(_connection()) as conn, _transaction(conn):
         row = _card(conn, card_id)
         if row["etapa_atual"] not in JOB_STAGES:
-            raise InvalidTransition("Só cards em Proposta ou Em execução pedem trabalho a um agente.")
+            raise InvalidTransition("Só cards em Proposta, Execução ou Revisão de código pedem trabalho a um agente.")
         _expire_stale(conn)
         if _open_job(conn, card_id):
             raise InvalidTransition("Um agente já está trabalhando neste card.")
@@ -323,12 +326,23 @@ def job_progress(job_id, text):
                      (str(text)[:200], _now(), job_id))
 
 
-def finish_job(job_id, error=None, now=None):
-    """Fecha o pedido: sem erro = feito; com erro o card destrava e mostra o motivo."""
+def finish_job(job_id, error=None, now=None, result=None):
+    """Fecha o pedido: sem erro = feito (com `result`, ex.: a revisão); com erro o card destrava e mostra o motivo."""
     with closing(_connection()) as conn, _transaction(conn):
-        conn.execute("UPDATE agent_jobs SET status=?, finished_at=?, error=? WHERE id=?"
+        conn.execute("UPDATE agent_jobs SET status=?, finished_at=?, error=?, result=? WHERE id=?"
                      " AND status IN ('queued','running')",
-                     ("failed" if error else "done", _iso(now), str(error)[:500] if error else None, job_id))
+                     ("failed" if error else "done", _iso(now), str(error)[:500] if error else None,
+                      None if error else result, job_id))
+
+
+def review(item):
+    """Revisão concluída do card em `revisao_codigo` (pedido feito com resultado), ou None."""
+    job = item.get("job")
+    if item["etapa_atual"] != "revisao_codigo" or not job or job["kind"] != "revisao_codigo" \
+            or job["status"] != "done" or not job.get("result"):
+        return None
+    text = job["result"]
+    return {"aprovar": text.lstrip().upper().startswith("VEREDITO: APROVAR"), "texto": text}
 
 
 def job(job_id):

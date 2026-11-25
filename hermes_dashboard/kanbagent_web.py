@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from . import kanbagent as kb
-from . import kanbagent_exec, kanbagent_hermes
+from . import kanbagent_exec, kanbagent_hermes, kanbagent_review
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -119,7 +119,16 @@ def card_moves(item):
 @bp.app_context_processor
 def _labels():
     return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
-            "kb_action": action_label, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS}
+            "kb_action": action_label, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
+            "kb_job_text": JOB_TEXT, "kb_review": kb.review}
+
+
+# Tipo de pedido → (selo enquanto trabalha, quem está fazendo o quê, selo de falha).
+JOB_TEXT = {
+    "proposta": ("propondo…", "O Hermes está escrevendo a proposta", "Hermes falhou"),
+    "execucao": ("executando…", "O Claude está executando o card (plano em mini tarefas, PR no fim)", "Execução falhou"),
+    "revisao_codigo": ("revisando…", "O Hermes está revisando o PR", "Revisão falhou"),
+}
 
 
 # --- helpers de formulário -------------------------------------------------------------------------
@@ -224,6 +233,33 @@ def stage_form(card_id):
     return _back(card_id)
 
 
+def approve(card_id):
+    """Aprovar a revisão: merge (squash) do PR ligado e card em Entregue."""
+    item = kb.card(card_id)
+    if item["etapa_atual"] != "revisao_codigo":
+        raise kb.InvalidTransition("Só cards em Revisão de código são aprovados.")
+    if item["job"] and item["job"]["status"] in ("queued", "running"):
+        raise kb.InvalidTransition(kb.LOCKED)
+    link = kanbagent_review.pr_link(item)
+    text = "Aprovado."
+    if link and link.get("estado") != "merged":
+        error = kanbagent_review.merge(link["repo"], link["numero"])
+        if error:
+            raise kb.InvalidTransition(f"O merge do PR falhou: {error}")
+        kb.set_link_state(link["id"], "merged")
+        text = f"Aprovado: merge do PR {link['url']}."
+    kb.change_stage(card_id, "entregue", "sato", text=text)
+
+
+@bp.post("/card/<int:card_id>/aprovar")
+def approve_form(card_id):
+    try:
+        approve(card_id)
+    except (ValueError, kb.NotFound) as error:
+        return _back(card_id, error)
+    return _back(card_id)
+
+
 @bp.post("/card/<int:card_id>/repropor")
 def repropose_form(card_id):
     try:
@@ -236,10 +272,8 @@ def repropose_form(card_id):
 def _kick(job_id):
     """Pedido novo na fila: dispara o worker do tipo dele (o crontab cobre se o disparo falhar)."""
     if job_id and os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
-        if kb.job(job_id)["kind"] == "execucao":
-            kanbagent_exec.spawn()
-        else:
-            kanbagent_hermes.spawn()
+        kind = kb.job(job_id)["kind"]
+        {"execucao": kanbagent_exec, "revisao_codigo": kanbagent_review}.get(kind, kanbagent_hermes).spawn()
 
 
 @bp.post("/card/<int:card_id>/proposta")
@@ -396,6 +430,15 @@ def api_jobs():
     """Último pedido ao Hermes de cada card pedido (`?cards=1,2`): o quadro acompanha ao vivo."""
     ids = [int(x) for x in request.args.get("cards", "").split(",") if x.strip().isdigit()][:100]
     return jsonify({str(card_id): job for card_id, job in kb.latest_jobs(ids).items()})
+
+
+@bp.post("/api/cards/<int:card_id>/aprovar")
+def api_approve(card_id):
+    try:
+        approve(card_id)
+    except Exception as error:
+        return _api_error(error)
+    return jsonify(kb.card(card_id))
 
 
 @bp.post("/api/cards/<int:card_id>/repropor")
