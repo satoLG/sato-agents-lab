@@ -69,14 +69,14 @@ def single_worker(lock_path=None):
         yield True
 
 
-def run_hermes(prompt, on_event, timeout=TIMEOUT):
-    """Roda o Hermes com a skill de proposta; devolve (código de saída, texto final ou erro)."""
+def run_hermes(prompt, on_event, timeout=TIMEOUT, skill="kanbagent-proposta"):
+    """Roda o Hermes (com a skill de proposta por padrão); devolve (código de saída, texto final ou erro)."""
     if not HERMES_BIN.exists():
         return 127, f"Hermes não encontrado em {HERMES_BIN}."
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as handle:
         handle.write(prompt)
         query = handle.name
-    command = [str(HERMES_BIN), "chat", "--query-file", query, "--oneshot", "-s", "kanbagent-proposta",
+    command = [str(HERMES_BIN), "chat", "--query-file", query, "--oneshot", *(["-s", skill] if skill else []),
                "--format", "stream-json", "--source", "tool", "--max-turns", "40"]
     result = {"code": None, "text": ""}
     try:

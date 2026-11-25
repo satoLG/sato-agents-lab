@@ -6,7 +6,8 @@
 {% block kb_content %}
 {% set job = card.job %}
 {% set locked = job and job.status in ('queued', 'running') %}
-{% set failed = job and job.status == 'failed' and card.etapa_atual == 'proposta' %}
+{% set failed = job and job.status == 'failed' and job.kind == card.etapa_atual %}
+{% set review = kb_review(card) %}
 <article class="kb-detail card{% if locked %} kb-locked{% endif %}" aria-labelledby="kb-title"{% if locked %} data-watch-job="{{ card.id }}"{% endif %}>
   <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro">✕</a>
   <header class="kb-detail-head">
@@ -23,16 +24,34 @@
   {% if locked %}
   <p class="kb-working" role="status" aria-live="polite">
     <span class="kb-spinner" aria-hidden="true"></span>
-    <span><strong>{% if job.kind == 'execucao' %}O Claude está executando o card (plano em mini tarefas, PR no fim).{% else %}O Hermes está escrevendo a proposta.{% endif %}</strong> O card fica travado até terminar; esta página atualiza sozinha.
+    <span><strong>{{ kb_job_text[job.kind][1] }}.</strong> O card fica travado até terminar; esta página atualiza sozinha.
     <span class="kb-working-step" data-job-progress>{{ job.progress or ('na fila' if job.status == 'queued' else 'começando') }}</span></span>
   </p>
   {% elif failed %}
   <div class="kb-failed" role="alert">
-    <p><strong>{% if job.kind == 'execucao' %}A execução não chegou ao fim.{% else %}O Hermes não conseguiu escrever a proposta.{% endif %}</strong> {{ job.error }}</p>
+    <p><strong>{{ {'execucao': 'A execução não chegou ao fim.', 'revisao_codigo': 'A revisão do PR não chegou ao fim.'}.get(job.kind, 'O Hermes não conseguiu escrever a proposta.') }}</strong> {{ job.error }}</p>
     <form method="post" action="{{ url_for('kanbagent.repropose_form', card_id=card.id) }}">{{ ui.csrf() }}
       <button class="btn small" type="submit">↻ Pedir de novo</button>
     </form>
   </div>
+  {% elif review %}
+  <section class="kb-review" data-verdict="{{ 'aprovar' if review.aprovar else 'ajustar' }}" aria-labelledby="kb-review-title">
+    <h2 id="kb-review-title">{{ '✓ Revisão: pode aprovar' if review.aprovar else '⚠ Revisão: pede ajustes' }}</h2>
+    <div class="kb-pre kb-box">{{ review.texto }}</div>
+    <div class="kb-review-actions">
+      <form method="post" action="{{ url_for('kanbagent.approve_form', card_id=card.id) }}" data-confirm="Fazer o merge do PR e marcar como entregue?">{{ ui.csrf() }}
+        <button class="btn" type="submit">✓ Aprovar (merge)</button>
+      </form>
+      <details class="kb-inline-edit">
+        <summary class="btn ghost">✗ Reprovar</summary>
+        <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
+          <input type="hidden" name="para" value="execucao">
+          <textarea name="texto" rows="6" required aria-label="O que ajustar">{{ review.texto }}</textarea>
+          <button class="btn small" type="submit">Voltar para execução</button>
+        </form>
+      </details>
+    </div>
+  </section>
   {% endif %}
 
   <div class="kb-detail-body">
@@ -101,7 +120,7 @@
       <h2>Mover</h2>
       {% set moves = [] if locked else kb_moves(card) %}
       {% if locked %}
-      <p class="muted kb-hint">Travado enquanto o Hermes escreve.</p>
+      <p class="muted kb-hint">Travado enquanto o agente trabalha.</p>
       {% elif card.proximas %}
       {% for to in moves if to != 'descartado' %}
       {% set move = (card.etapa_atual, to) %}

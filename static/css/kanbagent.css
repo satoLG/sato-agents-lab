@@ -197,3 +197,9 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-failed { flex-direction: column; background: color-mix(in srgb, var(--danger) 16%, transparent); }
 .kb-failed p { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .kb-spinner, .kb-card.kb-locked { animation: none; } }
+.kb-badge-ok { background: color-mix(in srgb, var(--label-entregue, #3a8f5c) 30%, transparent); color: var(--tile-ink-strong); }
+.kb-review { margin: 16px 0 0; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--label-revisao_codigo, #7a6ad8) 14%, transparent); }
+.kb-review[data-verdict=ajustar] { background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.kb-review h2 { margin: 0 0 8px; font-size: 1rem; }
+.kb-review-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 10px; }
+.kb-review-actions details[open] { flex-basis: 100%; }

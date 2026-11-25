@@ -20,7 +20,8 @@
       {% for c in items %}
       {% set job = c.job %}
       {% set locked = job and job.status in ('queued', 'running') %}
-      {% set failed = job and job.status == 'failed' and stage == 'proposta' %}
+      {% set failed = job and job.status == 'failed' and job.kind == stage %}
+      {% set review = kb_review(c) %}
       <li>
         <a class="kb-card{% if locked %} kb-locked{% endif %}" href="{{ url_for('kanbagent.card_page', card_id=c.id) }}" draggable="false"
            data-card="{{ c.id }}" data-stage="{{ stage }}" data-next="{{ '' if locked else kb_moves(c)|join(' ') }}"{% if locked %} data-watch-job="{{ c.id }}"{% endif %}>
@@ -32,9 +33,9 @@
           {% if c.repo %}<span class="kb-meta">{{ c.repo }}</span>{% endif %}
           <span class="kb-badges">
             <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">⏱ {{ c.na_etapa_desde|kb_since }}</span>
-            {% set exec_job = job and job.kind == 'execucao' %}
-            {% if locked %}<span class="kb-badge kb-badge-wait" title="{{ 'O Claude está executando' if exec_job else 'O Hermes está escrevendo a proposta' }}"><span class="kb-spinner" aria-hidden="true"></span> {{ 'executando…' if exec_job else 'propondo…' }} <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
-            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ {{ 'Execução falhou' if exec_job else 'Hermes falhou' }}</span>
+            {% if locked %}<span class="kb-badge kb-badge-wait" title="{{ kb_job_text[job.kind][1] }}"><span class="kb-spinner" aria-hidden="true"></span> {{ kb_job_text[job.kind][0] }} <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
+            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ {{ kb_job_text[job.kind][2] }}</span>
+            {% elif review %}<span class="kb-badge {{ 'kb-badge-ok' if review.aprovar else 'kb-badge-fail' }}" title="Revisão concluída: abra o card para aprovar ou reprovar">{{ '✓ revisado' if review.aprovar else '⚠ ajustes' }}</span>
             {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">≡</span>{% endif %}
             {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste">↺ {{ c.ajustes }}</span>{% endif %}
             {% if c.links %}<span class="kb-badge" title="Issues e PRs ligados">🔗 {{ c.links }}</span>{% endif %}

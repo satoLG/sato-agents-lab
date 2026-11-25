@@ -2,6 +2,13 @@
 // com JS os cards se arrastam entre as listas, e só acendem as listas permitidas pelas regras.
 import {press, release} from './button-sounds.js';
 
+// Tipo de pedido → selo enquanto o agente trabalha (igual ao JOB_TEXT do kanbagent_web.py).
+const JOB_TEXT = {
+  proposta: ['propondo…', 'O Hermes está escrevendo a proposta'],
+  execucao: ['executando…', 'O Claude está executando o card'],
+  revisao_codigo: ['revisando…', 'O Hermes está revisando o PR'],
+};
+
 for (const form of document.querySelectorAll('form[data-autosubmit]')) {
   form.addEventListener('change', () => form.requestSubmit());
 }
@@ -261,11 +268,11 @@ function setupDrag(board) {
     badges?.querySelector('.kb-badge-fail')?.remove();
     if (['queued', 'running'].includes(data.job?.status)) {
       // Pediu trabalho a um agente: card travado até ele terminar, com o passo atual ao vivo.
-      const exec = data.job.kind === 'execucao';
+      const [busy, who] = JOB_TEXT[data.job.kind] || JOB_TEXT.proposta;
       card.dataset.next = '';
       card.dataset.watchJob = card.dataset.card;
       card.classList.add('kb-locked');
-      badges?.insertAdjacentHTML('afterbegin', `<span class="kb-badge kb-badge-wait" title="${exec ? 'O Claude está executando' : 'O Hermes está escrevendo a proposta'}"><span class="kb-spinner" aria-hidden="true"></span> ${exec ? 'executando…' : 'propondo…'} <span data-job-progress>na fila</span></span>`);
+      badges?.insertAdjacentHTML('afterbegin', `<span class="kb-badge kb-badge-wait" title="${who}"><span class="kb-spinner" aria-hidden="true"></span> ${busy} <span data-job-progress>na fila</span></span>`);
       watchJobs();
     }
     if (data.ajustes) {

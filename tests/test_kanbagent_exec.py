@@ -74,7 +74,8 @@ def test_cheap_plan_runs_each_task_once_and_opens_pr(db):
     box = FakeBox({"tasks": [task("texto", "free"), task("lógica", "sonnet", "pytest -q t")], "final_check": "pytest"})
     assert worker.drain(lambda job: box) == 1
     item = kb.card(card)
-    assert item["etapa_atual"] == "revisao_codigo" and item["job"]["status"] == "done"
+    assert item["etapa_atual"] == "revisao_codigo"
+    assert (item["job"]["kind"], item["job"]["status"]) == ("revisao_codigo", "queued")   # entrega pede revisão
     assert [link["url"] for link in item["links"]] == [PR]
     assert [(k, t) for k, t, _ in box.calls] == [("plan", "sonnet"), ("free", "free"), ("sonnet", "sonnet")]
     assert any(e["author"] == "claude" and "[free] texto" in (e["text"] or "") for e in item["events"])
@@ -149,7 +150,8 @@ def test_unknown_tier_becomes_haiku_and_ladder_order():
 
 def test_rejected_delivery_feeds_the_planner(db):
     card = queued()
-    kb.change_stage(card, "revisao_codigo", "claude")
+    review = kb.change_stage(card, "revisao_codigo", "claude")
+    kb.finish_job(review, result="VEREDITO: AJUSTAR")
     kb.change_stage(card, "execucao", "sato", text="faltou o teste do botão")
     box = FakeBox({"tasks": [task("t", "haiku")]})
     worker.drain(lambda job: box)

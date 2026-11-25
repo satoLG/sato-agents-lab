@@ -70,6 +70,20 @@ repete a segurança do worker de issues: clona como o usuário do site, roda o C
    "↻ Pedir de novo". Numa reprovação, o texto do Sato vai para o planejador e o trabalho continua no
    mesmo branch/PR. Log por card em `~/.hermes/logs/kanbagent-exec/`.
 
+## Hermes revisa o PR
+
+Entrar em `revisao_codigo` (pelo Claude ao entregar, ou pelo Sato) abre um pedido `revisao_codigo`; o
+card trava com "revisando… <passo>". O worker `python -m hermes_dashboard.kanbagent_review` (disparado
+pelo executor/site, crontab a cada 5 min) lê o diff do PR ligado ao card e pede ao Hermes um parecer
+que começa com `VEREDITO: APROVAR` ou `VEREDITO: AJUSTAR`. O Claude faz uma segunda revisão (Sonnet;
+Opus se alguma tarefa precisou do opus) quando o diff passa de 400 linhas, quando houve trabalho opus
+ou quando o Hermes não dá veredito. Um AJUSTAR vence. O parecer vira comentário no PR e no card.
+
+Com a revisão concluída, o card mostra o parecer e dois botões: **Aprovar (merge)** faz o merge
+(squash) do PR e leva o card para `entregue`; se o merge falhar, o card fica onde está com o motivo.
+**Reprovar** volta para `execucao` com o parecer pré-preenchido como texto, o que dispara o executor de
+novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
+
 ## Modelo de dados (banco próprio `kanbagent.sqlite3`)
 
 - `projects` — slug, nome, descrição, criado_em, arquivado_em.
