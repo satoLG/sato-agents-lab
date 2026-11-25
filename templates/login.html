@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Entrar · Sato Agents{% endblock %}
+{% block content %}
+<section class="login-card card" aria-labelledby="login-title">
+  <h1 id="login-title">Entrar</h1>
+  {% if available %}
+  <p class="muted">O dashboard é privado. Use a mesma senha do chat do Sato Agent.</p>
+  <form id="login-form" class="login-form" data-next="{{ next_path }}" novalidate>
+    <label for="login-password">Senha</label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="256" required>
+    <button class="btn" type="submit">Entrar</button>
+    <p id="login-error" class="login-error" role="alert" hidden></p>
+  </form>
+  {% else %}
+  <p class="notice" role="alert">Login não configurado. Defina a senha com <span class="mono">tools/set_chat_password.py</span>.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% if available %}<script type="module" src="{{ url_for('static', filename='js/login.js') }}"></script>{% endif %}{% endblock %}

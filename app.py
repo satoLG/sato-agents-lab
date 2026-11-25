@@ -8,9 +8,12 @@ import os
 import traceback
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request
+from urllib.parse import quote
 
-from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
+from flask import Flask, abort, jsonify, redirect, render_template, request
+from werkzeug.exceptions import NotFound
+
+from hermes_dashboard import activity, auth, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
 from hermes_dashboard import config, lab_feed, streaming, sato_agent, mimic
 
@@ -22,14 +25,48 @@ web_chat.configure(app)
 _static_root = Path(app.static_folder)
 _asset_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
 _asset_digest = hashlib.sha256()
-for _path in [Path(app.root_path) / 'templates/home.html', Path(app.root_path) / 'templates/dashboard.html', *_asset_files]:
+for _path in [Path(app.root_path) / 'templates/home.html', Path(app.root_path) / 'templates/dashboard.html',
+              Path(app.root_path) / 'templates/login.html', *_asset_files]:
     _asset_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
     _asset_digest.update(b'\0')
     _asset_digest.update(_path.read_bytes())
 ASSET_VERSION = _asset_digest.hexdigest()[:16]
 
-# O dashboard de observabilidade existente continua público. O novo chat Hermes
-# tem autenticação própria; não confundir essa proteção com a das demais rotas.
+# ADR 0010: só a home e o chat dela são públicos. Qualquer outra rota, inclusive
+# as que ainda vão nascer, exige a sessão do login do site.
+PUBLIC_PATHS = frozenset({"/", "/login", "/logout", "/api/lab/chat"})
+PUBLIC_PREFIXES = ("/assets/", "/static/", "/api/lab/hermes-chat/", "/api/sato-agent/")
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def is_public(path):
+    return path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES)
+
+
+@app.before_request
+def require_login():
+    path = request.path
+    # Caminho inexistente segue para o 404 normal; não há o que proteger.
+    if is_public(path) or isinstance(request.routing_exception, NotFound):
+        return None
+    try:
+        api = path.startswith(("/api/", "/fragments/"))
+        if not auth.enabled():
+            if api:
+                return jsonify({"error": "Login não configurado."}), 503
+            return render_template("login.html", asset_version=ASSET_VERSION, available=False, next_path="/"), 503
+        if not auth.authorized():
+            if api or request.method not in SAFE_METHODS:
+                return jsonify({"error": "Entre para acessar."}), 401
+            target = path + ("?" + request.query_string.decode("utf-8", "replace") if request.query_string else "")
+            return redirect("/login?next=" + quote(auth.safe_next(target), safe="/"), code=302)
+        if request.method not in SAFE_METHODS and not auth.csrf_ok():
+            return jsonify({"error": "Sessão inválida; recarregue a página."}), 403
+    except Exception:
+        # A checagem nunca abre a rota nem vira um 500 genérico.
+        app.logger.exception("falha ao verificar a sessão em %s", path)
+        return jsonify({"error": "Login indisponível. Tente novamente."}), 503
+    return None
 
 
 @app.after_request
@@ -81,6 +118,24 @@ def home():
 @app.route("/api/stats")
 def api_stats():
     return jsonify(stats.public_stats())
+
+
+# --- login do site ---
+
+@app.get("/login")
+def login_page():
+    next_path = auth.safe_next(request.args.get("next"))
+    if auth.authorized():
+        return redirect(next_path, code=302)
+    available = auth.enabled()
+    return render_template("login.html", asset_version=ASSET_VERSION, available=available,
+                           next_path=next_path), 200 if available else 503
+
+
+@app.post("/logout")
+def logout():
+    denied = auth.logout()
+    return denied if denied else redirect("/", code=303)
 
 
 # --- dashboard ---

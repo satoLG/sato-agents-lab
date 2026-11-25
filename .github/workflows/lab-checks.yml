@@ -79,6 +79,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Start local dashboard
         run: |
+          # ADR 0010: o dashboard exige login; a senha de teste fica em tests/browser/fixtures.cjs.
+          export HERMES_WEB_CHAT_PASSWORD_HASH="$(python -c 'from werkzeug.security import generate_password_hash as h; print(h("senha-de-teste-do-site"))')"
+          export HERMES_WEB_CHAT_SESSION_SECRET=ci-session-secret
+          export HERMES_WEB_CHAT_WORKER=0
+          export HERMES_WEB_CHAT_DB=/tmp/sato-web-chat.sqlite3
           python app.py > /tmp/sato-site.log 2>&1 &
           for i in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/ > /dev/null; then exit 0; fi

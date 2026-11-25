@@ -80,10 +80,37 @@ class Fake:
         self.monkeypatch.setattr(rag, "search", boom)
 
 
+TEST_PASSWORD = "senha-de-teste-do-site"
+
+
 @pytest.fixture
-def client(vm):
-    app_module.app.config.update(TESTING=True)
+def site_login(monkeypatch):
+    """Configura o login do site (ADR 0010) com hash e segredo de teste."""
+    from collections import defaultdict, deque
+    from werkzeug.security import generate_password_hash
+    from hermes_dashboard import auth
+    monkeypatch.setattr(auth, "LOGIN_ATTEMPTS", defaultdict(deque))
+    monkeypatch.setattr(auth, "PASSWORD_HASH", generate_password_hash(TEST_PASSWORD))
+    monkeypatch.setattr(auth, "SESSION_SECRET", "test-session-secret")
+    app_module.app.secret_key = "test-session-secret"
+    app_module.app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
+    return TEST_PASSWORD
+
+
+@pytest.fixture
+def anonymous(vm, site_login):
+    """Cliente sem sessão, com o login configurado."""
     return app_module.app.test_client()
+
+
+@pytest.fixture
+def client(vm, site_login):
+    """Cliente do dashboard já autenticado; `client.csrf` tem o token da sessão."""
+    test_client = app_module.app.test_client()
+    response = test_client.post("/api/lab/hermes-chat/login", json={"password": site_login})
+    assert response.status_code == 200
+    test_client.csrf = response.get_json()["csrf"]
+    return test_client
 
 
 # Toda rota que a interface chama. Se alguma responder 500, o teste falha.

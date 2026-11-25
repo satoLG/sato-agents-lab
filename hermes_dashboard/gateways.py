@@ -5,7 +5,7 @@ from . import config
 
 
 def snapshot():
-    from . import web_chat
+    from . import auth
     entries = []
     try:
         state = json.loads((config.HERMES_HOME / "gateway_state.json").read_text())
@@ -20,7 +20,7 @@ def snapshot():
                             "source": "gateway_state.json · /proc"})
     except (OSError, ValueError, TypeError, AttributeError):
         pass
-    if web_chat.ENABLED:
+    if auth.enabled():
         entries.append({"id": "web", "name": "Web / túnel", "status": "configured",
                         "detail": "Endpoint privado de prompts do dashboard habilitado. A disponibilidade externa do túnel não é monitorada aqui.",
                         "source": "dashboard · configuração do chat privado"})

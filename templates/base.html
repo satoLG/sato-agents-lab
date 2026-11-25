@@ -18,7 +18,8 @@
 {{ logo_filter() }}
 <header class="topbar">
   <a class="site-brand" href="/" aria-label="Sato Agents · início"><img src="{{ url_for('static', filename='sato-logo.png') }}" alt="Sato Agents" width="28" height="28" style="filter:url('#site-logo-ink') invert(1)"></a>
-  <div class="topbar-actions">{{ navigation('dashboard') }}</div>
+  <div class="topbar-actions">{{ navigation('dashboard') }}{% if session.get('web_chat_authenticated') and session.get('web_chat_csrf') %}
+    <form class="logout-form" method="post" action="/logout"><input type="hidden" name="csrf" value="{{ session.get('web_chat_csrf') }}"><button class="btn ghost" type="submit">Sair</button></form>{% endif %}</div>
 </header>
 {% block nav %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
