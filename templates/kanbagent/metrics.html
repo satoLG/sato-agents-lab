@@ -31,13 +31,13 @@
 <div class="kb-two">
   <section class="card" aria-labelledby="kb-stuck">
     <h2 id="kb-stuck">Parados há mais tempo</h2>
-    <ol class="kb-list">
+    <ol class="kb-list-plain">
       {% for c in m.parados[:10] %}<li><a href="{{ url_for('kanbagent.card_page', card_id=c.id) }}">{{ c.titulo }}</a> <span class="muted">{{ kb_labels[c.etapa_atual] }} · {{ c.parado_seconds|kb_duration }}</span></li>{% else %}<li class="muted">Nada parado.</li>{% endfor %}
     </ol>
   </section>
   <section class="card" aria-labelledby="kb-done">
     <h2 id="kb-done">Entregues</h2>
-    <ol class="kb-list">
+    <ol class="kb-list-plain">
       {% for c in m.entregues[:20] %}<li><a href="{{ url_for('kanbagent.card_page', card_id=c.id) }}">{{ c.titulo }}</a> <span class="muted">{{ c.entregue_em|kb_time }} · {{ c.total_seconds|kb_duration }} no total</span></li>{% else %}<li class="muted">Nenhuma entrega no período.</li>{% endfor %}
     </ol>
   </section>

@@ -19,7 +19,7 @@
 </details>
 
 {% for p in projects %}
-<section class="card kb-project">
+<section class="card kb-project" style="--hue: {{ (p.id * 67) % 360 }}">
   <header><h2>{{ p.nome }}</h2><span class="muted mono">{{ p.slug }}</span></header>
   {% if p.descricao %}<p>{{ p.descricao }}</p>{% endif %}
   <ul class="kb-links">

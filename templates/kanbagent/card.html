@@ -3,120 +3,122 @@
 {% set kb_page = 'board' %}
 {% block title %}{{ card.titulo }} · kanbagent{% endblock %}
 {% block kb_content %}
-<p><a href="{{ url_for('kanbagent.board') }}">← Quadro</a></p>
-<div class="kb-head">
-  <div>
-    <h1>{{ card.titulo }}</h1>
-    <p class="muted">
-      <span class="kb-stage" data-stage="{{ card.etapa_atual }}">{{ kb_labels[card.etapa_atual] }}</span>
-      há {{ card.na_etapa_desde|kb_since }}
-      {% if card.projeto %} · {{ card.projeto }}{% endif %}{% if card.repo %} · {{ card.repo }}{% endif %}
-    </p>
-  </div>
-  <div class="kb-total">
-    <span class="muted">Tempo total</span>
-    <strong>{{ card.total_seconds|kb_duration }}</strong>
-    <span class="muted">desde {{ card.criado_em|kb_time }}</span>
-  </div>
-</div>
+<article class="kb-detail card" aria-labelledby="kb-title">
+  <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro">✕</a>
+  <header class="kb-detail-head">
+    <h1 id="kb-title">{{ card.titulo }}</h1>
+    <p class="muted">na lista <span class="kb-stage" data-stage="{{ card.etapa_atual }}">{{ kb_labels[card.etapa_atual] }}</span> há {{ card.na_etapa_desde|kb_since }}</p>
+    <div class="kb-facts">
+      {% if card.projeto %}<div><span class="kb-fact-label">Projeto</span><span class="kb-label kb-label-text" style="--hue: {{ (card.project_id * 67) % 360 }}">{{ card.projeto }}</span></div>{% endif %}
+      {% if card.repo %}<div><span class="kb-fact-label">Repositório</span><span class="kb-chip">{{ card.repo }}</span></div>{% endif %}
+      <div><span class="kb-fact-label">Tempo total</span><span class="kb-chip">⏱ {{ card.total_seconds|kb_duration }}</span></div>
+      <div><span class="kb-fact-label">Criado</span><span class="kb-chip">{{ card.criado_em|kb_time }}</span></div>
+    </div>
+  </header>
 
-<section class="card kb-actions" aria-label="Mover card">
-  <h2>Próximo passo</h2>
-  {% if card.proximas %}
-  <div class="kb-buttons">
-    {% for to in card.proximas if to != 'descartado' and not (card.etapa_atual == 'revisao' and to == 'proposta') %}
-    <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
-      <input type="hidden" name="para" value="{{ to }}">
-      <button class="btn" type="submit">{% if card.etapa_atual == 'revisao' and to == 'aprovado' %}Aprovar{% else %}Mover para {{ kb_labels[to] }}{% endif %}</button>
-    </form>
-    {% endfor %}
-    {% if 'descartado' in card.proximas %}
-    <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
-      <input type="hidden" name="para" value="descartado">
-      <button class="btn ghost" type="submit">Descartar</button>
-    </form>
-    {% endif %}
-  </div>
-  {% if card.etapa_atual == 'revisao' %}
-  <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form kb-adjust">{{ ui.csrf() }}
-    <input type="hidden" name="para" value="proposta">
-    <label>Pedir ajuste <textarea name="texto" rows="3" required placeholder="O que mudar na proposta?"></textarea></label>
-    <button class="btn ghost" type="submit">Pedir ajuste</button>
-  </form>
-  {% endif %}
-  {% if card.etapa_atual in ('aprovado', 'execucao', 'revisao_codigo') %}
-  <p class="muted">Ligue a issue ou o PR abaixo: o sync com o GitHub move o card até "Entregue" sozinho, com as datas reais.</p>
-  {% endif %}
-  {% else %}
-  <p class="muted">Card encerrado.</p>
-  {% endif %}
-</section>
+  <div class="kb-detail-body">
+    <div class="kb-detail-main">
+      <section aria-labelledby="kb-idea">
+        <h2 id="kb-idea"><span aria-hidden="true">💡</span> Ideia original</h2>
+        <p class="kb-pre kb-box">{{ card.ideia_original }}</p>
+      </section>
 
-<section class="card" aria-labelledby="kb-durations">
-  <h2 id="kb-durations">Tempo por etapa</h2>
-  <ul class="kb-bars">
-    {% for stage in kb_stages if stage in card.durations %}
-    <li>
-      <span class="kb-bar-label">{{ kb_labels[stage] }}{% if stage == card.etapa_atual and stage not in ('entregue','descartado') %} <em>(agora)</em>{% endif %}</span>
-      <span class="kb-bar" data-stage="{{ stage }}"><span style="width: {{ (100 * card.durations[stage] / longest)|round(1) }}%"></span></span>
-      <span class="kb-bar-value">{{ card.durations[stage]|kb_duration }}</span>
-    </li>
-    {% endfor %}
-  </ul>
-  {% if card.ajustes %}<p class="muted">{{ card.ajustes }} volta(s) de ajuste.</p>{% endif %}
-</section>
+      <section aria-labelledby="kb-proposal">
+        <h2 id="kb-proposal"><span aria-hidden="true">≡</span> Proposta</h2>
+        {% if card.proposta %}<div class="kb-pre kb-box">{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
+        <details class="kb-inline-edit">
+          <summary class="btn ghost small">{% if card.proposta %}Editar proposta{% else %}Escrever proposta{% endif %}</summary>
+          <form method="post" action="{{ url_for('kanbagent.proposal_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
+            <textarea name="proposta" rows="10" required aria-label="Proposta">{{ card.proposta }}</textarea>
+            <button class="btn small" type="submit">Salvar proposta</button>
+          </form>
+        </details>
+      </section>
 
-<div class="kb-two">
-  <section class="card" aria-labelledby="kb-idea">
-    <h2 id="kb-idea">Ideia original</h2>
-    <p class="kb-pre">{{ card.ideia_original }}</p>
-  </section>
-  <section class="card" aria-labelledby="kb-proposal">
-    <h2 id="kb-proposal">Proposta</h2>
-    {% if card.proposta %}<div class="kb-pre">{{ card.proposta }}</div>{% else %}<p class="muted">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
-    <details>
-      <summary>{% if card.proposta %}Editar proposta{% else %}Escrever proposta{% endif %}</summary>
-      <form method="post" action="{{ url_for('kanbagent.proposal_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
-        <textarea name="proposta" rows="10" required>{{ card.proposta }}</textarea>
-        <button class="btn" type="submit">Salvar proposta</button>
+      <section aria-labelledby="kb-durations">
+        <h2 id="kb-durations"><span aria-hidden="true">⏱</span> Tempo por etapa</h2>
+        <ul class="kb-bars">
+          {% for stage in kb_stages if stage in card.durations %}
+          <li>
+            <span class="kb-bar-label">{{ kb_labels[stage] }}{% if stage == card.etapa_atual and stage not in ('entregue','descartado') %} <em>(agora)</em>{% endif %}</span>
+            <span class="kb-bar" data-stage="{{ stage }}"><span style="width: {{ (100 * card.durations[stage] / longest)|round(1) }}%"></span></span>
+            <span class="kb-bar-value">{{ card.durations[stage]|kb_duration }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if card.ajustes %}<p class="muted">{{ card.ajustes }} volta(s) de ajuste.</p>{% endif %}
+      </section>
+
+      <section aria-labelledby="kb-timeline">
+        <h2 id="kb-timeline"><span aria-hidden="true">☰</span> Atividade</h2>
+        <form method="post" action="{{ url_for('kanbagent.comment_form', card_id=card.id) }}" class="kb-form kb-comment">{{ ui.csrf() }}
+          <textarea name="texto" rows="2" required placeholder="Escrever um comentário…" aria-label="Comentário"></textarea>
+          <button class="btn small" type="submit">Comentar</button>
+        </form>
+        <ol class="kb-timeline">
+          {% for e in card.events|reverse %}
+          <li data-kind="{{ e.kind }}">
+            <span class="kb-avatar" data-who="{{ e.author }}" aria-hidden="true">{{ e.author[:1]|upper }}</span>
+            <div>
+              <p><strong>{{ e.author }}</strong>
+              {% if e.kind == 'stage_change' %}
+                {% if e.from_stage %}moveu de {{ kb_labels[e.from_stage] }} para{% else %}criou em{% endif %} <strong>{{ kb_labels[e.to_stage] }}</strong>
+              {% elif e.kind == 'comment' %}comentou
+              {% elif e.kind == 'link_added' %}ligou <a href="{{ e.text }}" rel="noopener" target="_blank">{{ e.text }}</a>
+              {% elif e.kind == 'proposal_updated' %}atualizou a proposta
+              {% endif %}</p>
+              <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
+              {% if e.text and e.kind in ('stage_change', 'comment') %}<p class="kb-pre kb-box">{{ e.text }}</p>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ol>
+      </section>
+    </div>
+
+    <aside class="kb-detail-side" aria-label="Ações">
+      <h2>Mover</h2>
+      {% if card.proximas %}
+      {% for to in card.proximas if to != 'descartado' and not (card.etapa_atual == 'revisao' and to == 'proposta') %}
+      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
+        <input type="hidden" name="para" value="{{ to }}">
+        <button class="btn" type="submit">{% if card.etapa_atual == 'revisao' and to == 'aprovado' %}✓ Aprovar{% else %}→ {{ kb_labels[to] }}{% endif %}</button>
       </form>
-    </details>
-  </section>
-</div>
-
-<section class="card" aria-labelledby="kb-links">
-  <h2 id="kb-links">Issues e PRs</h2>
-  {% if card.links %}
-  <ul class="kb-links">
-    {% for l in card.links %}<li><a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.repo }}{{ '#' }}{{ l.numero }}</a> <span class="kb-badge">{{ 'PR' if l.tipo == 'pr' else 'issue' }}</span>{% if l.estado %} <span class="kb-badge muted">{{ l.estado }}</span>{% endif %}</li>{% endfor %}
-  </ul>
-  {% endif %}
-  <form method="post" action="{{ url_for('kanbagent.link_form', card_id=card.id) }}" class="kb-form kb-inline">{{ ui.csrf() }}
-    <input name="url" type="url" required placeholder="https://github.com/owner/repo/issues/123" aria-label="URL da issue ou PR">
-    <button class="btn ghost" type="submit">Ligar</button>
-  </form>
-</section>
-
-<section class="card" aria-labelledby="kb-timeline">
-  <h2 id="kb-timeline">Linha do tempo</h2>
-  <ol class="kb-timeline">
-    {% for e in card.events|reverse %}
-    <li data-kind="{{ e.kind }}">
-      <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
-      <span class="kb-who">{{ e.author }}</span>
-      {% if e.kind == 'stage_change' %}
-        {% if e.from_stage %}{{ kb_labels[e.from_stage] }} → {% endif %}<strong>{{ kb_labels[e.to_stage] }}</strong>
-        {% if e.text %}<p class="kb-pre">{{ e.text }}</p>{% endif %}
-      {% elif e.kind == 'comment' %}comentou<p class="kb-pre">{{ e.text }}</p>
-      {% elif e.kind == 'link_added' %}ligou <a href="{{ e.text }}" rel="noopener" target="_blank">{{ e.text }}</a>
-      {% elif e.kind == 'proposal_updated' %}atualizou a proposta
+      {% endfor %}
+      {% if card.etapa_atual == 'revisao' %}
+      <details class="kb-inline-edit">
+        <summary class="btn ghost">↺ Pedir ajuste</summary>
+        <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
+          <input type="hidden" name="para" value="proposta">
+          <textarea name="texto" rows="3" required placeholder="O que mudar na proposta?" aria-label="Pedir ajuste"></textarea>
+          <button class="btn small" type="submit">Pedir ajuste</button>
+        </form>
+      </details>
       {% endif %}
-    </li>
-    {% endfor %}
-  </ol>
-  <form method="post" action="{{ url_for('kanbagent.comment_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
-    <label>Comentário <textarea name="texto" rows="2" required></textarea></label>
-    <button class="btn ghost" type="submit">Comentar</button>
-  </form>
-</section>
+      {% if 'descartado' in card.proximas %}
+      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
+        <input type="hidden" name="para" value="descartado">
+        <button class="btn danger" type="submit">🗑 Descartar</button>
+      </form>
+      {% endif %}
+      {% if card.etapa_atual in ('aprovado', 'execucao', 'revisao_codigo') %}
+      <p class="muted kb-hint">Ligue a issue ou o PR: o sync com o GitHub move o card até "Entregue" sozinho, com as datas reais.</p>
+      {% endif %}
+      {% else %}
+      <p class="muted">Card encerrado.</p>
+      {% endif %}
+
+      <h2>Issues e PRs</h2>
+      {% if card.links %}
+      <ul class="kb-links">
+        {% for l in card.links %}<li><a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.repo }}{{ '#' }}{{ l.numero }}</a> <span class="kb-badge">{{ 'PR' if l.tipo == 'pr' else 'issue' }}</span>{% if l.estado %} <span class="kb-badge">{{ l.estado }}</span>{% endif %}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <form method="post" action="{{ url_for('kanbagent.link_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
+        <input name="url" type="url" required placeholder="https://github.com/owner/repo/issues/123" aria-label="URL da issue ou PR">
+        <button class="btn ghost small" type="submit">🔗 Ligar</button>
+      </form>
+    </aside>
+  </div>
+</article>
 {% endblock %}

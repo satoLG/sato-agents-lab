@@ -1,3 +1,8 @@
+import {press as buttonPress, release as buttonRelease, preload as preloadButtons} from './button-sounds.js';
+
+// Cliques de botão usam as gravações de button-sounds (press/release); o resto segue sintetizado.
+const BUTTON_SOUNDS={tap:'hi75-soft',click:'hi75-soft',thunk:'hi75-medium',toggle:'hi75-knob'};
+
 // Short synthesized robot syllables keep the entry scene self-contained.
 // Autoplay is attempted once, then retried on a gesture if the browser blocks it.
 export function createCompanionAudio(onState){
@@ -72,8 +77,10 @@ export function createCompanionAudio(onState){
   if(recent.some(time=>Math.abs(time-at)<(kind==='key'?.018:.025)))return;
   uiRecent.set(kind,[...recent.filter(time=>time>context.currentTime-.2),at]);recipe(at,pitch);
  }
- function ui(kind,{pitch=1,delay=0}={}){
+ function ui(kind,{pitch=1,delay=0,phase='down'}={}){
   if(!enabled||disposed||document.hidden)return;
+  if(BUTTON_SOUNDS[kind]){(phase==='up'?buttonRelease:buttonPress)(BUTTON_SOUNDS[kind]);return;}
+  if(phase==='up')return;
   if(!context||context.state!=='running'){pendingUi={kind,pitch,delay,at:performance.now()};resume();return;}
   playUi(kind,pitch,delay);
  }
@@ -87,6 +94,7 @@ export function createCompanionAudio(onState){
   if(!enabled||disposed||!init())return;context.resume().then(()=>{if(disposed)return;onState?.(enabled&&context.state==='running');if(pending&&play(pending))pending=null;if(pendingUi&&performance.now()-pendingUi.at<300&&context.state==='running')playUi(pendingUi.kind,pendingUi.pitch,0);pendingUi=null;ambient();}).catch(()=>onState?.(false));
  }
  function gesture(){if(pending&&enabled)resume();}
+ preloadButtons(Object.values(BUTTON_SOUNDS));
  document.addEventListener('pointerdown',gesture);document.addEventListener('keydown',gesture);
  function visibility(){if(!context)return;if(document.hidden){revision++;stopAmbient();stopTyping();context.suspend();}else if(enabled)resume();}
  document.addEventListener('visibilitychange',visibility);

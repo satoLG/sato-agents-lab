@@ -64,7 +64,7 @@ def test_empty_board_renders(client):
     response = client.get("/kanbagent")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Nova ideia" in html and "Ideia" in html and "kanbagent.css" in html
+    assert "Adicionar ideia" in html and "Ideia" in html and "kanbagent.css" in html
 
 
 def test_full_flow_through_the_pages(client):
@@ -80,7 +80,7 @@ def test_full_flow_through_the_pages(client):
     card_id = int(re.search(r"/card/(\d+)", response.headers["Location"]).group(1))
 
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
-    assert "quero ver o RAG" in page and "Mover para Proposta" in page
+    assert "quero ver o RAG" in page and "→ Proposta" in page
 
     form(client, f"/kanbagent/card/{card_id}/proposta", proposta="Fazer X e Y")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
