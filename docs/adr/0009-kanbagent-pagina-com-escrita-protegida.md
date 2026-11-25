@@ -1,6 +1,6 @@
 # 0009. Hospedar o kanbagent no site, com banco próprio e escrita protegida
 
-- Status: Aceito
+- Status: Aceito; parte de acesso substituída por [0010](0010-login-do-site-protege-dashboard-e-kanbagent.md)
 - Data: 2026-11-24
 
 ## Contexto
