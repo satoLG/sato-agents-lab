@@ -19,7 +19,7 @@ STAGES = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codig
 TERMINAL = {"entregue", "descartado"}
 MAIN_PATH = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue")
 EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated")
-AUTHORS = ("sato", "hermes", "github-sync")
+AUTHORS = ("sato", "hermes", "github-sync", "claude")
 
 _SCHEMA = (
     """CREATE TABLE IF NOT EXISTS projects (
@@ -133,6 +133,9 @@ def _connection():
             conn.execute("ALTER TABLE card_links ADD COLUMN tipo TEXT NOT NULL DEFAULT 'issue'")
         if "atualizado_em" not in link_columns:
             conn.execute("ALTER TABLE card_links ADD COLUMN atualizado_em TEXT")
+        job_columns = {column[1] for column in conn.execute("PRAGMA table_info(agent_jobs)")}
+        if "heartbeat_at" not in job_columns:
+            conn.execute("ALTER TABLE agent_jobs ADD COLUMN heartbeat_at TEXT")
     if DB_PATH.exists():
         os.chmod(DB_PATH, 0o600)
     return conn
@@ -226,7 +229,9 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         if not can_transition(from_stage, to_stage):
             raise InvalidTransition(f"Transição inválida: {from_stage} → {to_stage}.")
         if author == "sato" and _open_job(conn, card_id):
-            raise InvalidTransition("O Hermes está escrevendo a proposta deste card; espere terminar.")
+            raise InvalidTransition(LOCKED)
+        if to_stage == "execucao" and author == "sato" and not row["repo_id"]:
+            raise InvalidTransition("Ligue o card a um repositório antes de executar.")
         if (from_stage, to_stage) in NEEDS_TEXT and not text:
             raise InvalidTransition(f"Voltar de {from_stage} para {to_stage} exige comentário.")
         # Proposta vazia não vai para revisão (o sync com o GitHub pula etapas e fica de fora).
@@ -236,35 +241,44 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         occurred = _insert_event(conn, card_id, "stage_change", author, from_stage=from_stage,
                                  to_stage=to_stage, text=text or None, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET etapa_atual=?, atualizado_em=? WHERE id=?", (to_stage, occurred, card_id))
-        if from_stage == "proposta":
+        if from_stage in JOB_STAGES:
             conn.execute("UPDATE agent_jobs SET status='done', finished_at=? WHERE card_id=?"
                          " AND status IN ('queued','running')", (occurred, card_id))
-        if to_stage == "proposta" and author == "sato":
-            return _queue_job(conn, card_id, occurred)
+        if to_stage in JOB_STAGES and author == "sato":
+            return _queue_job(conn, card_id, occurred, to_stage)
         return None
 
 
 # --- pedidos ao Hermes ------------------------------------------------------------------------------
 
-JOB_STALE = timedelta(minutes=20)   # pedido rodando há mais que isso morreu (deploy, queda)
-STALE_ERROR = "O Hermes parou no meio (tempo esgotado)."
+# Etapa → tipo de pedido: entrar nela (pelo Sato) pede ao agente; sair dela fecha o pedido.
+# `proposta`: o Hermes escreve a proposta. `execucao`: o Claude planeja e executa (kanbagent_exec.py).
+JOB_STAGES = ("proposta", "execucao")
+# Pedido rodando sem sinal de vida (progresso) há mais que isso morreu (deploy, queda).
+JOB_STALE = timedelta(minutes=20)
+STALE_ERROR = "O agente parou no meio (sem sinal há 20 min)."
+LOCKED = "Um agente está trabalhando neste card; espere terminar."
 
 
-def _queue_job(conn, card_id, when=None):
+def _queue_job(conn, card_id, when=None, kind="proposta"):
     cursor = conn.execute("INSERT INTO agent_jobs (card_id, kind, status, requested_at) VALUES (?,?,?,?)",
-                          (card_id, "proposta", "queued", _iso(when)))
+                          (card_id, kind, "queued", _iso(when)))
     return cursor.lastrowid
 
 
+def _alive_at(row):
+    return row["heartbeat_at"] or row["started_at"]
+
+
 def _stale(row, now=None):
-    return row["status"] == "running" and bool(row["started_at"]) \
-        and _parse(row["started_at"]) < _parse(_iso(now)) - JOB_STALE
+    return row["status"] == "running" and bool(_alive_at(row)) \
+        and _parse(_alive_at(row)) < _parse(_iso(now)) - JOB_STALE
 
 
 def _expire_stale(conn, now=None):
     limit = (_parse(_iso(now)) - JOB_STALE).isoformat(timespec="seconds")
     conn.execute("UPDATE agent_jobs SET status='failed', finished_at=?, error=?"
-                 " WHERE status='running' AND started_at < ?", (_iso(now), STALE_ERROR, limit))
+                 " WHERE status='running' AND COALESCE(heartbeat_at, started_at) < ?", (_iso(now), STALE_ERROR, limit))
 
 
 def _open_job(conn, card_id):
@@ -273,34 +287,40 @@ def _open_job(conn, card_id):
     return None if row is None or _stale(row) else row
 
 
-def request_proposal(card_id):
-    """Pede (de novo) ao Hermes a proposta de um card que está em `proposta`."""
+def request_agent(card_id):
+    """Pede de novo ao agente o trabalho da etapa atual (proposta ou execução) depois de uma falha."""
     with closing(_connection()) as conn, _transaction(conn):
         row = _card(conn, card_id)
-        if row["etapa_atual"] != "proposta":
-            raise InvalidTransition("Só cards em Proposta pedem proposta ao Hermes.")
+        if row["etapa_atual"] not in JOB_STAGES:
+            raise InvalidTransition("Só cards em Proposta ou Em execução pedem trabalho a um agente.")
         _expire_stale(conn)
         if _open_job(conn, card_id):
-            raise InvalidTransition("O Hermes já está escrevendo a proposta deste card.")
-        return _queue_job(conn, card_id)
+            raise InvalidTransition("Um agente já está trabalhando neste card.")
+        return _queue_job(conn, card_id, kind=row["etapa_atual"])
 
 
-def claim_job(now=None):
-    """O worker pega o pedido mais antigo da fila (e marca como morto o que travou)."""
+request_proposal = request_agent
+
+
+def claim_job(kind="proposta", now=None):
+    """O worker de `kind` pega o pedido mais antigo da fila (e marca como morto o que travou)."""
     with closing(_connection()) as conn, _transaction(conn):
         _expire_stale(conn, now)
-        row = conn.execute("SELECT * FROM agent_jobs WHERE status='queued' ORDER BY id LIMIT 1").fetchone()
+        row = conn.execute("SELECT * FROM agent_jobs WHERE status='queued' AND kind=? ORDER BY id LIMIT 1",
+                           (kind,)).fetchone()
         if row is None:
             return None
         started = _iso(now)
-        conn.execute("UPDATE agent_jobs SET status='running', started_at=?, progress='começando' WHERE id=?",
-                     (started, row["id"]))
-        return dict(row, status="running", started_at=started)
+        conn.execute("UPDATE agent_jobs SET status='running', started_at=?, heartbeat_at=?, progress='começando'"
+                     " WHERE id=?", (started, started, row["id"]))
+        return dict(row, status="running", started_at=started, heartbeat_at=started)
 
 
 def job_progress(job_id, text):
+    """Passo atual do agente; também é o sinal de vida do pedido."""
     with closing(_connection()) as conn, _transaction(conn):
-        conn.execute("UPDATE agent_jobs SET progress=? WHERE id=? AND status='running'", (str(text)[:200], job_id))
+        conn.execute("UPDATE agent_jobs SET progress=?, heartbeat_at=? WHERE id=? AND status='running'",
+                     (str(text)[:200], _now(), job_id))
 
 
 def finish_job(job_id, error=None, now=None):
@@ -477,7 +497,7 @@ def update_proposal(card_id, proposta, author, occurred_at=None):
     with closing(_connection()) as conn, _transaction(conn):
         _card(conn, card_id)
         if author == "sato" and _open_job(conn, card_id):
-            raise InvalidTransition("O Hermes está escrevendo a proposta deste card; espere terminar.")
+            raise InvalidTransition(LOCKED)
         occurred = _insert_event(conn, card_id, "proposal_updated", author, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET proposta=?, atualizado_em=? WHERE id=?", (proposta, occurred, card_id))
 
@@ -537,6 +557,9 @@ def advance_to(card_id, target, author, occurred_at=None, text=None):
     with closing(_connection()) as conn:
         current = _card(conn, card_id)["etapa_atual"]
         last = _entered_current(conn, card_id)
+        busy = _open_job(conn, card_id) is not None
+    if busy:   # o agente está no meio (ex.: reexecutando depois de reprovado); ele mesmo move o card
+        return moved
     if current not in MAIN_PATH or MAIN_PATH.index(current) >= MAIN_PATH.index(target):
         return moved
     when = _parse(_iso(occurred_at))

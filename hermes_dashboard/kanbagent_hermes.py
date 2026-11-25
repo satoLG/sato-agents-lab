@@ -51,15 +51,16 @@ def describe(event):
 
 
 @contextmanager
-def single_worker():
+def single_worker(lock_path=None):
     """Só um worker por vez; os outros saem na hora (o que está rodando esvazia a fila)."""
+    lock_path = lock_path or LOCK_PATH
     try:
         import fcntl
     except ImportError:   # Windows (desenvolvimento): sem trava
         yield True
         return
-    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOCK_PATH, "w") as handle:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as handle:
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
@@ -133,16 +134,16 @@ def drain(runner=run_hermes):
     with single_worker() as mine:
         if not mine:
             return 0
-        while (job := kb.claim_job()) is not None:
+        while (job := kb.claim_job("proposta")) is not None:
             handle(job, runner)
             done += 1
     return done
 
 
-def spawn():
+def spawn(module="hermes_dashboard.kanbagent_hermes"):
     """Dispara o worker fora do processo do site (unidade própria do systemd quando dá, para não
     morrer junto num restart); sem systemd, um processo solto. Nunca bloqueia a requisição."""
-    worker = [sys.executable, "-m", "hermes_dashboard.kanbagent_hermes"]
+    worker = [sys.executable, "-m", module]
     root = str(Path(__file__).resolve().parent.parent)
     options = dict(cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:

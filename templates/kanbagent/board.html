@@ -32,8 +32,9 @@
           {% if c.repo %}<span class="kb-meta">{{ c.repo }}</span>{% endif %}
           <span class="kb-badges">
             <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">⏱ {{ c.na_etapa_desde|kb_since }}</span>
-            {% if locked %}<span class="kb-badge kb-badge-wait" title="O Hermes está escrevendo a proposta"><span class="kb-spinner" aria-hidden="true"></span> propondo… <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
-            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ Hermes falhou</span>
+            {% set exec_job = job and job.kind == 'execucao' %}
+            {% if locked %}<span class="kb-badge kb-badge-wait" title="{{ 'O Claude está executando' if exec_job else 'O Hermes está escrevendo a proposta' }}"><span class="kb-spinner" aria-hidden="true"></span> {{ 'executando…' if exec_job else 'propondo…' }} <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
+            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ {{ 'Execução falhou' if exec_job else 'Hermes falhou' }}</span>
             {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">≡</span>{% endif %}
             {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste">↺ {{ c.ajustes }}</span>{% endif %}
             {% if c.links %}<span class="kb-badge" title="Issues e PRs ligados">🔗 {{ c.links }}</span>{% endif %}

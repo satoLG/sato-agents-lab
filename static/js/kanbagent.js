@@ -260,11 +260,12 @@ function setupDrag(board) {
     badges?.querySelector('.kb-badge-wait')?.remove();
     badges?.querySelector('.kb-badge-fail')?.remove();
     if (['queued', 'running'].includes(data.job?.status)) {
-      // Foi pedir proposta ao Hermes: card travado até ele terminar, com o passo atual ao vivo.
+      // Pediu trabalho a um agente: card travado até ele terminar, com o passo atual ao vivo.
+      const exec = data.job.kind === 'execucao';
       card.dataset.next = '';
       card.dataset.watchJob = card.dataset.card;
       card.classList.add('kb-locked');
-      badges?.insertAdjacentHTML('afterbegin', '<span class="kb-badge kb-badge-wait" title="O Hermes está escrevendo a proposta"><span class="kb-spinner" aria-hidden="true"></span> propondo… <span data-job-progress>na fila</span></span>');
+      badges?.insertAdjacentHTML('afterbegin', `<span class="kb-badge kb-badge-wait" title="${exec ? 'O Claude está executando' : 'O Hermes está escrevendo a proposta'}"><span class="kb-spinner" aria-hidden="true"></span> ${exec ? 'executando…' : 'propondo…'} <span data-job-progress>na fila</span></span>`);
       watchJobs();
     }
     if (data.ajustes) {

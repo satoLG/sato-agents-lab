@@ -268,3 +268,24 @@ def test_sync_ignores_cards_before_approval_and_survives_errors(vm):
     assert report["links"] == 1 and len(report["errors"]) == 1
     assert kb.card(early)["etapa_atual"] == "ideia"
     assert kb.card(late)["etapa_atual"] == "aprovado"
+
+
+def test_execution_job_shows_executing_and_kicks_the_exec_worker(client, monkeypatch):
+    from hermes_dashboard import kanbagent_exec, kanbagent_hermes
+    kicked = []
+    monkeypatch.setenv("KANBAGENT_HERMES_WORKER", "1")
+    monkeypatch.setattr(kanbagent_exec, "spawn", lambda: kicked.append("exec"))
+    monkeypatch.setattr(kanbagent_hermes, "spawn", lambda: kicked.append("hermes"))
+    project = kb.create_project("app", "App")
+    card_id = kb.create_card("T", "i", "sato", project_id=project, repo_id=kb.add_repo_to_project(project, "sato/app"))
+    kb.change_stage(card_id, "proposta", "hermes")
+    kb.update_proposal(card_id, "p", "hermes")
+    kb.change_stage(card_id, "revisao", "hermes")
+    kb.change_stage(card_id, "aprovado", "sato")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="execucao")
+    assert kicked == ["exec"]
+    kb.job_progress(kb.claim_job("execucao")["id"], "tarefa 1/3 · haiku · tentativa 1: botão")
+    board = client.get("/kanbagent").get_data(as_text=True)
+    assert "executando…" in board and "tarefa 1/3" in board
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "O Claude está executando" in page

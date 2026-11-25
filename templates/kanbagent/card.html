@@ -23,12 +23,12 @@
   {% if locked %}
   <p class="kb-working" role="status" aria-live="polite">
     <span class="kb-spinner" aria-hidden="true"></span>
-    <span><strong>O Hermes está escrevendo a proposta.</strong> O card fica travado até ele terminar; esta página atualiza sozinha.
+    <span><strong>{% if job.kind == 'execucao' %}O Claude está executando o card (plano em mini tarefas, PR no fim).{% else %}O Hermes está escrevendo a proposta.{% endif %}</strong> O card fica travado até terminar; esta página atualiza sozinha.
     <span class="kb-working-step" data-job-progress>{{ job.progress or ('na fila' if job.status == 'queued' else 'começando') }}</span></span>
   </p>
   {% elif failed %}
   <div class="kb-failed" role="alert">
-    <p><strong>O Hermes não conseguiu escrever a proposta.</strong> {{ job.error }}</p>
+    <p><strong>{% if job.kind == 'execucao' %}A execução não chegou ao fim.{% else %}O Hermes não conseguiu escrever a proposta.{% endif %}</strong> {{ job.error }}</p>
     <form method="post" action="{{ url_for('kanbagent.repropose_form', card_id=card.id) }}">{{ ui.csrf() }}
       <button class="btn small" type="submit">↻ Pedir de novo</button>
     </form>
