@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/kanbagent.css') }}">{% endblock %}
+{% block nav %}
+<nav class="kb-nav" aria-label="kanbagent">
+  <a href="{{ url_for('kanbagent.board') }}" {% if kb_page == 'board' %}aria-current="page"{% endif %}>Quadro</a>
+  <a href="{{ url_for('kanbagent.metrics_page') }}" {% if kb_page == 'metrics' %}aria-current="page"{% endif %}>Métricas</a>
+  <a href="{{ url_for('kanbagent.projects_page') }}" {% if kb_page == 'projects' %}aria-current="page"{% endif %}>Projetos</a>
+  <a class="kb-nav-out" href="/dashboard">Dashboard</a>
+</nav>
+{% endblock %}
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}
+<p class="notice kb-flash {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+{% endfor %}{% endwith %}
+{% block kb_content %}{% endblock %}
+{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static', filename='js/kanbagent.js') }}"></script>{% endblock %}

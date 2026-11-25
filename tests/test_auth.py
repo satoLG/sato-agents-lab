@@ -44,7 +44,8 @@ def _sample_url(rule):
     values = {}
     for name in rule.arguments:
         converter = rule._converters[name]
-        values[name] = "2026-01-01" if name == "date" else ("x/y.js" if "path" in type(converter).__name__.lower() else "x")
+        kind = type(converter).__name__.lower()
+        values[name] = "2026-01-01" if name == "date" else ("x/y.js" if "path" in kind else ("1" if "integer" in kind else "x"))
     url = rule.rule
     for name, value in values.items():
         url = re.sub(r"<(?:[^:<>]+:)?" + name + ">", value, url)

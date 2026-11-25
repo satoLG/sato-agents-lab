@@ -1,0 +1,56 @@
+{% extends "kanbagent/_layout.html" %}
+{% import "kanbagent/_macros.html" as ui %}
+{% set kb_page = 'board' %}
+{% block title %}Quadro · kanbagent{% endblock %}
+{% block kb_content %}
+<div class="kb-head">
+  <div>
+    <h1>kanbagent</h1>
+    <p class="muted">Da ideia à entrega, com o tempo de cada etapa.</p>
+  </div>
+  <form method="post" action="{{ url_for('kanbagent.sync_form') }}">{{ ui.csrf() }}<button class="btn ghost" type="submit">Sincronizar GitHub</button></form>
+</div>
+
+{{ ui.filters(projects, filters) }}
+
+<details class="card kb-new" {% if not columns.values()|sum(start=[]) %}open{% endif %}>
+  <summary>Nova ideia</summary>
+  <form method="post" action="{{ url_for('kanbagent.create_card_form') }}" class="kb-form">
+    {{ ui.csrf() }}
+    <label>Título <input name="titulo" maxlength="200" required placeholder="Ex.: página de métricas do RAG"></label>
+    <label>Ideia <textarea name="ideia" rows="4" required placeholder="Escreva solto, do seu jeito. O texto original nunca é alterado."></textarea></label>
+    <div class="kb-row">
+      <label>Projeto {{ ui.project_select(projects, selected=filters.project) }}</label>
+      <label>Repositório {{ ui.repo_select(projects) }}</label>
+    </div>
+    <button class="btn" type="submit">Anotar ideia</button>
+  </form>
+</details>
+
+<div class="kb-board" role="list" aria-label="Etapas">
+  {% for stage in kb_stages if stage != 'descartado' or show_discarded %}
+  {% set items = columns[stage] %}
+  <section class="kb-col" role="listitem" aria-labelledby="col-{{ stage }}" data-stage="{{ stage }}">
+    <header><h2 id="col-{{ stage }}">{{ kb_labels[stage] }}</h2><span class="kb-count">{{ items|length }}</span></header>
+    {% for c in items %}
+    <a class="kb-card" href="{{ url_for('kanbagent.card_page', card_id=c.id) }}">
+      <strong>{{ c.titulo }}</strong>
+      {% if c.projeto or c.repo %}<span class="kb-meta">{{ c.projeto or '' }}{% if c.projeto and c.repo %} · {% endif %}{{ c.repo or '' }}</span>{% endif %}
+      <span class="kb-time" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">⏱ {{ c.na_etapa_desde|kb_since }} nesta etapa</span>
+      <span class="kb-badges">
+        {% if c.ajustes %}<span class="kb-badge">↺ {{ c.ajustes }}</span>{% endif %}
+        {% if c.links %}<span class="kb-badge">🔗 {{ c.links }}</span>{% endif %}
+        <span class="kb-badge muted">criado {{ c.criado_em|kb_since }} atrás</span>
+      </span>
+    </a>
+    {% else %}
+    <p class="kb-empty">—</p>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+<p class="muted kb-foot">
+  {% if show_discarded %}<a href="{{ url_for('kanbagent.board', projeto=filters.project, repo=filters.repo) }}">Esconder descartados</a>
+  {% else %}<a href="{{ url_for('kanbagent.board', projeto=filters.project, repo=filters.repo, descartados=1) }}">Mostrar descartados ({{ columns['descartado']|length }})</a>{% endif %}
+</p>
+{% endblock %}

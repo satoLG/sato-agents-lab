@@ -53,17 +53,22 @@ Tempo corrido por etapa e total (ideia → entregue); por projeto e repositório
 onde os cards ficam parados, entregues no período, voltas de ajuste. Esforço real (tempo ativo) fica
 fora da primeira versão.
 
+## O que existe
+
+- Páginas (login do site): `/kanbagent` (quadro com filtros por projeto/repo e "Nova ideia"),
+  `/kanbagent/card/<id>` (ideia, proposta editável, aprovar / pedir ajuste / descartar, links do GitHub,
+  linha do tempo e tempo por etapa), `/kanbagent/metricas`, `/kanbagent/projetos`. Funciona sem JS;
+  `static/js/kanbagent.js` só adiciona conforto (filtro automático, confirmação de descarte).
+- API JSON em `/kanbagent/api/...` (`projects`, `cards`, `cards/<id>`, `cards/<id>/proposal|stage|comments|links`,
+  `metrics`, `sync`). Aceita a sessão do site (com `X-Chat-CSRF`) ou `Authorization: Bearer
+  $KANBAGENT_API_TOKEN`; sem token configurado no servidor, a via por token fica fechada (503). Pelo
+  token, o autor registrado é `hermes`.
+- Sync: `python -m hermes_dashboard.kanbagent_sync` (cron) ou o botão "Sincronizar GitHub". Só mexe em
+  cards de `aprovado` em diante, usa as datas do GitHub e pode rodar quantas vezes quiser.
+
 ## Ordem de construção
 
-Uma issue por vez para o worker do Claude; a próxima só depois do merge da anterior.
-
-1. Módulo `hermes_dashboard/kanbagent.py`: banco, migrações, transições, testes.
-2. API para o Hermes (`/kanbagent/api/...`) com token.
-3. Página `/kanbagent` (HTMX): colunas, filtros por projeto/repo, criar card, aprovar, pedir ajuste,
-   descartar.
-4. Detalhe do card e linha do tempo com tempos por etapa.
-5. Sync com o GitHub (issues/PRs → `execucao`, `revisao_codigo`, `entregue`).
-6. Métricas por projeto/repositório.
+Feito: módulo de domínio, API com token, página com quadro/detalhe/métricas/projetos e sync.
 
 Fora deste repo (no Hermes): skill "anota" (Telegram → card em `ideia`) e skill de proposta do Sato
 Agent (lê card + repos + `estilo-sato.md`, escreve em pt-BR, move para `revisao`). Acesso: o login que o

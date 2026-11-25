@@ -1,0 +1,211 @@
+"""Tela e API do kanbagent (ADR 0009/0010): login do site nas páginas, token Bearer na API."""
+import re
+
+import pytest
+
+from hermes_dashboard import kanbagent as kb
+from hermes_dashboard import kanbagent_sync
+
+TOKEN = "token-de-teste-do-kanbagent"
+
+
+@pytest.fixture
+def api(vm, site_login, monkeypatch):
+    """Cliente sem sessão que fala com a API usando o token do Sato Agent."""
+    import app as app_module
+    monkeypatch.setenv("KANBAGENT_API_TOKEN", TOKEN)
+    client = app_module.app.test_client()
+    client.headers = {"Authorization": f"Bearer {TOKEN}"}
+    return client
+
+
+def form(client, target, /, **data):
+    return client.post(target, data={"csrf": client.csrf, **data})
+
+
+# --- acesso ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("path", ["/kanbagent", "/kanbagent/metricas", "/kanbagent/projetos"])
+def test_pages_require_site_login(anonymous, path):
+    response = anonymous.get(path)
+    assert response.status_code == 302
+    assert response.headers["Location"].startswith("/login?next=/kanbagent")
+
+
+def test_api_without_session_or_token_is_401(anonymous):
+    assert anonymous.get("/kanbagent/api/cards").status_code == 401
+
+
+def test_api_with_wrong_token_is_401(api):
+    response = api.get("/kanbagent/api/cards", headers={"Authorization": "Bearer errado"})
+    assert response.status_code == 401
+
+
+def test_api_token_unset_keeps_api_closed(anonymous, monkeypatch):
+    monkeypatch.delenv("KANBAGENT_API_TOKEN", raising=False)
+    response = anonymous.get("/kanbagent/api/cards", headers={"Authorization": "Bearer qualquer"})
+    assert response.status_code == 503
+
+
+def test_bearer_does_not_open_pages(api):
+    response = api.get("/kanbagent", headers=api.headers)
+    assert response.status_code == 302
+
+
+def test_form_post_without_csrf_is_refused(client):
+    response = client.post("/kanbagent/cards", data={"titulo": "x", "ideia": "y"})
+    assert response.status_code == 403
+    assert kb.cards() == []
+
+
+# --- páginas --------------------------------------------------------------------------------------
+
+def test_empty_board_renders(client):
+    response = client.get("/kanbagent")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Nova ideia" in html and "Ideia" in html and "kanbagent.css" in html
+
+
+def test_full_flow_through_the_pages(client):
+    response = form(client, "/kanbagent/projetos", nome="Sato Agents", slug="sato-agents",
+                    repos="satoLG/sato-agents-lab, satoLG/outro")
+    assert response.status_code == 303
+    project = kb.project_by_slug("sato-agents")
+    assert sorted(r["full_name"] for r in kb.projects()[0]["repos"]) == ["satoLG/outro", "satoLG/sato-agents-lab"]
+
+    response = form(client, "/kanbagent/cards", titulo="Métricas do RAG", ideia="quero ver o RAG",
+                    projeto=str(project))
+    assert response.status_code == 303
+    card_id = int(re.search(r"/card/(\d+)", response.headers["Location"]).group(1))
+
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "quero ver o RAG" in page and "Mover para Proposta" in page
+
+    form(client, f"/kanbagent/card/{card_id}/proposta", proposta="Fazer X e Y")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="revisao")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Aprovar" in page and "Pedir ajuste" in page
+
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta", texto="menos escopo")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="revisao")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="aprovado")
+    form(client, f"/kanbagent/card/{card_id}/comentario", texto="bora")
+    form(client, f"/kanbagent/card/{card_id}/link", url="https://github.com/satoLG/sato-agents-lab/issues/42")
+
+    item = kb.card(card_id)
+    assert item["etapa_atual"] == "aprovado"
+    assert item["ajustes"] == 1
+    assert item["proposta"] == "Fazer X e Y"
+    assert [l["numero"] for l in item["links"]] == [42]
+
+    for path in ("/kanbagent", f"/kanbagent?projeto={project}", "/kanbagent?descartados=1",
+                 "/kanbagent/metricas?dias=7", "/kanbagent/projetos", f"/kanbagent/card/{card_id}"):
+        assert client.get(path).status_code == 200, path
+
+
+def test_adjust_requires_text(client):
+    card_id = kb.create_card("T", "i", "sato")
+    for stage in ("proposta", "revisao"):
+        kb.change_stage(card_id, stage, "hermes")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
+    assert kb.card(card_id)["etapa_atual"] == "revisao"
+
+
+def test_invalid_transition_flashes_and_keeps_stage(client):
+    card_id = kb.create_card("T", "i", "sato")
+    response = form(client, f"/kanbagent/card/{card_id}/etapa", para="entregue")
+    assert response.status_code == 303
+    assert kb.card(card_id)["etapa_atual"] == "ideia"
+    assert "Transição inválida" in client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+
+
+def test_missing_card_is_404(client):
+    assert client.get("/kanbagent/card/999").status_code == 404
+
+
+def test_html_is_escaped(client):
+    card_id = kb.create_card("<script>x</script>", "<b>oi</b>", "sato")
+    html = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "<script>x</script>" not in html and "&lt;script&gt;" in html
+
+
+# --- API do Sato Agent ----------------------------------------------------------------------------
+
+def test_api_flow_with_token(api):
+    h = api.headers
+    assert api.post("/kanbagent/api/projects", json={"slug": "lab", "nome": "Lab",
+                                                     "repos": ["satoLG/sato-agents-lab"]}, headers=h).status_code == 201
+    response = api.post("/kanbagent/api/cards", json={"titulo": "Ideia", "ideia": "texto cru",
+                                                      "projeto": "lab"}, headers=h)
+    assert response.status_code == 201
+    card_id = response.get_json()["id"]
+
+    response = api.post(f"/kanbagent/api/cards/{card_id}/proposal",
+                        json={"proposta": "Plano", "revisar": True}, headers=h)
+    assert response.status_code == 200
+    item = api.get(f"/kanbagent/api/cards/{card_id}", headers=h).get_json()
+    assert item["etapa_atual"] == "revisao"
+    assert item["proposta"] == "Plano"
+    assert {e["author"] for e in item["events"]} == {"hermes"}
+
+    response = api.post(f"/kanbagent/api/cards/{card_id}/stage", json={"para": "entregue"}, headers=h)
+    assert response.status_code == 409
+
+    listed = api.get("/kanbagent/api/cards?projeto=lab", headers=h).get_json()
+    assert [c["id"] for c in listed["cards"]] == [card_id]
+    assert api.get("/kanbagent/api/metrics?dias=7", headers=h).status_code == 200
+    assert api.get("/kanbagent/api/cards/999", headers=h).status_code == 404
+
+
+def test_api_with_session_needs_csrf_header(client):
+    assert client.post("/kanbagent/api/cards", json={"titulo": "a", "ideia": "b"}).status_code == 403
+    response = client.post("/kanbagent/api/cards", json={"titulo": "a", "ideia": "b"},
+                           headers={"X-Chat-CSRF": client.csrf})
+    assert response.status_code == 201
+    assert kb.card(response.get_json()["id"])["events"][0]["author"] == "sato"
+
+
+# --- sync com o GitHub (fetcher falso) ------------------------------------------------------------
+
+def test_sync_moves_approved_card_to_delivered(vm):
+    card_id = kb.create_card("T", "i", "sato", occurred_at="2026-01-01T00:00:00Z")
+    for stage, when in (("proposta", "2026-01-02T00:00:00Z"), ("revisao", "2026-01-03T00:00:00Z"),
+                        ("aprovado", "2026-01-04T00:00:00Z")):
+        kb.change_stage(card_id, stage, "sato", occurred_at=when)
+    kb.add_link(card_id, "https://github.com/o/r/issues/7", "sato")
+
+    def fake(link):
+        assert (link["repo"], link["numero"], link["tipo"]) == ("o/r", 7, "issue")
+        return {"state": "closed", "created": "2026-01-05T00:00:00Z", "done_at": "2026-01-08T00:00:00Z",
+                "prs": [{"number": 9, "url": "https://github.com/o/r/pull/9", "state": "MERGED",
+                         "createdAt": "2026-01-06T00:00:00Z", "mergedAt": "2026-01-08T00:00:00Z"}]}
+
+    report = kanbagent_sync.sync(fetcher=fake)
+    assert report["errors"] == [] and report["moved"] == 3
+    item = kb.card(card_id)
+    assert item["etapa_atual"] == "entregue"
+    assert sorted(l["numero"] for l in item["links"]) == [7, 9]
+    stages = [(e["to_stage"], e["occurred_at"][:10]) for e in item["events"] if e["kind"] == "stage_change"]
+    assert stages[-3:] == [("execucao", "2026-01-05"), ("revisao_codigo", "2026-01-06"),
+                           ("entregue", "2026-01-08")]
+    # repetir não duplica nada
+    assert kanbagent_sync.sync(fetcher=fake)["moved"] == 0
+
+
+def test_sync_ignores_cards_before_approval_and_survives_errors(vm):
+    early = kb.create_card("cedo", "i", "sato")
+    kb.add_link(early, "https://github.com/o/r/issues/1", "sato")
+    late = kb.create_card("tarde", "i", "sato")
+    for stage in ("proposta", "revisao", "aprovado"):
+        kb.change_stage(late, stage, "sato")
+    kb.add_link(late, "https://github.com/o/r/pull/2", "sato")
+
+    def broken(link):
+        raise RuntimeError("gh fora do ar")
+
+    report = kanbagent_sync.sync(fetcher=broken)
+    assert report["links"] == 1 and len(report["errors"]) == 1
+    assert kb.card(early)["etapa_atual"] == "ideia"
+    assert kb.card(late)["etapa_atual"] == "aprovado"

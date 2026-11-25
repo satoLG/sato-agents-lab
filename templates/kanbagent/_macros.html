@@ -1,0 +1,40 @@
+{% macro csrf() %}<input type="hidden" name="csrf" value="{{ session.get('web_chat_csrf', '') }}">{% endmacro %}
+
+{% macro filters(projects, filters, days=none) %}
+<form class="kb-filters" method="get" data-autosubmit>
+  <label>Projeto
+    <select name="projeto">
+      <option value="">Todos</option>
+      {% for p in projects %}<option value="{{ p.id }}" {% if filters.project == p.id %}selected{% endif %}>{{ p.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Repositório
+    <select name="repo">
+      <option value="">Todos</option>
+      {% for p in projects %}{% for r in p.repos %}<option value="{{ r.id }}" {% if filters.repo == r.id %}selected{% endif %}>{{ r.full_name }}</option>{% endfor %}{% endfor %}
+    </select>
+  </label>
+  {% if days is not none %}
+  <label>Período
+    <select name="dias">
+      {% for d in (7, 30, 90, 365) %}<option value="{{ d }}" {% if days == d %}selected{% endif %}>{{ d }} dias</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <noscript><button class="btn ghost" type="submit">Filtrar</button></noscript>
+</form>
+{% endmacro %}
+
+{% macro project_select(projects, name='projeto', selected=none) %}
+<select name="{{ name }}" data-project-select>
+  <option value="">Sem projeto</option>
+  {% for p in projects %}<option value="{{ p.id }}" {% if selected == p.id %}selected{% endif %}>{{ p.nome }}</option>{% endfor %}
+</select>
+{% endmacro %}
+
+{% macro repo_select(projects, name='repo') %}
+<select name="{{ name }}" data-repo-select>
+  <option value="">Sem repositório</option>
+  {% for p in projects %}{% for r in p.repos %}<option value="{{ r.id }}" data-project="{{ p.id }}">{{ r.full_name }}</option>{% endfor %}{% endfor %}
+</select>
+{% endmacro %}

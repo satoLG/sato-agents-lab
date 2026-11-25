@@ -1,0 +1,97 @@
+/* kanbagent: quadro da ideia à entrega (ADR 0009). Mobile-first, mesmos tokens do app.css. */
+
+.kb-nav { display: flex; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--border); }
+.kb-nav a { color: var(--ink-2); text-decoration: none; padding: 6px 12px; border-radius: 999px; font-size: 0.85rem; }
+.kb-nav a:hover { background: var(--surface-2); color: var(--ink); }
+.kb-nav a[aria-current="page"] { background: var(--surface-2); color: var(--ink); border: 1px solid var(--border); }
+.kb-nav .kb-nav-out { margin-left: auto; }
+
+.kb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.kb-head h1 { margin: 0 0 var(--sp-1); font-size: 1.4rem; overflow-wrap: anywhere; }
+.kb-head p { margin: 0; }
+.kb-total { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.kb-total strong { font-size: 1.4rem; }
+
+.kb-flash { margin-bottom: var(--sp-3); }
+.kb-flash.error { border-color: var(--critical); }
+
+.kb-filters { display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.kb-filters label, .kb-form label { display: flex; flex-direction: column; gap: var(--sp-1); font-size: 0.8rem; color: var(--ink-2); }
+
+.kb-form { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-3); }
+.kb-form input, .kb-form textarea, .kb-form select, .kb-filters select {
+  background: var(--surface-2); color: var(--ink); border: 1px solid var(--border);
+  border-radius: var(--r-1); padding: 8px 10px; font: inherit; font-size: 0.9rem; min-width: 0; width: 100%;
+}
+.kb-filters select { width: auto; }
+.kb-form textarea { resize: vertical; }
+.kb-form .btn { align-self: flex-start; }
+.kb-inline { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.kb-inline input { flex: 1 1 220px; width: auto; }
+.kb-inline .btn { align-self: auto; }
+.kb-row { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center; }
+.kb-row > label { flex: 1 1 200px; }
+.btn { min-height: 36px; cursor: pointer; }
+
+.kb-new { margin-bottom: var(--sp-4); }
+.kb-new > summary, .card details > summary { cursor: pointer; font-weight: 600; }
+
+/* quadro: colunas roláveis no celular, grade no desktop */
+.kb-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 82vw); gap: var(--sp-3); overflow-x: auto; padding-bottom: var(--sp-3); scroll-snap-type: x mandatory; }
+.kb-col { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-2); padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); scroll-snap-align: start; min-height: 120px; }
+.kb-col > header { display: flex; justify-content: space-between; align-items: center; border-top: 3px solid var(--stage, var(--s1)); padding-top: var(--sp-2); }
+.kb-col h2 { font-size: 0.9rem; margin: 0; }
+.kb-count { font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 2px 8px; }
+.kb-empty { color: var(--muted); text-align: center; margin: var(--sp-3) 0; }
+
+.kb-card { display: flex; flex-direction: column; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--stage, var(--s1)); border-radius: var(--r-1); padding: var(--sp-2) var(--sp-3); color: var(--ink); text-decoration: none; }
+.kb-card:hover { background: var(--surface-3); }
+.kb-card strong { font-size: 0.9rem; overflow-wrap: anywhere; }
+.kb-meta { font-size: 0.75rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.kb-time { font-size: 0.75rem; color: var(--ink-2); }
+.kb-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.kb-badge { font-size: 0.7rem; background: var(--surface-3); border-radius: 999px; padding: 1px 8px; color: var(--ink-2); }
+.kb-foot { margin-top: var(--sp-2); }
+
+[data-stage="ideia"] { --stage: var(--s7); }
+[data-stage="proposta"] { --stage: var(--s1); }
+[data-stage="revisao"] { --stage: var(--s4); }
+[data-stage="aprovado"] { --stage: var(--s3); }
+[data-stage="execucao"] { --stage: var(--s2); }
+[data-stage="revisao_codigo"] { --stage: var(--s5); }
+[data-stage="entregue"] { --stage: var(--s6); }
+[data-stage="descartado"] { --stage: var(--muted); }
+
+.kb-stage { display: inline-block; border: 1px solid var(--stage); color: var(--ink); border-radius: 999px; padding: 1px 10px; font-size: 0.8rem; }
+
+.card { margin-bottom: var(--sp-4); }
+.card h2 { font-size: 1rem; margin: 0 0 var(--sp-3); }
+.kb-buttons { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.kb-adjust { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+
+.kb-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.kb-bars li { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label value" "bar bar"; gap: 4px var(--sp-2); align-items: center; }
+.kb-bar-label { grid-area: label; font-size: 0.85rem; }
+.kb-bar-value { grid-area: value; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.kb-bar { grid-area: bar; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.kb-bar > span { display: block; height: 100%; background: var(--stage, var(--s1)); border-radius: 999px; min-width: 2px; }
+
+.kb-two { display: grid; gap: var(--sp-4); grid-template-columns: minmax(0, 1fr); }
+.kb-two > .card { margin-bottom: 0; }
+.kb-two { margin-bottom: var(--sp-4); }
+.kb-pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--sp-2) 0; color: var(--ink-2); }
+
+.kb-links, .kb-list { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-1); overflow-wrap: anywhere; }
+.kb-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.kb-timeline li { border-left: 2px solid var(--border); padding-left: var(--sp-3); font-size: 0.85rem; overflow-wrap: anywhere; }
+.kb-timeline time { color: var(--muted); font-size: 0.75rem; margin-right: var(--sp-2); }
+.kb-who { font-size: 0.75rem; background: var(--surface-2); border-radius: 999px; padding: 1px 8px; margin-right: var(--sp-2); }
+
+.kb-stats .card { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: 0; }
+.kb-stats strong { font-size: 1.3rem; }
+.kb-project > header h2 { margin: 0; }
+
+@media (min-width: 900px) {
+  .kb-board { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow-x: visible; }
+  .kb-two { grid-template-columns: 1fr 1fr; }
+}

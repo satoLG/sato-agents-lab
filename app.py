@@ -16,6 +16,7 @@ from werkzeug.exceptions import NotFound
 from hermes_dashboard import activity, auth, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat, webhooks
 from hermes_dashboard import db
 from hermes_dashboard import config, lab_feed, streaming, sato_agent, mimic
+from hermes_dashboard import kanbagent_web
 
 app = Flask(__name__)
 web_chat.configure(app)
@@ -31,6 +32,8 @@ for _path in [Path(app.root_path) / 'templates/home.html', Path(app.root_path) /
     _asset_digest.update(b'\0')
     _asset_digest.update(_path.read_bytes())
 ASSET_VERSION = _asset_digest.hexdigest()[:16]
+app.config["ASSET_VERSION"] = ASSET_VERSION
+app.register_blueprint(kanbagent_web.bp)
 
 # ADR 0010: só a home e o chat dela são públicos. Qualquer outra rota, inclusive
 # as que ainda vão nascer, exige a sessão do login do site.
@@ -46,11 +49,14 @@ def is_public(path):
 @app.before_request
 def require_login():
     path = request.path
+    # A API do kanbagent também aceita o token do Sato Agent (Bearer), sem sessão.
+    if kanbagent_web.bearer_request():
+        return kanbagent_web.check_bearer()
     # Caminho inexistente segue para o 404 normal; não há o que proteger.
     if is_public(path) or isinstance(request.routing_exception, NotFound):
         return None
     try:
-        api = path.startswith(("/api/", "/fragments/"))
+        api = path.startswith(("/api/", "/fragments/", "/kanbagent/api/"))
         if not auth.enabled():
             if api:
                 return jsonify({"error": "Login não configurado."}), 503
