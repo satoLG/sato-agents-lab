@@ -33,6 +33,35 @@ for (const form of document.querySelectorAll('form')) {
 const board = document.querySelector('.kb-board[data-rules]');
 if (board) setupDrag(board);
 
+// --- Hermes escrevendo ao vivo ---------------------------------------------------------------------
+// Enquanto houver card travado na tela, pergunta a cada poucos segundos em que passo o Hermes está;
+// quando ele termina (ou falha), recarrega para o card aparecer na lista nova.
+let watching = false;
+function watchJobs() {
+  if (watching || !document.querySelector('[data-watch-job]')) return;
+  watching = true;
+  const tick = async () => {
+    const ids = [...new Set([...document.querySelectorAll('[data-watch-job]')].map((el) => el.dataset.watchJob))];
+    if (!ids.length) { watching = false; return; }
+    try {
+      const response = await fetch(`/kanbagent/api/jobs?cards=${ids.join(',')}`, {credentials: 'same-origin'});
+      if (response.ok) {
+        const jobs = await response.json();
+        for (const id of ids) {
+          const job = jobs[id];
+          if (!job || !['queued', 'running'].includes(job.status)) { location.reload(); return; }
+          for (const el of document.querySelectorAll(`[data-watch-job="${id}"] [data-job-progress]`)) {
+            el.textContent = job.progress || (job.status === 'queued' ? 'na fila' : 'começando');
+          }
+        }
+      }
+    } catch { /* rede caiu: tenta de novo no próximo ciclo */ }
+    setTimeout(tick, document.hidden ? 10000 : 3000);
+  };
+  setTimeout(tick, 2000);
+}
+watchJobs();
+
 function setupDrag(board) {
   const rules = JSON.parse(board.dataset.rules);
   const csrf = board.dataset.csrf;
@@ -45,7 +74,7 @@ function setupDrag(board) {
 
   board.addEventListener('pointerdown', (event) => {
     const card = event.target.closest('.kb-card[data-card]');
-    if (!card || event.button > 0 || card.classList.contains('kb-busy')) return;
+    if (!card || event.button > 0 || card.matches('.kb-busy,.kb-locked')) return;
     pending = {card, id: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType !== 'mouse', timer: 0};
     // Mouse: sem isso o navegador seleciona texto ao arrastar (o clique continua abrindo o card).
     if (!pending.touch) event.preventDefault();
@@ -228,10 +257,16 @@ function setupDrag(board) {
     const time = card.querySelector('.kb-badge-time');
     if (time) time.textContent = '⏱ agora';
     const badges = card.querySelector('.kb-badges');
-    const wait = badges?.querySelector('.kb-badge-wait');
-    if (stage === 'proposta' && !(data.proposta || '').trim()) {
-      if (!wait) badges?.insertAdjacentHTML('beforeend', '<span class="kb-badge kb-badge-wait" title="Esperando o Hermes escrever a proposta">⏳ aguardando Hermes</span>');
-    } else wait?.remove();
+    badges?.querySelector('.kb-badge-wait')?.remove();
+    badges?.querySelector('.kb-badge-fail')?.remove();
+    if (['queued', 'running'].includes(data.job?.status)) {
+      // Foi pedir proposta ao Hermes: card travado até ele terminar, com o passo atual ao vivo.
+      card.dataset.next = '';
+      card.dataset.watchJob = card.dataset.card;
+      card.classList.add('kb-locked');
+      badges?.insertAdjacentHTML('afterbegin', '<span class="kb-badge kb-badge-wait" title="O Hermes está escrevendo a proposta"><span class="kb-spinner" aria-hidden="true"></span> propondo… <span data-job-progress>na fila</span></span>');
+      watchJobs();
+    }
     if (data.ajustes) {
       let adj = [...(badges?.children || [])].find((b) => b.textContent.startsWith('↺'));
       if (!adj) { badges?.insertAdjacentHTML('beforeend', '<span class="kb-badge" title="Voltas de ajuste"></span>'); adj = badges?.lastElementChild; }

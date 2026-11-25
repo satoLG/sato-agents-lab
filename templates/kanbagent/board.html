@@ -18,10 +18,12 @@
     <header class="kb-list-head"><h2 id="col-{{ stage }}">{{ kb_labels[stage] }}</h2><span class="kb-count">{{ items|length }}</span></header>
     <ol class="kb-cards">
       {% for c in items %}
-      {% set waiting = stage == 'proposta' and not (c.proposta or '').strip() %}
+      {% set job = c.job %}
+      {% set locked = job and job.status in ('queued', 'running') %}
+      {% set failed = job and job.status == 'failed' and stage == 'proposta' %}
       <li>
-        <a class="kb-card" href="{{ url_for('kanbagent.card_page', card_id=c.id) }}" draggable="false"
-           data-card="{{ c.id }}" data-stage="{{ stage }}" data-next="{{ kb_moves(c)|join(' ') }}">
+        <a class="kb-card{% if locked %} kb-locked{% endif %}" href="{{ url_for('kanbagent.card_page', card_id=c.id) }}" draggable="false"
+           data-card="{{ c.id }}" data-stage="{{ stage }}" data-next="{{ '' if locked else kb_moves(c)|join(' ') }}"{% if locked %} data-watch-job="{{ c.id }}"{% endif %}>
           <span class="kb-labels">
             <span class="kb-label" data-stage="{{ stage }}" title="{{ kb_labels[stage] }}"></span>
             {% if c.projeto %}<span class="kb-label kb-label-text" style="--hue: {{ (c.project_id * 67) % 360 }}">{{ c.projeto }}</span>{% endif %}
@@ -30,7 +32,8 @@
           {% if c.repo %}<span class="kb-meta">{{ c.repo }}</span>{% endif %}
           <span class="kb-badges">
             <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">⏱ {{ c.na_etapa_desde|kb_since }}</span>
-            {% if waiting %}<span class="kb-badge kb-badge-wait" title="Esperando o Hermes escrever a proposta">⏳ aguardando Hermes</span>
+            {% if locked %}<span class="kb-badge kb-badge-wait" title="O Hermes está escrevendo a proposta"><span class="kb-spinner" aria-hidden="true"></span> propondo… <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
+            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ Hermes falhou</span>
             {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">≡</span>{% endif %}
             {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste">↺ {{ c.ajustes }}</span>{% endif %}
             {% if c.links %}<span class="kb-badge" title="Issues e PRs ligados">🔗 {{ c.links }}</span>{% endif %}

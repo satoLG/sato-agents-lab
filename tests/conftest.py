@@ -3,11 +3,15 @@
 Cada teste monta a "VM" que quer (schema do banco, formato do config, permissoes)
 e chama as rotas de verdade pelo test_client do Flask.
 """
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 import pytest
+
+# Os testes nunca disparam o Hermes de verdade.
+os.environ.setdefault("KANBAGENT_HERMES_WORKER", "0")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

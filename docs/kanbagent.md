@@ -35,6 +35,19 @@ Depois que a execução começa não existe volta para ideia/proposta: só o cic
 (exceto pelo sync com o GitHub, que pula etapas). Na página os cards se arrastam entre as listas e só
 acendem as listas permitidas por essas regras (no celular: segurar o card e arrastar).
 
+### Hermes escreve a proposta
+
+Quando o Sato leva um card para `proposta` (arrastando, pelo botão "Pedir proposta ao Hermes" ou pela
+volta "Pedir ajuste"), entra um pedido na tabela `agent_jobs` e o card **trava** para o Sato até o
+Hermes terminar (dá para abrir os detalhes, não para mover ou editar). O site dispara
+`python -m hermes_dashboard.kanbagent_hermes` (via `systemd-run --user`, para não morrer num restart);
+o crontab roda o mesmo comando a cada 2 minutos para pegar o que sobrar. O worker roda
+`hermes chat --oneshot -s kanbagent-proposta --format stream-json`, anota cada passo como progresso
+(o quadro mostra "propondo… lendo o card" ao vivo) e o Hermes grava pela API, levando o card para
+`revisao`, o que fecha o pedido. Se ele sair sem gravar, travar mais de 20 min ou der erro, o pedido
+falha, o card destrava e mostra o motivo com "↻ Pedir de novo". Ao voltar para `ideia` e ir de novo
+para `proposta`, o Hermes reescreve em cima de tudo que já foi escrito.
+
 ## Modelo de dados (banco próprio `kanbagent.sqlite3`)
 
 - `projects` — slug, nome, descrição, criado_em, arquivado_em.
