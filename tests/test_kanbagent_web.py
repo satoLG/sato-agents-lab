@@ -188,6 +188,15 @@ def test_html_is_escaped(client):
     assert "<script>x</script>" not in html and "&lt;script&gt;" in html
 
 
+def test_only_comments_get_the_ver_mais_preview(client):
+    card_id = kb.create_card("Prévia", "ideia", "sato")
+    form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta", texto="motivo da etapa")
+    form(client, f"/kanbagent/card/{card_id}/comentario", texto="comentário longo")
+    html = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert '<div class="kb-pre kb-box" data-rich data-clamp>comentário longo</div>' in html
+    assert '<div class="kb-pre kb-box" data-rich>motivo da etapa</div>' in html
+
+
 # --- API do Sato Agent ----------------------------------------------------------------------------
 
 def test_api_flow_with_token(api):
