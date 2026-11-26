@@ -19,6 +19,18 @@ from hermes_dashboard import config, lab_feed, streaming, sato_agent, mimic
 from hermes_dashboard import kanbagent_web
 
 app = Flask(__name__)
+
+
+def _icon(name, label=None):
+    """Ícone do sprite Lucide (ADR 0011). Decorativo por padrão; com `label` vira imagem com nome."""
+    from flask import url_for
+    from markupsafe import Markup, escape
+    href = f"{url_for('static', filename='icons/lucide.svg')}#{escape(name)}"
+    role = f' role="img" aria-label="{escape(label)}"' if label else ' aria-hidden="true"'
+    return Markup(f'<svg class="i" viewBox="0 0 24 24"{role}><use href="{href}"/></svg>')
+
+
+app.jinja_env.globals["icon"] = _icon
 web_chat.configure(app)
 
 # A version in the path also versions relative ES-module imports and assets.

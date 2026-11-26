@@ -1,5 +1,5 @@
 // Aba 3: catalogo de tools e estatisticas de tool calling.
-import { h, fmt, render, load, empty, table, notice } from "./core.js";
+import { h, icon, fmt, render, load, empty, table, notice } from "./core.js";
 import { bars, stat, seriesColor, legend } from "./charts.js";
 
 const state = { days: 30, group: "todos", data: null };
@@ -108,7 +108,7 @@ function renderTools(d) {
 function successPill(row) {
   if (row.success_rate === null || row.success_rate === undefined) return h("span", { text: "-" });
   const rate = row.success_rate;
-  const [cls, icon] = rate >= 98 ? ["ok", "✓"] : rate >= 90 ? ["warn", "!"] : ["err", "×"];
+  const [cls, name] = rate >= 98 ? ["ok", "check"] : rate >= 90 ? ["warn", "triangle-exclamation-point"] : ["err", "x"];
   return h("span", { class: `pill ${cls}`, title: `${row.failures} de ${row.calls} falharam` },
-    [h("span", { class: "ico", text: icon }), fmt.pct(rate)]);
+    [icon(name), fmt.pct(rate)]);
 }

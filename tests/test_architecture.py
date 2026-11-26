@@ -121,3 +121,17 @@ def test_every_adr_is_indexed():
     index = (adr / "README.md").read_text(encoding="utf-8")
     missing = [p.name for p in sorted(adr.glob("[0-9][0-9][0-9][0-9]-*.md")) if p.name not in index]
     assert not missing, "Add to docs/adr/README.md: " + ", ".join(missing)
+
+
+def test_no_emoji_in_the_site():
+    """ADR 0011: ícones vêm do sprite Lucide (`icon()`), nunca de emoji ou símbolo de texto."""
+    import unicodedata
+    sources = (sorted((ROOT / "templates").rglob("*.html")) + sorted((ROOT / "static/js").glob("*.js"))
+               + sorted((ROOT / "static/css").glob("*.css")) + DOMAIN + [ROOT / "app.py"])
+    offenders = []
+    for path in sources:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            bad = [ch for ch in line if ord(ch) > 0x2000 and unicodedata.category(ch) == "So"]
+            if bad:
+                offenders.append(f"{path.relative_to(ROOT)}:{number} {''.join(bad)}")
+    assert not offenders, "Troque por {{ icon('nome') }} (ADR 0011): " + ", ".join(offenders)

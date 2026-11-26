@@ -1,5 +1,5 @@
 // Aba 7: cron jobs da VM (Hermes, crontab e systemd timers) + historico.
-import { h, fmt, render, load, empty, table, notice, openSheet } from "./core.js";
+import { h, icon, fmt, render, load, empty, table, notice, openSheet } from "./core.js";
 import { stat } from "./charts.js";
 
 let refs = {};
@@ -47,7 +47,7 @@ function renderCron(d) {
         { key: "source", label: "Origem", render: (r) => h("span", { class: "pill", text: SOURCE_LABELS[r.source] || r.source }) },
         { key: "enabled", label: "Estado", render: (r) => (r.enabled === false
             ? h("span", { class: "pill", text: "desligado" })
-            : h("span", { class: "pill ok" }, [h("span", { class: "ico", text: "✓" }), "ativo"])) },
+            : h("span", { class: "pill ok" }, [icon("check"), "ativo"])) },
         { key: "runs", label: "Execucoes", num: true, render: (r) => fmt.num(r.history?.runs || 0) },
         { key: "last", label: "Ultima", render: (r) => (r.history?.last ? fmt.relative(r.history.last) : "-") },
       ], jobs, { onRow: (job) => showJob(job) }),
@@ -66,7 +66,7 @@ function renderCron(d) {
           render: (r) => (r.duration_s === null ? "-" : fmt.duration(r.duration_s)) },
         { key: "output_bytes", label: "Saida", num: true, render: (r) => fmt.bytes(r.output_bytes) },
         { key: "exit_code", label: "Exit", num: true, render: (r) => (r.ok
-            ? h("span", { class: "pill ok" }, [h("span", { class: "ico", text: "✓" }), "0"])
+            ? h("span", { class: "pill ok" }, [icon("check"), "0"])
             : h("span", { class: "pill err" }, [h("span", { class: "ico", text: "!" }), String(r.exit_code)])) },
       ], runs, { scroll: true }),
     ]));

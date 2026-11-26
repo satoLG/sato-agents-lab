@@ -21,6 +21,19 @@ export function h(tag, attrs = {}, ...children) {
   return node;
 }
 
+// Ícone do sprite Lucide (ADR 0011): <svg class="i"><use href="…#nome"></svg>.
+const SPRITE = new URL("../icons/lucide.svg", import.meta.url).href;
+export function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  svg.setAttribute("class", "i");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  use.setAttribute("href", `${SPRITE}#${name}`);
+  svg.append(use);
+  return svg;
+}
+
 export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
   return node;

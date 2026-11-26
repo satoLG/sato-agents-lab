@@ -84,7 +84,7 @@ class NotFound(LookupError):
 
 
 # Voltas permitidas. Antes da execução a proposta pode ir e voltar; depois que a execução começa,
-# só existe o ciclo execução ⇄ revisão de código até entregar (ou descartar).
+# só existe o ciclo execução <-> revisão de código até entregar (ou descartar).
 RETURNS = {("proposta", "ideia"), ("revisao", "ideia"), ("revisao", "proposta"), ("revisao_codigo", "execucao")}
 # Voltas que pedem comentário: é o que o Hermes (ou o worker) usa para refazer.
 NEEDS_TEXT = {("revisao", "proposta"), ("revisao", "ideia"), ("revisao_codigo", "execucao")}

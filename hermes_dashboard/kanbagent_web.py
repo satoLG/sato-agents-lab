@@ -90,22 +90,29 @@ def _since_filter(value):
 
 
 # Rótulo de cada movimento nos botões do card e no diálogo do arrastar.
+# Movimento → (ícone Lucide, palavra do botão, tooltip). ADR 0011: uma palavra por botão.
 ACTIONS = {
-    ("ideia", "proposta"): "✨ Pedir proposta ao Hermes",
-    ("proposta", "revisao"): "→ Enviar para revisão",
-    ("proposta", "ideia"): "↩ Voltar para ideia",
-    ("revisao", "aprovado"): "✓ Aprovar",
-    ("revisao", "proposta"): "↺ Pedir ajuste",
-    ("revisao", "ideia"): "↩ Voltar para ideia",
-    ("aprovado", "execucao"): "▶ Executar agora",
-    ("execucao", "revisao_codigo"): "→ Revisão de código",
-    ("revisao_codigo", "entregue"): "✓ Entregar",
-    ("revisao_codigo", "execucao"): "↺ Reprovar",
+    ("ideia", "proposta"): ("sparkles", "Propor", "Pedir proposta ao Hermes"),
+    ("proposta", "revisao"): ("send", "Revisar", "Enviar para revisão"),
+    ("proposta", "ideia"): ("undo-2", "Voltar", "Voltar para ideia"),
+    ("revisao", "aprovado"): ("check", "Aprovar", "Aprovar a proposta"),
+    ("revisao", "proposta"): ("rotate-ccw", "Ajustar", "Pedir ajuste na proposta"),
+    ("revisao", "ideia"): ("undo-2", "Voltar", "Voltar para ideia"),
+    ("aprovado", "execucao"): ("play", "Executar", "Executar agora"),
+    ("execucao", "revisao_codigo"): ("arrow-right", "Revisar", "Mandar para revisão de código"),
+    ("revisao_codigo", "entregue"): ("circle-check", "Entregar", "Marcar como entregue"),
+    ("revisao_codigo", "execucao"): ("undo-2", "Reprovar", "Reprovar e voltar para execução"),
 }
 
 
+def action(from_stage, to_stage):
+    """(ícone, palavra, tooltip) do botão que leva o card de uma etapa à outra."""
+    label = kb.STAGE_LABELS.get(to_stage, to_stage)
+    return ACTIONS.get((from_stage, to_stage), ("arrow-right", "Mover", f"Mover para {label}"))
+
+
 def action_label(from_stage, to_stage):
-    return ACTIONS.get((from_stage, to_stage), f"→ {kb.STAGE_LABELS.get(to_stage, to_stage)}")
+    return action(from_stage, to_stage)[2]
 
 
 def card_moves(item):
@@ -119,7 +126,7 @@ def card_moves(item):
 @bp.app_context_processor
 def _labels():
     return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
-            "kb_action": action_label, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
+            "kb_action": action, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
             "kb_job_text": JOB_TEXT, "kb_review": kb.review}
 
 
@@ -198,7 +205,7 @@ def board():
     columns = {stage: [] for stage in kb.STAGES}
     for item in items:
         columns[item["etapa_atual"]].append(item)
-    rules = {"labels": {f"{a}>{b}": label for (a, b), label in ACTIONS.items()},
+    rules = {"labels": {f"{a}>{b}": tip for (a, b), (_, _, tip) in ACTIONS.items()},
              "needsText": [f"{a}>{b}" for a, b in sorted(kb.NEEDS_TEXT)],
              "returns": [f"{a}>{b}" for a, b in sorted(kb.RETURNS)],
              "stages": kb.STAGE_LABELS}

@@ -64,7 +64,7 @@ def test_empty_board_renders(client):
     response = client.get("/kanbagent")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Adicionar ideia" in html and "Ideia" in html and "kanbagent.css" in html
+    assert "lucide.svg#plus" in html and "Anotar" in html and "kanbagent.css" in html
 
 
 def test_full_flow_through_the_pages(client):

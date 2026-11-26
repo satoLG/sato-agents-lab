@@ -105,8 +105,9 @@ def reviewed(verdict="AJUSTAR"):
 def test_card_shows_review_and_approve_merges_then_delivers(client, monkeypatch):
     card = reviewed("APROVAR")
     page = client.get(f"/kanbagent/card/{card}").get_data(as_text=True)
-    assert "Revisão: pode aprovar" in page and "Aprovar (merge)" in page and "Reprovar" in page
-    assert "✓ revisado" in client.get("/kanbagent").get_data(as_text=True)
+    assert "Revisão: pode aprovar" in page and "git-merge" in page and "Reprovar" in page
+    board = client.get("/kanbagent").get_data(as_text=True)
+    assert "#circle-check" in board and "</svg> revisado" in board
     merged = []
     monkeypatch.setattr(worker, "merge", lambda repo, number: merged.append((repo, number)))
     form(client, f"/kanbagent/card/{card}/aprovar")
