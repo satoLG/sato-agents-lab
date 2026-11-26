@@ -223,3 +223,11 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-links li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kb-close .i { width: 20px; height: 20px; }
 .kb-pre.rich { white-space: normal; }
+
+/* Artefatos que a execução devolve */
+.kb-artifacts { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.kb-artifacts li { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.kb-artifacts li > div { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; min-width: 0; }
+.kb-artifact-thumb { display: block; border-radius: 8px; overflow: hidden; background:
+  repeating-conic-gradient(#2b3036 0 25%, #22272b 0 50%) 0 0 / 16px 16px; }
+.kb-artifact-thumb img { display: block; max-width: min(320px, 100%); max-height: 240px; object-fit: contain; }

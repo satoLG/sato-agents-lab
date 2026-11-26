@@ -92,6 +92,18 @@ Com a revisão concluída, o card mostra o parecer e dois botões: **Aprovar (me
 **Reprovar** volta para `execucao` com o parecer pré-preenchido como texto, o que dispara o executor de
 novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
 
+## Artefatos (o que a execução devolve)
+
+Quando o card pede um arquivo como resultado (imagem, sprite, documento, página HTML), o executor salva a
+versão final em `../entregas/`, fora do repositório. No fim da execução esses arquivos (até 20, 20 MB cada,
+sem seguir links) viram **Artefatos** no card, independentes do PR. Imagem (tipo conferido pelos bytes)
+abre direto; SVG, HTML, PDF e texto abrem isolados com CSP `sandbox` (origem opaca, sem cookies nem acesso
+ao site); o resto baixa. Mesmo nome numa nova rodada substitui o anterior. Card que só gerou artefato, sem
+commit, vai para "Revisão de código" sem PR: o Sato confere e entrega.
+
+Card aprovado sem repositório (criado antes da escolha obrigatória) ainda pode receber um, ou "novo",
+enquanto espera na fila; depois de definido, trava.
+
 ## Imagens de perfil
 
 Cada autor do histórico (sato, hermes, claude, github-sync) aparece com uma imagem. Os padrões ficam em
