@@ -401,3 +401,4 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: v
 .login-error { color: var(--serious); font-size: 0.8rem; }
 .logout-form { display: inline-flex; margin: 0; }
 .logout-form .btn { min-height: 36px; padding: 0 var(--sp-3); }
+.doc-rich { font-size: .86rem; color: var(--ink-2); }

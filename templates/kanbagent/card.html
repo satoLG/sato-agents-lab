@@ -50,7 +50,7 @@
   {% elif review %}
   <section class="kb-review" data-verdict="{{ 'aprovar' if review.aprovar else 'ajustar' }}" aria-labelledby="kb-review-title">
     <h2 id="kb-review-title">{% if review.aprovar %}{{ icon('circle-check') }} Revisão: pode aprovar{% else %}{{ icon('triangle-exclamation-point') }} Revisão: pede ajustes{% endif %}</h2>
-    <div class="kb-pre kb-box">{{ review.texto }}</div>
+    <div class="kb-pre kb-box" data-rich>{{ review.texto }}</div>
     <div class="kb-review-actions">
       <form method="post" action="{{ url_for('kanbagent.approve_form', card_id=card.id) }}" data-confirm="Fazer o merge do PR e marcar como entregue?">{{ ui.csrf() }}
         <button class="btn" type="submit" data-tip="Fazer merge do PR e entregar">{{ icon('git-merge') }} Aprovar</button>
@@ -71,7 +71,7 @@
     <div class="kb-detail-main">
       <section aria-labelledby="kb-idea">
         <h2 id="kb-idea">{{ icon('lightbulb') }}Ideia original</h2>
-        <p class="kb-pre kb-box">{{ card.ideia_original }}</p>
+        <div class="kb-pre kb-box" data-rich>{{ card.ideia_original }}</div>
       </section>
 
       <section aria-labelledby="kb-refs">
@@ -101,7 +101,7 @@
 
       <section aria-labelledby="kb-proposal">
         <h2 id="kb-proposal">{{ icon('file-text') }}Proposta</h2>
-        {% if card.proposta %}<div class="kb-pre kb-box">{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
+        {% if card.proposta %}<div class="kb-pre kb-box" data-rich>{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
         {% if not locked %}
         <details class="kb-inline-edit">
           <summary class="btn ghost small">{{ icon('pencil') }} {% if card.proposta %}Editar{% else %}Escrever{% endif %}</summary>
@@ -148,7 +148,7 @@
               {% elif e.kind == 'ref_added' %}adicionou a referência {{ e.text }}
               {% endif %}</p>
               <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
-              {% if e.text and e.kind in ('stage_change', 'comment') %}<p class="kb-pre kb-box">{{ e.text }}</p>{% endif %}
+              {% if e.text and e.kind in ('stage_change', 'comment') %}<div class="kb-pre kb-box" data-rich>{{ e.text }}</div>{% endif %}
             </div>
           </li>
           {% endfor %}

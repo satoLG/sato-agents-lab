@@ -1,15 +1,7 @@
-import MarkdownIt from '../vendor/markdown-it.module.js';
+import {createMarkdown} from './rich-text.js';
 
-const markdown = new MarkdownIt({html: false}).disable('image');
-markdown.validateLink = url => /^https?:\/\//i.test(url);
-markdown.renderer.rules.link_open = (tokens, index, options, env, renderer) => {
-  tokens[index].attrSet('target', '_blank');
-  tokens[index].attrSet('rel', 'noopener noreferrer');
-  return renderer.renderToken(tokens, index, options);
-};
-markdown.renderer.rules.table_open = () =>
-  '<div class="chat-table" role="region" aria-label="Tabela da resposta" tabindex="0"><table>';
-markdown.renderer.rules.table_close = () => '</table></div>';
+// Mesmo Markdown do site inteiro (ADR 0012); no chat as quebras simples seguem o padrão do Markdown.
+const markdown = createMarkdown({breaks: false, tableClass: 'chat-table', tableLabel: 'Tabela da resposta'});
 
 export function formatChatAnswer(text) {
   const env = {};

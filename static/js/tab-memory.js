@@ -1,6 +1,7 @@
 // Aba 5: memoria, skills e contextos - catalogo com leitura do conteudo.
 import { h, fmt, render, load, empty, table, notice, getJSON, openSheet } from "./core.js";
 import { stat, seriesColor } from "./charts.js";
+import { richElement } from "./rich-text.js";
 
 const state = { filter: "todos", term: "", data: null };
 let refs = {};
@@ -115,7 +116,8 @@ async function openDocument(row) {
       ].filter(Boolean)),
       h("p", { class: "mono muted", style: { marginBottom: "var(--sp-3)", overflowWrap: "anywhere" },
                text: doc.path }),
-      h("pre", { class: "doc-content", text: doc.content }));
+      /\.(md|markdown)$/i.test(doc.path || "") ? richElement(doc.content, "doc-rich")
+        : h("pre", { class: "doc-content", text: doc.content }));
   } catch (err) {
     render(body, notice(err.message));
   }

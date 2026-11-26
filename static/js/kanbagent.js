@@ -1,6 +1,9 @@
 // kanbagent: conforto por cima dos formulários. Sem JS tudo funciona por formulário e link;
 // com JS os cards se arrastam entre as listas, e só acendem as listas permitidas pelas regras.
 import {press, release} from './button-sounds.js';
+import {enhanceRich} from './rich-text.js';
+
+enhanceRich();
 
 // Ícone do sprite Lucide como HTML (ADR 0011). Nomes fixos do código, nunca vindos do usuário.
 const SPRITE = new URL('../icons/lucide.svg', import.meta.url).href;
