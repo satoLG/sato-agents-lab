@@ -3,6 +3,7 @@
 // milhares de nos no cytoscape de uma vez trava no celular.
 import { h, fmt, render, load, empty, table, notice, getJSON, openSheet, skeleton } from "./core.js";
 import { stat, bars, seriesColor } from "./charts.js";
+import { richElement } from "./rich-text.js";
 
 const KIND_COLORS = {
   root: "#3987e5", repo: "#d95926", category: "#199e70",
@@ -218,7 +219,7 @@ function showDoc(data) {
     data.url ? h("p", { style: { marginBottom: "var(--sp-3)" } },
       h("a", { href: data.url, target: "_blank", rel: "noopener", text: data.url })) : null,
     h("h3", { text: "Trecho indexado" }),
-    h("pre", { class: "doc-content", text: data.preview || "(sem previa)" }),
+    richElement(data.preview || "(sem prévia)", "doc-rich"),
   ].filter(Boolean));
 }
 

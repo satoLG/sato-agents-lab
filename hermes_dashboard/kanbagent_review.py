@@ -106,7 +106,7 @@ def execute(job, tools):
 
     final = "AJUSTAR" if any(verdict(text) == "AJUSTAR" for _, text in reviews) else "APROVAR"
     result = f"VEREDITO: {final}\n\n" + "\n\n".join(
-        f"{who} — {verdict(text).lower()}:\n{body_of(text)}" for who, text in reviews)
+        f"**{who}** — {verdict(text).lower()}\n\n{body_of(text)}" for who, text in reviews)
     kb.job_progress(job["id"], "publicando a revisão")
     tools.comment(repo, number, f"Revisão do kanbagent\n\n{result}")
     kb.add_comment(item["id"], "hermes", result)

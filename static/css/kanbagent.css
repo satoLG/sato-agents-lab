@@ -217,3 +217,4 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-composer > summary { display: flex; align-items: center; gap: 6px; }
 .kb-links li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kb-close .i { width: 20px; height: 20px; }
+.kb-pre.rich { white-space: normal; }
