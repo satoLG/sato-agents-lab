@@ -33,7 +33,7 @@ body[data-page=dashboard] .kb-filters select option { color: #1d2125; }
 .kb-list-head h2 { margin: 0; font-size: .875rem; font-weight: 700; color: var(--tile-ink-strong); display: flex; align-items: center; gap: 8px; }
 .kb-list-head h2::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--stage); }
 .kb-count { font-size: .75rem; font-weight: 700; color: var(--tile-muted); background: #ffffff14; border-radius: 999px; padding: 1px 8px; }
-.kb-cards { list-style: none; margin: 0; padding: 0 2px 2px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 8px; }
+.kb-cards { list-style: none; margin: 0; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 8px; }
 
 /* cartão */
 .kb-card { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; touch-action: manipulation; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; background: var(--tile); color: var(--tile-ink-strong); border-radius: 8px; box-shadow: var(--raise); text-decoration: none; transition: background .12s, box-shadow .12s, transform 250ms var(--press-settle); outline: 2px solid transparent; }
@@ -99,8 +99,8 @@ body[data-page=dashboard] .kb-foot a { color: #fff; font-size: .85rem; opacity: 
 
 .kb-comment { margin: 0 0 16px 40px; }
 .kb-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.kb-timeline li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px; font-size: .875rem; }
-.kb-timeline p { margin: 0; overflow-wrap: anywhere; }
+.kb-timeline > li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px; font-size: .875rem; }
+.kb-timeline > li > div > p { margin: 0; overflow-wrap: anywhere; }
 .kb-timeline .kb-box { margin-top: 6px; }
 .kb-timeline time { color: var(--tile-muted); font-size: .75rem; }
 .kb-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font-weight: 800; font-size: .8rem; color: #1d2125; background: var(--label-proposta); }
@@ -231,3 +231,14 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-artifact-thumb { display: block; border-radius: 8px; overflow: hidden; background:
   repeating-conic-gradient(#2b3036 0 25%, #22272b 0 50%) 0 0 / 16px 16px; }
 .kb-artifact-thumb img { display: block; max-width: min(320px, 100%); max-height: 240px; object-fit: contain; }
+
+/* Lista vazia fica recolhida (só Ideia fica sempre aberta); abre sozinha quando é destino do arraste. */
+.kb-list.kb-list-empty { flex: 0 0 48px; padding: 8px 4px; align-items: center; transition: flex-basis .18s ease; }
+.kb-list.kb-list-empty .kb-list-head { flex-direction: column-reverse; justify-content: flex-end; padding: 6px 0; gap: 10px; }
+.kb-list.kb-list-empty .kb-list-head h2 { writing-mode: vertical-rl; white-space: nowrap; }
+.kb-list.kb-list-empty .kb-cards { display: none; }
+body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok { flex-basis: 272px; align-items: stretch; }
+body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-list-head { flex-direction: row; justify-content: space-between; padding: 6px 8px 10px; }
+body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-list-head h2 { writing-mode: horizontal-tb; }
+body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; min-height: 64px; }
+.kb-dialog-message { margin: 0; color: var(--tile-ink); }

@@ -403,3 +403,18 @@ def test_queued_card_without_repo_shows_the_picker(client):
     assert kb.card(card_id)["repo"] == "satoLG/biscoidino"
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "não tem repositório" not in page and "Trocar o repositório" not in page
+
+
+def test_empty_lists_are_collapsed_except_ideas_and_no_browser_confirm(client):
+    kb.create_card("A", "a", "sato")
+    page = client.get("/kanbagent").get_data(as_text=True)
+    assert 'class="kb-list" aria-labelledby="col-ideia"' in page
+    assert 'class="kb-list kb-list-empty" aria-labelledby="col-execucao"' in page
+    empty = client.get("/kanbagent?projeto=999").get_data(as_text=True)
+    assert 'class="kb-list" aria-labelledby="col-ideia"' in empty     # Ideia aberta mesmo vazia
+    assert 'id="kb-confirm"' in page
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    for path in [*root.joinpath("static/js").glob("*.js"), *root.joinpath("templates").rglob("*.html")]:
+        text = path.read_text(encoding="utf-8")
+        assert "window.confirm(" not in text and "window.alert(" not in text and " alert(" not in text, path

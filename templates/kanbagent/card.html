@@ -52,7 +52,7 @@
     <h2 id="kb-review-title">{% if review.aprovar %}{{ icon('circle-check') }} Revisão: pode aprovar{% else %}{{ icon('triangle-exclamation-point') }} Revisão: pede ajustes{% endif %}</h2>
     <div class="kb-pre kb-box" data-rich>{{ review.texto }}</div>
     <div class="kb-review-actions">
-      <form method="post" action="{{ url_for('kanbagent.approve_form', card_id=card.id) }}" data-confirm="Fazer o merge do PR e marcar como entregue?">{{ ui.csrf() }}
+      <form method="post" action="{{ url_for('kanbagent.approve_form', card_id=card.id) }}" data-confirm="O PR entra no branch principal (merge) e o card vai para Entregue." data-confirm-title="Aprovar a entrega?" data-confirm-ok="Aprovar">{{ ui.csrf() }}
         <button class="btn" type="submit" data-tip="Fazer merge do PR e entregar">{{ icon('git-merge') }} Aprovar</button>
       </form>
       <details class="kb-inline-edit">
@@ -209,7 +209,7 @@
       {% endif %}
       {% endfor %}
       {% if 'descartado' in card.proximas %}
-      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
+      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="O card sai do quadro (fica em &quot;Mostrar descartados&quot;)." data-confirm-title="Descartar este card?" data-confirm-ok="Descartar" data-confirm-danger>{{ ui.csrf() }}
         <input type="hidden" name="para" value="descartado">
         <button class="btn danger" type="submit" data-tip="Descartar o card">{{ icon('trash') }} Descartar</button>
       </form>
