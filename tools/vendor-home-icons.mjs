@@ -5,7 +5,7 @@ if(!response.ok)throw new Error(`Lucide revision: ${response.status}`);
 const {sha}=await response.json();
 const icons=['arrow-up','arrow-up-right','arrow-left','history','settings-2','volume-2','volume-x','x','log-in','ellipsis','chevron-down','check-check','circle','flask-conical','trees','sparkles','layout-dashboard','copy','check','loader-circle',
  // kanbagent e casca do app (ADR 0011: ícones no lugar de emoji)
- 'menu','panel-left','timer','refresh-cw','rotate-ccw','undo-2','triangle-exclamation-point','lightbulb','file-text','list','link','trash','play','arrow-right','git-pull-request','git-merge','paperclip','plus','maximize','message-square','external-link','log-out','square-kanban','chart-column','folder-kanban','folder-git-2','send','pencil','circle-check','circle-x'];
+ 'menu','panel-left','timer','refresh-cw','rotate-ccw','undo-2','triangle-exclamation-point','lightbulb','file-text','list','link','trash','play','arrow-right','git-pull-request','git-merge','paperclip','plus','maximize','message-square','external-link','log-out','square-kanban','chart-column','folder-kanban','folder-git-2','send','pencil','circle-check','circle-x','image','upload'];
 await mkdir('static/icons',{recursive:true});
 const symbols=await Promise.all(icons.map(async name=>{
  const source=name==='history'?'messages-square':name;

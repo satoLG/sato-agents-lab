@@ -136,7 +136,7 @@
         <ol class="kb-timeline">
           {% for e in card.events|reverse %}
           <li data-kind="{{ e.kind }}">
-            <span class="kb-avatar" data-who="{{ e.author }}" aria-hidden="true">{{ e.author[:1]|upper }}</span>
+            <img class="kb-avatar" data-who="{{ e.author }}" src="{{ kb_avatar(e.author) }}" alt="" width="32" height="32" loading="lazy">
             <div>
               <p><strong>{{ e.author }}</strong>
               {% if e.kind == 'stage_change' %}

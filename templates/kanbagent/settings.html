@@ -1,0 +1,31 @@
+{% extends "kanbagent/_layout.html" %}
+{% import "kanbagent/_macros.html" as ui %}
+{% set kb_page = 'settings' %}
+{% block title %}Ajustes · kanbagent{% endblock %}
+{% block kb_content %}
+<div class="kb-head"><div><h1>Ajustes</h1><p class="muted">Imagens de perfil que aparecem no histórico dos cards.</p></div></div>
+
+<section class="card kb-avatars" aria-labelledby="kb-avatars-title">
+  <h2 id="kb-avatars-title">{{ icon('image') }}Imagens de perfil</h2>
+  <p class="muted">PNG, JPEG ou WebP, até 2 MB. Fica recortada em círculo.</p>
+  <ul>
+    {% for author, name in avatars %}
+    <li>
+      <img class="kb-avatar lg" src="{{ kb_avatar(author) }}" alt="" width="64" height="64">
+      <div>
+        <strong>{{ name }}</strong>
+        <form method="post" action="{{ url_for('kanbagent.avatar_upload', author=author) }}" enctype="multipart/form-data" class="kb-form kb-inline">{{ ui.csrf() }}
+          <input type="file" name="imagem" accept="image/png,image/jpeg,image/webp" required aria-label="Nova imagem de {{ name }}">
+          <button class="btn small" type="submit">{{ icon('upload') }} Trocar</button>
+        </form>
+        {% if custom[author] %}
+        <form method="post" action="{{ url_for('kanbagent.avatar_reset', author=author) }}" class="kb-inline">{{ ui.csrf() }}
+          <button class="btn small ghost" type="submit" data-tip="Voltar para a imagem padrão">{{ icon('rotate-ccw') }} Padrão</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
