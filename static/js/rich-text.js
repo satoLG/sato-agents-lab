@@ -3,8 +3,8 @@
 // só links http(s), sem imagens: o texto nunca injeta nada na página.
 import MarkdownIt from '../vendor/markdown-it.module.js';
 
-export function createMarkdown({breaks = true, tableClass = 'rich-table', tableLabel = 'Tabela'} = {}) {
-  const md = new MarkdownIt({html: false, linkify: true, breaks}).disable('image');
+export function createMarkdown({breaks = true, linkify = true, tableClass = 'rich-table', tableLabel = 'Tabela'} = {}) {
+  const md = new MarkdownIt({html: false, linkify, breaks}).disable('image');
   md.validateLink = (url) => /^https?:\/\//i.test(url);
   md.renderer.rules.link_open = (tokens, index, options, env, renderer) => {
     tokens[index].attrSet('target', '_blank');

@@ -1,7 +1,7 @@
 import {createMarkdown} from './rich-text.js';
 
-// Mesmo Markdown do site inteiro (ADR 0012); no chat as quebras simples seguem o padrão do Markdown.
-const markdown = createMarkdown({breaks: false, tableClass: 'chat-table', tableLabel: 'Tabela da resposta'});
+// Mesmo Markdown do site inteiro (ADR 0012); no chat quebras simples e URLs soltas seguem o Markdown puro (a prévia da fala depende disso).
+const markdown = createMarkdown({breaks: false, linkify: false, tableClass: 'chat-table', tableLabel: 'Tabela da resposta'});
 
 export function formatChatAnswer(text) {
   const env = {};
