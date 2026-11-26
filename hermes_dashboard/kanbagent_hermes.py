@@ -28,8 +28,9 @@ PROMPT = """Card {id} do kanbagent ("{titulo}") acabou de ser movido para Propos
 Use a skill kanbagent-proposta para escrever a proposta deste card agora e grave com
 `~/.hermes/scripts/kanbagent.sh proposal {id} ARQUIVO` (isso leva o card para "Em revisão").
 
-Antes, leia o card inteiro (`~/.hermes/scripts/kanbagent.sh card {id}`): ideia original, comentários e
-cada volta (stage_change com texto). Se já existe proposta, reescreva em cima dela levando em conta tudo
+Antes, leia o card inteiro (`~/.hermes/scripts/kanbagent.sh card {id}`): ideia original, comentários,
+cada volta (stage_change com texto) e as referências em `refs` (links para abrir; arquivos anexos no
+caminho `path`, leia os de texto/imagem que ajudarem). Se já existe proposta, reescreva em cima dela levando em conta tudo
 o que o Sato escreveu depois. Ninguém vai responder perguntas nesta execução: dúvidas vão na seção
 "Dúvidas" da proposta. Trabalhe só neste card."""
 

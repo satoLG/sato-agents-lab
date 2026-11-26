@@ -95,7 +95,7 @@ def test_full_flow_through_the_pages(client):
     kb.change_stage(card_id, "revisao", "hermes")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="aprovado")
     form(client, f"/kanbagent/card/{card_id}/comentario", texto="bora")
-    form(client, f"/kanbagent/card/{card_id}/link", url="https://github.com/satoLG/sato-agents-lab/issues/42")
+    kb.add_link(card_id, "https://github.com/satoLG/sato-agents-lab/issues/42", "hermes")   # links vêm do fluxo
 
     item = kb.card(card_id)
     assert item["etapa_atual"] == "aprovado"
@@ -289,3 +289,37 @@ def test_execution_job_shows_executing_and_kicks_the_exec_worker(client, monkeyp
     assert "executando…" in board and "tarefa 1/3" in board
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "O Claude está executando" in page
+
+
+def test_new_idea_picks_any_github_repo_or_a_new_one(client, monkeypatch):
+    from hermes_dashboard import kanbagent_github
+    monkeypatch.setattr(kanbagent_github, "repos", lambda force=False: (
+        "satoLG", [{"full_name": "satoLG/jogo", "private": True}, {"full_name": "satoLG/site", "private": False}]))
+    board = client.get("/kanbagent").get_data(as_text=True)
+    assert 'value="satoLG/jogo"' in board and "privado" in board and "Novo repositório" in board
+    form(client, "/kanbagent/cards", titulo="A", ideia="a", repo="satoLG/jogo")
+    form(client, "/kanbagent/cards", titulo="B", ideia="b", repo="__novo__", novo_repo="jogo-2", publico="1")
+    a, b = sorted(kb.cards(), key=lambda c: c["id"])
+    assert kb.card(a["id"])["repo"] == "satoLG/jogo"
+    assert (kb.card(b["id"])["novo_repo"], kb.card(b["id"])["novo_repo_publico"]) == ("satoLG/jogo-2", 1)
+    page = client.get(f"/kanbagent/card/{a['id']}").get_data(as_text=True)
+    assert "Trocar" in page and "Ligar" not in page and "issues/123" not in page
+    form(client, f"/kanbagent/card/{a['id']}/repo", repo="satoLG/site")
+    assert kb.card(a["id"])["repo"] == "satoLG/site"
+
+
+def test_refs_links_and_files_are_added_and_downloaded_safely(client):
+    card_id = kb.create_card("A", "a", "sato")
+    form(client, f"/kanbagent/card/{card_id}/referencia", url="https://example.com/x", titulo="Moodboard")
+    import io as _io
+    client.post(f"/kanbagent/card/{card_id}/anexo", content_type="multipart/form-data",
+                data={"csrf": client.csrf, "arquivo": (_io.BytesIO(b"<script>alert(1)</script>"), "x.html")})
+    item = kb.card(card_id)
+    assert [r["titulo"] for r in item["refs"]] == ["Moodboard", "x.html"]
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Moodboard" in page and "Anexar" in page
+    response = client.get(f"/kanbagent/card/{card_id}/anexo/{item['refs'][1]['id']}")
+    assert response.status_code == 200 and response.data.startswith(b"<script>")
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert response.headers["Content-Type"] == "application/octet-stream"
+    assert client.get(f"/kanbagent/card/{card_id}/anexo/{item['refs'][0]['id']}").status_code == 404

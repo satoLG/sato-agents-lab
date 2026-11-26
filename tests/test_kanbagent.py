@@ -117,22 +117,56 @@ def test_unknown_card_is_not_found(db):
         kanbagent.change_stage(42, "proposta", "sato")
 
 
-def test_card_repo_must_belong_to_its_project(db):
+def test_card_takes_any_github_repo_and_project_learns_it(db):
     project = kanbagent.create_project("site", "Site")
-    other = kanbagent.create_project("outro", "Outro")
     lab = kanbagent.add_repo_to_project(project, "satoLG/sato-agents-lab")
-    hermes = kanbagent.add_repo_to_project(project, "satoLG/hermes")
-    assert kanbagent.add_repo_to_project(project, "satoLG/hermes") == hermes
-    outside = kanbagent.add_repo_to_project(other, "satoLG/fora")
-    assert kanbagent.create_card("A", "a", "sato", project_id=project, repo_id=lab)
-    assert kanbagent.create_card("B", "b", "sato", project_id=project, repo_id=hermes)
+    assert kanbagent.add_repo_to_project(project, "satoLG/sato-agents-lab") == lab
+    card = kanbagent.create_card("A", "a", "sato", project_id=project, repo="satoLG/fora")
+    assert kanbagent.card(card)["repo"] == "satoLG/fora"
+    assert [r["full_name"] for r in kanbagent.projects()[0]["repos"]] == ["satoLG/fora", "satoLG/sato-agents-lab"]
+    assert kanbagent.card(kanbagent.create_card("B", "b", "sato", repo_id=lab))["repo"] == "satoLG/sato-agents-lab"
+    for bad in ("sem-barra", "a/b/c", "dono/repo.git", "-x/y"):
+        with pytest.raises(ValueError):
+            kanbagent.create_card("C", "c", "sato", repo=bad)
+
+
+def test_new_repo_card_can_execute_and_repo_freezes_after_approval(db):
+    card = kanbagent.create_card("Jogo", "ideia", "sato", novo_repo="satoLG/jogo-novo", publico=True)
+    item = kanbagent.card(card)
+    assert item["repo"] is None and (item["novo_repo"], item["novo_repo_publico"]) == ("satoLG/jogo-novo", 1)
     with pytest.raises(ValueError):
-        kanbagent.create_card("C", "c", "sato", project_id=project, repo_id=outside)
+        kanbagent.create_card("X", "x", "sato", repo="satoLG/a", novo_repo="satoLG/b")
+    kanbagent.set_repo(card, "sato", repo="satoLG/existente")
+    assert kanbagent.card(card)["repo"] == "satoLG/existente" and kanbagent.card(card)["novo_repo"] is None
+    kanbagent.set_repo(card, "sato", novo_repo="satoLG/jogo-novo")
+    kanbagent.change_stage(card, "proposta", "hermes")
+    kanbagent.update_proposal(card, "p", "hermes")
+    kanbagent.change_stage(card, "revisao", "hermes")
+    kanbagent.change_stage(card, "aprovado", "sato")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.set_repo(card, "sato", repo="satoLG/outro")
+    job = kanbagent.change_stage(card, "execucao", "sato")   # repo novo basta para executar
+    assert kanbagent.job(job)["kind"] == "execucao"
+    kanbagent.set_repo(card, "claude", repo="satoLG/jogo-novo")   # o executor grava o que criou
+    assert kanbagent.card(card)["repo"] == "satoLG/jogo-novo" and kanbagent.card(card)["novo_repo"] is None
+
+
+def test_refs_follow_the_card_until_approval(db):
+    card = kanbagent.create_card("A", "a", "sato")
+    kanbagent.add_ref_link(card, "https://example.com/ref", "sato", "Inspiração")
+    ref_id = kanbagent.add_ref_file(card, "sato", "../../sprite final.png", b"PNG")
+    refs = kanbagent.card(card)["refs"]
+    assert [(r["tipo"], r["titulo"]) for r in refs] == [("link", "Inspiração"), ("arquivo", "sprite-final.png")]
+    path = kanbagent.ref(card, ref_id)["path"]
+    assert open(path, "rb").read() == b"PNG" and "kanbagent-files" in path and ".." not in path
+    for bad in ("javascript:alert(1)", "ftp://x"):
+        with pytest.raises(ValueError):
+            kanbagent.add_ref_link(card, bad, "sato")
     with pytest.raises(ValueError):
-        kanbagent.create_card("D", "d", "sato", repo_id=lab)
-    assert rows(db, "SELECT titulo FROM cards ORDER BY id") == [("A",), ("B",)]
-    assert rows(db, "SELECT COUNT(*) FROM events") == [(2,)]
-    assert rows(db, "SELECT COUNT(*) FROM project_repos") == [(3,)]
+        kanbagent.add_ref_file(card, "sato", "grande.bin", b"x" * (kanbagent.MAX_FILE + 1))
+    kanbagent.change_stage(card, "descartado", "sato")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.add_ref_link(card, "https://example.com/tarde", "sato")
 
 
 def test_stage_durations_sum_an_adjustment_loop(db):

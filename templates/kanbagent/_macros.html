@@ -32,9 +32,19 @@
 </select>
 {% endmacro %}
 
-{% macro repo_select(projects, name='repo') %}
-<select name="{{ name }}" data-repo-select>
-  <option value="">Sem repositório</option>
-  {% for p in projects %}{% for r in p.repos %}<option value="{{ r.id }}" data-project="{{ p.id }}">{{ r.full_name }}</option>{% endfor %}{% endfor %}
-</select>
+{# Repositório do card: qualquer um do GitHub do Sato, ou um novo que o executor cria. #}
+{% macro repo_picker(gh_repos, gh_login, current=none) %}
+<div class="kb-repo-picker" data-repo-picker>
+  <select name="repo" aria-label="Repositório">
+    <option value="">Sem repositório</option>
+    {% if current and current not in gh_repos|map(attribute='full_name') %}<option value="{{ current }}" selected>{{ current }}</option>{% endif %}
+    {% for r in gh_repos %}<option value="{{ r.full_name }}" {% if r.full_name == current %}selected{% endif %}>{{ r.full_name }}{% if r.private %} · privado{% endif %}</option>{% endfor %}
+    <option value="__novo__">Novo repositório…</option>
+  </select>
+  <fieldset class="kb-new-repo" data-new-repo aria-label="Repositório novo">
+    <input name="novo_repo" maxlength="140" placeholder="{{ (gh_login ~ '/') if gh_login else 'dono/' }}nome" aria-label="Nome do repositório novo">
+    <label class="kb-check"><input type="checkbox" name="publico" value="1"> Público</label>
+  </fieldset>
+  {% if not gh_repos %}<p class="muted kb-hint">Não deu para ler seus repositórios do GitHub agora; recarregue em 1 minuto.</p>{% endif %}
+</div>
 {% endmacro %}

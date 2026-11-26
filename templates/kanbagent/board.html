@@ -52,7 +52,7 @@
         <input name="titulo" maxlength="200" required placeholder="Título da ideia" aria-label="Título">
         <textarea name="ideia" rows="4" required placeholder="Escreva solto, do seu jeito. O texto original nunca é alterado." aria-label="Ideia"></textarea>
         {{ ui.project_select(projects, selected=filters.project) }}
-        {{ ui.repo_select(projects) }}
+        {{ ui.repo_picker(gh_repos, gh_login) }}
         <button class="btn small" type="submit">Anotar ideia</button>
       </form>
     </details>

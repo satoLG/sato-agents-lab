@@ -19,19 +19,16 @@ for (const form of document.querySelectorAll('form[data-confirm]')) {
   });
 }
 
-// No formulário de nova ideia, o repositório acompanha o projeto escolhido.
-for (const form of document.querySelectorAll('form')) {
-  const project = form.querySelector('[data-project-select]');
-  const repo = form.querySelector('[data-repo-select]');
-  if (!project || !repo) continue;
+// Escolha de repositório: o nome do repositório novo só aparece quando "Novo repositório…" é escolhido.
+for (const picker of document.querySelectorAll('[data-repo-picker]')) {
+  const select = picker.querySelector('select');
+  const extra = picker.querySelector('[data-new-repo]');
   const sync = () => {
-    for (const option of repo.options) {
-      if (!option.dataset.project) continue;
-      option.hidden = Boolean(project.value) && option.dataset.project !== project.value;
-    }
-    if (repo.selectedOptions[0]?.hidden) repo.value = '';
+    const fresh = select.value === '__novo__';
+    extra.hidden = !fresh;
+    extra.querySelector('input[name=novo_repo]').required = fresh;
   };
-  project.addEventListener('change', sync);
+  select.addEventListener('change', sync);
   sync();
 }
 

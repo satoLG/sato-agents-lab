@@ -203,3 +203,13 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-review h2 { margin: 0 0 8px; font-size: 1rem; }
 .kb-review-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 10px; }
 .kb-review-actions details[open] { flex-basis: 100%; }
+.kb-repo-picker { display: grid; gap: 8px; }
+.kb-new-repo { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.kb-new-repo[hidden] { display: none; }
+.kb-check { display: inline-flex; gap: 8px; align-items: center; font-size: .9rem; }
+.kb-repo-edit { display: inline-block; margin-left: 6px; }
+.kb-refs { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.kb-refs li { padding: 8px 12px; border-radius: 8px; background: var(--tile-bg-soft, rgba(255,255,255,.04)); overflow-wrap: anywhere; }
+.kb-ref-forms { display: grid; gap: 8px; }
+.kb-ref-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kb-ref-form input[type=url], .kb-ref-form input[name=titulo] { flex: 1 1 200px; }
