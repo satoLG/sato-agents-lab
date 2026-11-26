@@ -223,6 +223,11 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-links li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kb-close .i { width: 20px; height: 20px; }
 .kb-pre.rich { white-space: normal; }
+/* Prévia de comentário: 5 linhas (line-height 1.5 + padding da .kb-box). max-height em vez de
+   line-clamp porque o texto rico tem p/ul/table, que o -webkit-box não corta direito. */
+.kb-pre.kb-clamped { max-height: calc(7.5em + 20px); overflow: hidden; }
+.kb-more { margin-top: 4px; padding: 2px 0; background: none; border: 0; font-size: .75rem; font-weight: 800; color: var(--accent); cursor: pointer; }
+.kb-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Artefatos que a execução devolve */
 .kb-artifacts { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }

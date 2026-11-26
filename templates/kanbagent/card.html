@@ -174,7 +174,7 @@
               {% elif e.kind == 'artifact_added' %}entregou o artefato <strong>{{ e.text }}</strong>
               {% endif %}</p>
               <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
-              {% if e.text and e.kind in ('stage_change', 'comment') %}<div class="kb-pre kb-box" data-rich>{{ e.text }}</div>{% endif %}
+              {% if e.text and e.kind in ('stage_change', 'comment') %}<div class="kb-pre kb-box" data-rich{% if e.kind == 'comment' %} data-clamp{% endif %}>{{ e.text }}</div>{% endif %}
             </div>
           </li>
           {% endfor %}

@@ -2,8 +2,36 @@
 // com JS os cards se arrastam entre as listas, e só acendem as listas permitidas pelas regras.
 import {press, release} from './button-sounds.js';
 import {enhanceRich} from './rich-text.js';
+import {needsClamp} from './clamp.js';
 
 enhanceRich();
+
+// Comentários longos da timeline começam numa prévia de 5 linhas (CSS .kb-clamped) com
+// "Ver mais"/"Ver menos", como a home. 5 linhas (e não as 2 da pergunta da home) porque o
+// comentário costuma ser texto rico de agente. Sem JS o texto aparece inteiro.
+function clampLongBlocks() {
+  for (const node of document.querySelectorAll('[data-clamp]')) {
+    if ('clampDone' in node.dataset) continue;
+    node.dataset.clampDone = '';
+    node.classList.add('kb-clamped');
+    if (!needsClamp(node.scrollHeight, node.clientHeight)) {
+      node.classList.remove('kb-clamped');
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kb-more';
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = 'Ver mais';
+    btn.addEventListener('click', () => {
+      const collapsed = node.classList.toggle('kb-clamped');
+      btn.textContent = collapsed ? 'Ver mais' : 'Ver menos';
+      btn.setAttribute('aria-expanded', String(!collapsed));
+    });
+    node.after(btn);
+  }
+}
+clampLongBlocks();
 
 // Ícone do sprite Lucide como HTML (ADR 0011). Nomes fixos do código, nunca vindos do usuário.
 const SPRITE = new URL('../icons/lucide.svg', import.meta.url).href;
