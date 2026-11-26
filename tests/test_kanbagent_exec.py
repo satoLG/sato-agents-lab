@@ -216,3 +216,15 @@ def test_artifact_only_card_skips_the_pr(db):
     assert [a["nome"] for a in item["artifacts"]] == ["dino.png"]
     assert "Artefatos prontos" in item["events"][-1]["text"]
     assert not hasattr(box, "summary")      # publish não foi chamado
+
+
+def test_art_is_always_opus_but_copying_a_file_is_not():
+    plan = worker.parse_plan(json.dumps({"tasks": [
+        task("Desenhar SVG do dinossauro de corpo inteiro", "sonnet"),
+        task("Script que renderiza o sprite em PNG", "haiku"),
+        task("Copiar o PNG do sprite para public/biscuits", "free"),
+        task("Ajustar texto do botão", "free")]}))
+    assert [t["tier"] for t in plan["tasks"]] == ["opus", "haiku", "free", "free"]
+    assert worker.planner_model("**Tamanho** — pequeno", "fazer um sprite do dinossauro") == "opus"
+    assert worker.planner_model("**Tamanho** — pequeno", "botão de exportar CSV") == "sonnet"
+    assert "SEMPRE opus para arte" in worker.RUBRIC

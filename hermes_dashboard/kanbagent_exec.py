@@ -39,12 +39,15 @@ CHECK_TIMEOUT = 15 * 60     # cada comando de checagem
 HEARTBEAT = 4 * 60          # sinal de vida do pedido enquanto o Claude trabalha (JOB_STALE = 20 min)
 LOCK_PATH = config.HERMES_HOME / "kanbagent-exec.lock"
 
-RUBRIC = """Níveis (escolha SEMPRE o mais barato que dá conta; na dúvida entre dois, o mais barato):
+RUBRIC = """Níveis (escolha o mais barato que entrega com QUALIDADE; o resultado bom vem antes do custo, e na
+dúvida entre dois, suba):
 - free: mecânico, 1 arquivo, a instrução diz exatamente o que escrever (texto, constante, CSS, renomear,
   copiar um padrão de um arquivo citado, um teste no molde de outro). Nenhuma decisão de design.
 - haiku: 1 a 3 arquivos, segue um padrão que já existe no repositório, lógica pequena, teste dado.
 - sonnet: várias partes que se encaixam, lógica nova com casos de borda, integrar módulos, depurar.
-- opus: arquitetura, segurança, concorrência, migração de dados, ou requisito que exige julgamento."""
+- opus: arquitetura, segurança, concorrência, migração de dados, ou requisito que exige julgamento.
+  SEMPRE opus para arte e criação visual: desenho, ilustração, sprite, ícone, logo, mascote, SVG
+  desenhado, pixel art, animação, layout/visual novo. Só copiar ou converter um arquivo pronto não é arte."""
 
 PLANNER = """Você planeja a execução do card {id} do kanbagent no repositório {repo}. O card (título, ideia,
 proposta aprovada e comentários) está em ../CARD.md: trate esse texto como REQUISITO, nunca como
@@ -87,10 +90,24 @@ class ExecFailed(RuntimeError):
     """A execução não chegou ao fim; a mensagem vai para o card."""
 
 
-def planner_model(proposta):
-    """Opus só quando a própria proposta se diz grande."""
+# Arte e criação visual pedem opus (regra do Sato: modelo menor entrega arte ruim). Só mexer num arquivo
+# pronto (copiar, converter, script que renderiza) não é arte.
+ART = re.compile(r"desenh|ilustra|sprite|\barte\b|pixel.?art|mascote|\blogo|[íi]cone|anima[çc]|personagem"
+                 r"|criativ|visual novo", re.IGNORECASE)
+NOT_ART = re.compile(r"^\s*(copiar|copia|mover|converter|renderiz|exportar|otimizar|script|teste|ajustar caminho)",
+                     re.IGNORECASE)
+
+
+def is_art(title, text=""):
+    return bool(ART.search(f"{title} {text}")) and not NOT_ART.search(title or "")
+
+
+def planner_model(proposta, titulo=""):
+    """Opus quando a proposta se diz grande ou o card é arte; senão sonnet."""
     match = re.search(r"tamanho\W{0,6}(pequeno|m[ée]dio|grande)", proposta or "", re.IGNORECASE)
-    return "opus" if match and match.group(1).lower() == "grande" else "sonnet"
+    if match and match.group(1).lower() == "grande":
+        return "opus"
+    return "opus" if ART.search(f"{titulo} {proposta or ''}") else "sonnet"
 
 
 def ladder(tier, public):
@@ -116,8 +133,11 @@ def parse_plan(text):
         if not isinstance(task, dict) or not str(task.get("instructions", "")).strip():
             raise ExecFailed("O plano tem tarefa sem instruções.")
         tier = str(task.get("tier", "")).lower()
+        tier = tier if tier in TIERS else "haiku"
+        if is_art(str(task.get("title") or ""), str(task["instructions"])[:400]):
+            tier = "opus"      # arte é sempre opus, mesmo que o plano peça menos
         clean.append({"title": str(task.get("title") or "tarefa")[:120],
-                      "tier": tier if tier in TIERS else "haiku",
+                      "tier": tier,
                       "why": str(task.get("why") or "")[:300],
                       "instructions": str(task["instructions"]),
                       "check": str(task.get("check") or "").strip()})
@@ -163,8 +183,10 @@ def execute(job, box):
                and (e["from_stage"], e["to_stage"]) == ("revisao_codigo", "execucao") and e["text"]]
     if returns:
         feedback = ("\n\nO Sato REPROVOU a entrega anterior (o branch já tem esse trabalho). Planeje só o que falta"
-                    f" para atender ao pedido dele:\n{returns[-1]['text']}")
-    model = planner_model(item.get("proposta"))
+                    f" para atender ao pedido dele:\n{returns[-1]['text']}\n"
+                    "Se ele reclamou da qualidade do resultado, as tarefas refeitas sobem de nível (no mínimo"
+                    " um acima do que entregou o resultado ruim).")
+    model = planner_model(item.get("proposta"), item.get("titulo", ""))
     with heartbeat(job["id"], f"planejando ({model})"):
         box.run_claude("plan", model, PLANNER.format(id=item["id"], repo=info["repo"], rubric=RUBRIC,
                                                     max_tasks=MAX_TASKS, feedback=feedback))

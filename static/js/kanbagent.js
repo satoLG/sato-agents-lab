@@ -20,9 +20,33 @@ for (const form of document.querySelectorAll('form[data-autosubmit]')) {
   form.addEventListener('change', () => form.requestSubmit());
 }
 
+// Confirmação no modal do próprio site (nunca window.confirm/alert).
+const confirmDialog = document.getElementById('kb-confirm');
+function askConfirm({title, message, ok = 'Confirmar', danger = false}) {
+  if (!confirmDialog) return Promise.resolve(true);
+  confirmDialog.querySelector('h2').textContent = title;
+  confirmDialog.querySelector('[data-confirm-message]').textContent = message || '';
+  const button = confirmDialog.querySelector('[data-confirm-ok]');
+  button.textContent = ok;
+  button.classList.toggle('danger', danger);
+  return new Promise((resolve) => {
+    confirmDialog.returnValue = '';
+    confirmDialog.addEventListener('close', () => resolve(confirmDialog.returnValue === 'ok'), {once: true});
+    confirmDialog.showModal();
+    button.focus();
+  });
+}
+
 for (const form of document.querySelectorAll('form[data-confirm]')) {
-  form.addEventListener('submit', (event) => {
-    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+  form.addEventListener('submit', async (event) => {
+    if (form.dataset.confirmed) return;
+    event.preventDefault();
+    const submitter = event.submitter;
+    const yes = await askConfirm({title: form.dataset.confirmTitle || 'Confirmar?', message: form.dataset.confirm,
+                                  ok: form.dataset.confirmOk, danger: 'confirmDanger' in form.dataset});
+    if (!yes) return;
+    form.dataset.confirmed = '1';
+    form.requestSubmit(submitter);
   });
 }
 

@@ -20,4 +20,14 @@
 {% block kb_content %}{% endblock %}
 </div>
 {% endblock %}
-{% block scripts %}<script type="module" src="{{ url_for('static', filename='js/kanbagent.js') }}"></script>{% endblock %}
+{% block scripts %}<dialog class="kb-dialog card" id="kb-confirm" aria-labelledby="kb-confirm-title">
+  <form method="dialog">
+    <h2 id="kb-confirm-title"></h2>
+    <p class="kb-dialog-message" data-confirm-message></p>
+    <div class="kb-dialog-actions">
+      <button class="btn ghost small" value="cancel">Cancelar</button>
+      <button class="btn small" value="ok" data-confirm-ok>Confirmar</button>
+    </div>
+  </form>
+</dialog>
+<script type="module" src="{{ url_for('static', filename='js/kanbagent.js') }}"></script>{% endblock %}

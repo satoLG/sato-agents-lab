@@ -14,7 +14,7 @@
 <div class="kb-board" aria-label="Etapas" data-csrf="{{ session.get('web_chat_csrf', '') }}" data-rules="{{ rules|tojson|forceescape }}">
   {% for stage in kb_stages if stage != 'descartado' or show_discarded %}
   {% set items = columns[stage] %}
-  <section class="kb-list" aria-labelledby="col-{{ stage }}" data-stage="{{ stage }}" data-drop="{{ stage }}">
+  <section class="kb-list{% if not items and stage != 'ideia' %} kb-list-empty{% endif %}" aria-labelledby="col-{{ stage }}" data-stage="{{ stage }}" data-drop="{{ stage }}">
     <header class="kb-list-head"><h2 id="col-{{ stage }}">{{ kb_labels[stage] }}</h2><span class="kb-count">{{ items|length }}</span></header>
     <ol class="kb-cards">
       {% for c in items %}
