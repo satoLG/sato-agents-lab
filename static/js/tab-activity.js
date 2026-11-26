@@ -1,7 +1,7 @@
 // Aba 1: atividade do agente (heatmap tipo GitHub + detalhe do dia).
 // O painel "ao vivo" acima do heatmap e servido pelo htmx (fragments/live.html);
 // aqui cuidamos so do calendario e da lista do dia selecionado.
-import { h, fmt, render, load, empty, getJSON, notice } from "./core.js";
+import { h, icon, fmt, render, load, empty, getJSON, notice } from "./core.js";
 import { heatmap, stat } from "./charts.js";
 
 const KIND_LABELS = {
@@ -122,7 +122,7 @@ function dayDetail(data) {
     data.cost_usd ? h("span", { class: "pill", text: `custo ${fmt.usd(data.cost_usd)}` }) : null,
     data.errors
       ? h("span", { class: "pill err" }, [h("span", { class: "ico", text: "!" }), `${data.errors} com erro`])
-      : h("span", { class: "pill ok" }, [h("span", { class: "ico", text: "✓" }), "sem erros"]),
+      : h("span", { class: "pill ok" }, [icon("check"), "sem erros"]),
   ].filter(Boolean));
 
   const rows = data.events.map((e) => h("div", {

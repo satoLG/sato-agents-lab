@@ -2,6 +2,10 @@
 // com JS os cards se arrastam entre as listas, e só acendem as listas permitidas pelas regras.
 import {press, release} from './button-sounds.js';
 
+// Ícone do sprite Lucide como HTML (ADR 0011). Nomes fixos do código, nunca vindos do usuário.
+const SPRITE = new URL('../icons/lucide.svg', import.meta.url).href;
+const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><use href="${SPRITE}#${name}"/></svg>`;
+
 // Tipo de pedido → selo enquanto o agente trabalha (igual ao JOB_TEXT do kanbagent_web.py).
 const JOB_TEXT = {
   proposta: ['propondo…', 'O Hermes está escrevendo a proposta'],
@@ -190,7 +194,7 @@ function setupDrag(board) {
     const title = card.querySelector('.kb-card-title')?.textContent || 'Card';
     const area = dialog.querySelector('textarea');
     const error = dialog.querySelector('.kb-dialog-error');
-    dialog.querySelector('h2').textContent = rules.labels[key] || (to === 'descartado' ? '🗑 Descartar' : `→ ${rules.stages[to]}`);
+    dialog.querySelector('h2').textContent = rules.labels[key] || (to === 'descartado' ? 'Descartar o card' : `Mover para ${rules.stages[to]}`);
     dialog.querySelector('[data-move-help]').textContent = to === 'descartado'
       ? `Descartar "${title}"? O card sai do quadro (fica em "Mostrar descartados").`
       : required ? `"${title}": diga o que mudar. O comentário fica na atividade do card.`
@@ -258,8 +262,8 @@ function setupDrag(board) {
     card.dataset.next = moves.join(' ');
     card.querySelector('.kb-label[data-stage]')?.setAttribute('data-stage', stage);
     card.querySelector('.kb-label[data-stage]')?.setAttribute('title', rules.stages[stage]);
-    const time = card.querySelector('.kb-badge-time');
-    if (time) time.textContent = '⏱ agora';
+    const since = card.querySelector('.kb-badge-time [data-since]');
+    if (since) since.textContent = 'agora';
     const badges = card.querySelector('.kb-badges');
     badges?.querySelector('.kb-badge-wait')?.remove();
     badges?.querySelector('.kb-badge-fail')?.remove();
@@ -273,9 +277,10 @@ function setupDrag(board) {
       watchJobs();
     }
     if (data.ajustes) {
-      let adj = [...(badges?.children || [])].find((b) => b.textContent.startsWith('↺'));
-      if (!adj) { badges?.insertAdjacentHTML('beforeend', '<span class="kb-badge" title="Voltas de ajuste"></span>'); adj = badges?.lastElementChild; }
-      if (adj) adj.textContent = `↺ ${data.ajustes}`;
+      let adj = badges?.querySelector('[data-ajustes]');
+      if (!adj) { badges?.insertAdjacentHTML('beforeend', `<span class="kb-badge" title="Voltas de ajuste" data-ajustes>${icon('rotate-ccw')} <span></span></span>`); adj = badges?.lastElementChild; }
+      const n = adj?.querySelector('span');
+      if (n) n.textContent = data.ajustes;
     }
   }
 

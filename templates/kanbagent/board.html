@@ -8,7 +8,7 @@
 <div class="kb-boardbar">
   <h1>Quadro</h1>
   {{ ui.filters(projects, filters) }}
-  <form method="post" action="{{ url_for('kanbagent.sync_form') }}" class="kb-boardbar-end">{{ ui.csrf() }}<button class="btn ghost small" type="submit">↻ Sincronizar GitHub</button></form>
+  <form method="post" action="{{ url_for('kanbagent.sync_form') }}" class="kb-boardbar-end">{{ ui.csrf() }}<button class="btn ghost small" type="submit" data-tip="Sincronizar com o GitHub" data-tip-pos="below">{{ icon('refresh-cw') }} Sincronizar</button></form>
 </div>
 
 <div class="kb-board" aria-label="Etapas" data-csrf="{{ session.get('web_chat_csrf', '') }}" data-rules="{{ rules|tojson|forceescape }}">
@@ -32,13 +32,13 @@
           <strong class="kb-card-title">{{ c.titulo }}</strong>
           {% if c.repo %}<span class="kb-meta">{{ c.repo }}</span>{% endif %}
           <span class="kb-badges">
-            <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">⏱ {{ c.na_etapa_desde|kb_since }}</span>
+            <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">{{ icon('timer') }} <span data-since>{{ c.na_etapa_desde|kb_since }}</span></span>
             {% if locked %}<span class="kb-badge kb-badge-wait" title="{{ kb_job_text[job.kind][1] }}"><span class="kb-spinner" aria-hidden="true"></span> {{ kb_job_text[job.kind][0] }} <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
-            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">⚠ {{ kb_job_text[job.kind][2] }}</span>
-            {% elif review %}<span class="kb-badge {{ 'kb-badge-ok' if review.aprovar else 'kb-badge-fail' }}" title="Revisão concluída: abra o card para aprovar ou reprovar">{{ '✓ revisado' if review.aprovar else '⚠ ajustes' }}</span>
-            {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">≡</span>{% endif %}
-            {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste">↺ {{ c.ajustes }}</span>{% endif %}
-            {% if c.links %}<span class="kb-badge" title="Issues e PRs ligados">🔗 {{ c.links }}</span>{% endif %}
+            {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">{{ icon('triangle-exclamation-point') }} {{ kb_job_text[job.kind][2] }}</span>
+            {% elif review %}<span class="kb-badge {{ 'kb-badge-ok' if review.aprovar else 'kb-badge-fail' }}" title="Revisão concluída: abra o card para aprovar ou reprovar">{% if review.aprovar %}{{ icon('circle-check') }} revisado{% else %}{{ icon('triangle-exclamation-point') }} ajustes{% endif %}</span>
+            {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">{{ icon('file-text', 'Tem proposta') }}</span>{% endif %}
+            {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste" data-ajustes>{{ icon('rotate-ccw') }} <span>{{ c.ajustes }}</span></span>{% endif %}
+            {% if c.links %}<span class="kb-badge" title="PRs e issues do card">{{ icon('git-pull-request') }} {{ c.links }}</span>{% endif %}
           </span>
         </a>
       </li>
@@ -46,21 +46,21 @@
     </ol>
     {% if stage == 'ideia' %}
     <details class="kb-composer" {% if not columns.values()|sum(start=[]) %}open{% endif %}>
-      <summary>+ Adicionar ideia</summary>
+      <summary>{{ icon('plus') }} Ideia</summary>
       <form method="post" action="{{ url_for('kanbagent.create_card_form') }}" class="kb-form">
         {{ ui.csrf() }}
         <input name="titulo" maxlength="200" required placeholder="Título da ideia" aria-label="Título">
         <textarea name="ideia" rows="4" required placeholder="Escreva solto, do seu jeito. O texto original nunca é alterado." aria-label="Ideia"></textarea>
         {{ ui.project_select(projects, selected=filters.project) }}
         {{ ui.repo_picker(gh_repos, gh_login) }}
-        <button class="btn small" type="submit">Anotar ideia</button>
+        <button class="btn small" type="submit">Anotar</button>
       </form>
     </details>
     {% endif %}
   </section>
   {% endfor %}
 </div>
-{% if not show_discarded %}<div class="kb-trash" data-drop="descartado" data-stage="descartado" aria-hidden="true">🗑 Solte aqui para descartar</div>{% endif %}
+{% if not show_discarded %}<div class="kb-trash" data-drop="descartado" data-stage="descartado" aria-hidden="true">{{ icon('trash') }} Solte aqui para descartar</div>{% endif %}
 <p class="kb-hint-drag muted">Arraste os cards entre as listas (no celular, segure o card antes de arrastar). Só acendem as listas para onde ele pode ir.</p>
 <p class="kb-foot">
   {% if show_discarded %}<a href="{{ url_for('kanbagent.board', projeto=filters.project, repo=filters.repo) }}">Esconder descartados</a>

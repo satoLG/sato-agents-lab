@@ -9,7 +9,7 @@
 {% set failed = job and job.status == 'failed' and job.kind == card.etapa_atual %}
 {% set review = kb_review(card) %}
 <article class="kb-detail card{% if locked %} kb-locked{% endif %}" aria-labelledby="kb-title"{% if locked %} data-watch-job="{{ card.id }}"{% endif %}>
-  <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro">✕</a>
+  <a class="kb-close" href="{{ url_for('kanbagent.board') }}" aria-label="Voltar ao quadro" data-tip="Fechar" data-tip-pos="below">{{ icon('x') }}</a>
   <header class="kb-detail-head">
     <h1 id="kb-title">{{ card.titulo }}</h1>
     <p class="muted">na lista <span class="kb-stage" data-stage="{{ card.etapa_atual }}">{{ kb_labels[card.etapa_atual] }}</span> há {{ card.na_etapa_desde|kb_since }}</p>
@@ -21,15 +21,15 @@
         {% else %}<span class="kb-chip muted">nenhum</span>{% endif %}
         {% if gh_repos is defined and not locked %}
         <details class="kb-inline-edit kb-repo-edit">
-          <summary class="btn ghost small">Trocar</summary>
+          <summary class="btn ghost small" data-tip="Trocar o repositório">{{ icon('folder-git-2') }} Trocar</summary>
           <form method="post" action="{{ url_for('kanbagent.repo_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
             {{ ui.repo_picker(gh_repos, gh_login, card.repo) }}
-            <button class="btn small" type="submit">Salvar</button>
+            <button class="btn small" type="submit">{{ icon('check') }} Salvar</button>
           </form>
         </details>
         {% endif %}
       </div>
-      <div><span class="kb-fact-label">Tempo total</span><span class="kb-chip">⏱ {{ card.total_seconds|kb_duration }}</span></div>
+      <div><span class="kb-fact-label">Tempo total</span><span class="kb-chip">{{ icon('timer') }} {{ card.total_seconds|kb_duration }}</span></div>
       <div><span class="kb-fact-label">Criado</span><span class="kb-chip">{{ card.criado_em|kb_time }}</span></div>
     </div>
   </header>
@@ -44,23 +44,23 @@
   <div class="kb-failed" role="alert">
     <p><strong>{{ {'execucao': 'A execução não chegou ao fim.', 'revisao_codigo': 'A revisão do PR não chegou ao fim.'}.get(job.kind, 'O Hermes não conseguiu escrever a proposta.') }}</strong> {{ job.error }}</p>
     <form method="post" action="{{ url_for('kanbagent.repropose_form', card_id=card.id) }}">{{ ui.csrf() }}
-      <button class="btn small" type="submit">↻ Pedir de novo</button>
+      <button class="btn small" type="submit" data-tip="Pedir de novo ao agente">{{ icon('refresh-cw') }} Repetir</button>
     </form>
   </div>
   {% elif review %}
   <section class="kb-review" data-verdict="{{ 'aprovar' if review.aprovar else 'ajustar' }}" aria-labelledby="kb-review-title">
-    <h2 id="kb-review-title">{{ '✓ Revisão: pode aprovar' if review.aprovar else '⚠ Revisão: pede ajustes' }}</h2>
+    <h2 id="kb-review-title">{% if review.aprovar %}{{ icon('circle-check') }} Revisão: pode aprovar{% else %}{{ icon('triangle-exclamation-point') }} Revisão: pede ajustes{% endif %}</h2>
     <div class="kb-pre kb-box">{{ review.texto }}</div>
     <div class="kb-review-actions">
       <form method="post" action="{{ url_for('kanbagent.approve_form', card_id=card.id) }}" data-confirm="Fazer o merge do PR e marcar como entregue?">{{ ui.csrf() }}
-        <button class="btn" type="submit">✓ Aprovar (merge)</button>
+        <button class="btn" type="submit" data-tip="Fazer merge do PR e entregar">{{ icon('git-merge') }} Aprovar</button>
       </form>
       <details class="kb-inline-edit">
-        <summary class="btn ghost">✗ Reprovar</summary>
+        <summary class="btn ghost" data-tip="Voltar para execução com o parecer">{{ icon('undo-2') }} Reprovar</summary>
         <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
           <input type="hidden" name="para" value="execucao">
           <textarea name="texto" rows="6" required aria-label="O que ajustar">{{ review.texto }}</textarea>
-          <button class="btn small" type="submit">Voltar para execução</button>
+          <button class="btn small" type="submit">{{ icon('send') }} Enviar</button>
         </form>
       </details>
     </div>
@@ -70,12 +70,12 @@
   <div class="kb-detail-body">
     <div class="kb-detail-main">
       <section aria-labelledby="kb-idea">
-        <h2 id="kb-idea"><span aria-hidden="true">💡</span> Ideia original</h2>
+        <h2 id="kb-idea">{{ icon('lightbulb') }}Ideia original</h2>
         <p class="kb-pre kb-box">{{ card.ideia_original }}</p>
       </section>
 
       <section aria-labelledby="kb-refs">
-        <h2 id="kb-refs">Referências</h2>
+        <h2 id="kb-refs">{{ icon('paperclip') }}Referências</h2>
         {% if card.refs %}
         <ul class="kb-refs">
           {% for r in card.refs %}
@@ -89,32 +89,32 @@
           <form method="post" action="{{ url_for('kanbagent.ref_link_form', card_id=card.id) }}" class="kb-form kb-ref-form">{{ ui.csrf() }}
             <input name="url" type="url" required placeholder="https://… (link de referência)" aria-label="Link de referência">
             <input name="titulo" maxlength="200" placeholder="Título (opcional)" aria-label="Título do link">
-            <button class="btn ghost small" type="submit">Adicionar</button>
+            <button class="btn ghost small" type="submit" data-tip="Adicionar link">{{ icon('link') }} Adicionar</button>
           </form>
           <form method="post" action="{{ url_for('kanbagent.ref_file_form', card_id=card.id) }}" enctype="multipart/form-data" class="kb-form kb-ref-form">{{ ui.csrf() }}
             <input name="arquivo" type="file" required aria-label="Arquivo anexo (até 20 MB)">
-            <button class="btn ghost small" type="submit">Anexar</button>
+            <button class="btn ghost small" type="submit" data-tip="Anexar arquivo (até 20 MB)">{{ icon('paperclip') }} Anexar</button>
           </form>
         </div>
         {% endif %}
       </section>
 
       <section aria-labelledby="kb-proposal">
-        <h2 id="kb-proposal"><span aria-hidden="true">≡</span> Proposta</h2>
+        <h2 id="kb-proposal">{{ icon('file-text') }}Proposta</h2>
         {% if card.proposta %}<div class="kb-pre kb-box">{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
         {% if not locked %}
         <details class="kb-inline-edit">
-          <summary class="btn ghost small">{% if card.proposta %}Editar proposta{% else %}Escrever proposta{% endif %}</summary>
+          <summary class="btn ghost small">{{ icon('pencil') }} {% if card.proposta %}Editar{% else %}Escrever{% endif %}</summary>
           <form method="post" action="{{ url_for('kanbagent.proposal_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
             <textarea name="proposta" rows="10" required aria-label="Proposta">{{ card.proposta }}</textarea>
-            <button class="btn small" type="submit">Salvar proposta</button>
+            <button class="btn small" type="submit">{{ icon('check') }} Salvar</button>
           </form>
         </details>
         {% endif %}
       </section>
 
       <section aria-labelledby="kb-durations">
-        <h2 id="kb-durations"><span aria-hidden="true">⏱</span> Tempo por etapa</h2>
+        <h2 id="kb-durations">{{ icon('timer') }}Tempo por etapa</h2>
         <ul class="kb-bars">
           {% for stage in kb_stages if stage in card.durations %}
           <li>
@@ -128,10 +128,10 @@
       </section>
 
       <section aria-labelledby="kb-timeline">
-        <h2 id="kb-timeline"><span aria-hidden="true">☰</span> Atividade</h2>
+        <h2 id="kb-timeline">{{ icon('list') }}Atividade</h2>
         <form method="post" action="{{ url_for('kanbagent.comment_form', card_id=card.id) }}" class="kb-form kb-comment">{{ ui.csrf() }}
           <textarea name="texto" rows="2" required placeholder="Escrever um comentário…" aria-label="Comentário"></textarea>
-          <button class="btn small" type="submit">Comentar</button>
+          <button class="btn small" type="submit">{{ icon('message-square') }} Comentar</button>
         </form>
         <ol class="kb-timeline">
           {% for e in card.events|reverse %}
@@ -144,6 +144,8 @@
               {% elif e.kind == 'comment' %}comentou
               {% elif e.kind == 'link_added' %}ligou <a href="{{ e.text }}" rel="noopener" target="_blank">{{ e.text }}</a>
               {% elif e.kind == 'proposal_updated' %}atualizou a proposta
+              {% elif e.kind == 'repo_changed' %}escolheu o repositório <strong>{{ e.text }}</strong>
+              {% elif e.kind == 'ref_added' %}adicionou a referência {{ e.text }}
               {% endif %}</p>
               <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
               {% if e.text and e.kind in ('stage_change', 'comment') %}<p class="kb-pre kb-box">{{ e.text }}</p>{% endif %}
@@ -164,24 +166,26 @@
       {% set move = (card.etapa_atual, to) %}
       {% if move in kb_returns %}
       <details class="kb-inline-edit">
-        <summary class="btn ghost">{{ kb_action(card.etapa_atual, to) }}</summary>
+        {% set act = kb_action(card.etapa_atual, to) %}
+        <summary class="btn ghost" data-tip="{{ act[2] }}">{{ icon(act[0]) }} {{ act[1] }}</summary>
         <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
           <input type="hidden" name="para" value="{{ to }}">
-          <textarea name="texto" rows="3" {% if move in kb_needs_text %}required placeholder="O que mudar?"{% else %}placeholder="Comentário (opcional)"{% endif %} aria-label="{{ kb_action(card.etapa_atual, to) }}"></textarea>
-          <button class="btn small" type="submit">{{ kb_action(card.etapa_atual, to)[2:] }}</button>
+          <textarea name="texto" rows="3" {% if move in kb_needs_text %}required placeholder="O que mudar?"{% else %}placeholder="Comentário (opcional)"{% endif %} aria-label="{{ act[2] }}"></textarea>
+          <button class="btn small" type="submit">{{ icon('send') }} Enviar</button>
         </form>
       </details>
       {% else %}
       <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
         <input type="hidden" name="para" value="{{ to }}">
-        <button class="btn" type="submit">{{ kb_action(card.etapa_atual, to) }}</button>
+        {% set act = kb_action(card.etapa_atual, to) %}
+        <button class="btn" type="submit" data-tip="{{ act[2] }}">{{ icon(act[0]) }} {{ act[1] }}</button>
       </form>
       {% endif %}
       {% endfor %}
       {% if 'descartado' in card.proximas %}
       <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}" data-confirm="Descartar este card?">{{ ui.csrf() }}
         <input type="hidden" name="para" value="descartado">
-        <button class="btn danger" type="submit">🗑 Descartar</button>
+        <button class="btn danger" type="submit" data-tip="Descartar o card">{{ icon('trash') }} Descartar</button>
       </form>
       {% endif %}
       {% else %}
@@ -191,7 +195,7 @@
       {% if card.links %}
       <h2>Entregas</h2>
       <ul class="kb-links">
-        {% for l in card.links %}<li><a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.repo }}{{ '#' }}{{ l.numero }}</a> <span class="kb-badge">{{ 'PR' if l.tipo == 'pr' else 'issue' }}</span>{% if l.estado %} <span class="kb-badge">{{ l.estado }}</span>{% endif %}</li>{% endfor %}
+        {% for l in card.links %}<li>{{ icon('git-pull-request' if l.tipo == 'pr' else 'circle') }} <a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.repo }}{{ '#' }}{{ l.numero }}</a> <span class="kb-badge">{{ 'PR' if l.tipo == 'pr' else 'issue' }}</span>{% if l.estado %} <span class="kb-badge">{{ l.estado }}</span>{% endif %}</li>{% endfor %}
       </ul>
       {% endif %}
     </aside>

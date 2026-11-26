@@ -173,7 +173,7 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .kb-dialog-error { color: var(--danger); font-size: .85rem; margin: 6px 0 0; }
 .kb-toast { position: fixed; right: 16px; bottom: 16px; z-index: 110; margin: 0; max-width: min(90vw, 420px); }
-/* celular: o título já está na barra do ☰; filtros e sync numa faixa só */
+/* celular: o título já está na barra do menu; filtros e sync numa faixa só */
 @media (max-width: 899px) {
   .kb-boardbar { gap: 8px; padding: 8px 12px; }
   .kb-boardbar h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -213,3 +213,7 @@ body[data-page=dashboard] .kb-dialog { width: min(92vw, 460px); margin: auto; pa
 .kb-ref-forms { display: grid; gap: 8px; }
 .kb-ref-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .kb-ref-form input[type=url], .kb-ref-form input[name=titulo] { flex: 1 1 200px; }
+.app-side .kb-nav a { display: flex; align-items: center; gap: 10px; }
+.kb-composer > summary { display: flex; align-items: center; gap: 6px; }
+.kb-links li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kb-close .i { width: 20px; height: 20px; }

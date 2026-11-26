@@ -1,5 +1,5 @@
 // Aba 4: servidores MCP - o que esta configurado e o que foi realmente chamado.
-import { h, fmt, render, load, empty, table, notice } from "./core.js";
+import { h, icon, fmt, render, load, empty, table, notice } from "./core.js";
 import { bars, stat, seriesColor } from "./charts.js";
 
 const state = { days: 30 };
@@ -85,7 +85,7 @@ function renderMcps(d) {
 
 function serverCard(s) {
   const meta = [
-    s.configured ? h("span", { class: "pill ok" }, [h("span", { class: "ico", text: "✓" }), "no config"])
+    s.configured ? h("span", { class: "pill ok" }, [icon("check"), "no config"])
                  : h("span", { class: "pill warn" }, [h("span", { class: "ico", text: "!" }), "so no log"]),
     s.transport ? h("span", { class: "pill", text: s.transport }) : null,
     s.enabled === false ? h("span", { class: "pill err", text: "desabilitado" }) : null,

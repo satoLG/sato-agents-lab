@@ -16,6 +16,7 @@ crie um ADR novo com `Substitui: NNNN` e marque o antigo como `Substituído por 
 | [0008](0008-dashboard-read-only-tolerante.md) | Dashboard read-only e tolerante a fontes ausentes | Aceito |
 | [0009](0009-kanbagent-pagina-com-escrita-protegida.md) | kanbagent no site, com banco próprio e escrita protegida | Aceito (acesso substituído por 0010) |
 | [0010](0010-login-do-site-protege-dashboard-e-kanbagent.md) | Login do site protege dashboard e kanbagent; só a home é pública | Aceito |
+| [0011](0011-icones-svg-sem-emoji.md) | Ícones SVG do sprite Lucide, nunca emoji; botões com uma palavra | Aceito |
 
 ## Modelo
 

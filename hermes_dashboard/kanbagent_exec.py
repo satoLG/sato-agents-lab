@@ -391,7 +391,7 @@ class Sandbox:
         existing = _run(["gh", "pr", "list", "--repo", self.repo, "--head", self.branch, "--state", "open",
                          "--json", "url", "--jq", ".[0].url"], timeout=60, env=env).stdout.strip()
         body = (f"Card do kanbagent: {item['titulo']}\n\n{summary}\n\n---\n"
-                "🤖 Planejado e executado pelo worker do kanbagent (Claude Code, níveis por tarefa). Revisar antes do merge.")
+                "Planejado e executado pelo worker do kanbagent (Claude Code, níveis por tarefa). Revisar antes do merge.")
         if existing:
             _run(["gh", "pr", "comment", existing, "--body", f"Nova rodada depois da reprovação.\n\n{summary}"],
                  timeout=60, env=env)
