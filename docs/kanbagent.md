@@ -92,6 +92,13 @@ Com a revisão concluída, o card mostra o parecer e dois botões: **Aprovar (me
 **Reprovar** volta para `execucao` com o parecer pré-preenchido como texto, o que dispara o executor de
 novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
 
+## Imagens de perfil
+
+Cada autor do histórico (sato, hermes, claude, github-sync) aparece com uma imagem. Os padrões ficam em
+`static/avatars/`; a página **Ajustes** troca por PNG, JPEG ou WebP (até 2 MB, conferido pelo conteúdo,
+SVG recusado), salvo em `kanbagent-avatars/` ao lado do banco. `GET /kanbagent/avatar/<autor>` serve a
+atual com `?v=<mtime>` para furar o cache; "Padrão" apaga a enviada.
+
 ## Modelo de dados (banco próprio `kanbagent.sqlite3`)
 
 - `projects` — slug, nome, descrição, criado_em, arquivado_em.

@@ -323,3 +323,42 @@ def test_refs_links_and_files_are_added_and_downloaded_safely(client):
     assert "attachment" in response.headers["Content-Disposition"]
     assert response.headers["Content-Type"] == "application/octet-stream"
     assert client.get(f"/kanbagent/card/{card_id}/anexo/{item['refs'][0]['id']}").status_code == 404
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+def test_avatars_have_defaults_and_can_be_replaced(client):
+    import io as _io
+    card_id = kb.create_card("A", "a", "sato")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert 'src="/kanbagent/avatar/sato?v=0"' in page
+    response = client.get("/kanbagent/avatar/claude")
+    assert response.status_code == 200 and response.mimetype == "image/svg+xml"
+    assert "default-src 'none'" in response.headers["Content-Security-Policy"]
+    assert client.get("/kanbagent/avatar/hermes").mimetype == "image/png"
+    assert client.get("/kanbagent/avatar/fulano").status_code == 404
+    assert "Imagens de perfil" in client.get("/kanbagent/ajustes").get_data(as_text=True)
+
+    client.post("/kanbagent/avatares/sato", content_type="multipart/form-data",
+                data={"csrf": client.csrf, "imagem": (_io.BytesIO(PNG), "eu.svg")})
+    response = client.get("/kanbagent/avatar/sato")
+    assert response.data == PNG and response.mimetype == "image/png"
+    response.close()   # no Windows o arquivo aberto impediria o reset
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "/kanbagent/avatar/sato?v=0" not in page and "Padrão" in client.get("/kanbagent/ajustes").get_data(as_text=True)
+
+    client.post("/kanbagent/avatares/sato/padrao", data={"csrf": client.csrf})
+    assert client.get("/kanbagent/avatar/sato").mimetype == "image/svg+xml"
+
+
+def test_avatar_upload_rejects_svg_and_big_files(client):
+    import io as _io
+    from hermes_dashboard import kanbagent_avatars as av
+    for payload in (b"<svg onload=alert(1)>", PNG + b"\x00" * av.MAX_SIZE):
+        response = client.post("/kanbagent/avatares/hermes", content_type="multipart/form-data",
+                               data={"csrf": client.csrf, "imagem": (_io.BytesIO(payload), "x.png")})
+        assert response.status_code == 302 and av.custom("hermes") is None
+    assert av.sniff(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp" and av.sniff(b"\xff\xd8\xff\xe0") == "jpg"
+    assert client.post("/kanbagent/avatares/fulano", content_type="multipart/form-data",
+                       data={"csrf": client.csrf, "imagem": (_io.BytesIO(PNG), "x.png")}).status_code == 404

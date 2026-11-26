@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 
 from . import kanbagent as kb
-from . import kanbagent_exec, kanbagent_github, kanbagent_hermes, kanbagent_review
+from . import kanbagent_avatars, kanbagent_exec, kanbagent_github, kanbagent_hermes, kanbagent_review
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -127,7 +127,13 @@ def card_moves(item):
 def _labels():
     return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
             "kb_action": action, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
-            "kb_job_text": JOB_TEXT, "kb_review": kb.review}
+            "kb_job_text": JOB_TEXT, "kb_review": kb.review, "kb_avatar": avatar_url}
+
+
+def avatar_url(author):
+    if author not in kanbagent_avatars.DEFAULTS:
+        author = "sato"
+    return url_for("kanbagent.avatar", author=author, v=kanbagent_avatars.version(author))
 
 
 # Tipo de pedido → (selo enquanto trabalha, quem está fazendo o quê, selo de falha).
@@ -227,6 +233,48 @@ def card_page(card_id):
 @bp.get("/projetos")
 def projects_page():
     return _render("kanbagent/projects.html", projects=kb.projects())
+
+
+@bp.get("/ajustes")
+def settings_page():
+    names = kanbagent_avatars.NAMES
+    return _render("kanbagent/settings.html", avatars=list(names.items()),
+                   custom={a: kanbagent_avatars.custom(a) is not None for a in names})
+
+
+@bp.get("/avatar/<author>")
+def avatar(author):
+    try:
+        path, mimetype = kanbagent_avatars.path(author)
+    except kb.NotFound:
+        abort(404)
+    response = send_file(path, mimetype=mimetype, max_age=86400)
+    response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    return response
+
+
+@bp.post("/avatares/<author>")
+def avatar_upload(author):
+    upload = request.files.get("imagem")
+    try:
+        kanbagent_avatars.save(author, upload.read(kanbagent_avatars.MAX_SIZE + 1) if upload else b"")
+    except kb.NotFound:
+        abort(404)
+    except ValueError as error:
+        flash(str(error), "error")
+    else:
+        flash(f"Imagem de {kanbagent_avatars.NAMES[author]} trocada.", "ok")
+    return redirect(url_for("kanbagent.settings_page"))
+
+
+@bp.post("/avatares/<author>/padrao")
+def avatar_reset(author):
+    try:
+        kanbagent_avatars.reset(author)
+    except kb.NotFound:
+        abort(404)
+    flash(f"{kanbagent_avatars.NAMES[author]} voltou para a imagem padrão.", "ok")
+    return redirect(url_for("kanbagent.settings_page"))
 
 
 @bp.get("/metricas")
