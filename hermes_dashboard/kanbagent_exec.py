@@ -29,7 +29,10 @@ from .kanbagent_hermes import single_worker
 
 LOG = logging.getLogger(__name__)
 TIERS = ("free", "haiku", "sonnet", "opus")
-ATTEMPTS = 2
+# Tentativas por nível: barato tenta 2x; sonnet e opus 1x (subir de nível é mais barato que repetir o mesmo
+# nível caro). O nível em que a tarefa COMEÇA ganha a segunda tentativa, porque não há para onde subir.
+ATTEMPTS = {"free": 2, "haiku": 2, "sonnet": 1, "opus": 1}
+BUDGET_USD = float(os.getenv("KANBAGENT_CARD_BUDGET_USD", "5"))   # teto por execução (equivalente em API)
 MAX_TASKS = 12
 MAX_ARTIFACTS = 20          # arquivos de ../entregas/ que voltam para o card
 FREE_MODEL = os.getenv("KANBAGENT_FREE_MODEL", "nvidia/nemotron-3.5-super-vl:free")
@@ -70,7 +73,10 @@ inclua nas instruções da tarefa salvar a versão final em ../entregas/ (fora d
 É o que o Sato abre direto no card, sem precisar do repositório. Se a proposta também manda pôr o arquivo
 no repositório, a tarefa faz as duas coisas. Uma tarefa que só gera artefato pode terminar sem commit.
 
-No máximo {max_tasks} tarefas. Prefira mais tarefas baratas a poucas caras. Ferramentas no ambiente: uv
+Custo: cada tarefa abre uma sessão nova do Claude que relê o repositório e o CARD.md; isso pesa mais que o
+trabalho em si. Por isso AGRUPE passos que mexem nos mesmos arquivos em UMA tarefa e use no máximo
+{max_tasks} tarefa(s) neste card. Só separe quando os níveis forem de fato diferentes (ex.: arte em opus
+e o resto barato). Ferramentas no ambiente: uv
 (Python), Node 20 + npm, Playwright com Chromium. Testes de navegador só os specs da área, nunca a suíte toda.{feedback}"""
 
 TASK = """Você faz UMA mini tarefa do card {id} do kanbagent no repositório {repo} (branch atual {branch}).
@@ -102,12 +108,35 @@ def is_art(title, text=""):
     return bool(ART.search(f"{title} {text}")) and not NOT_ART.search(title or "")
 
 
-def planner_model(proposta, titulo=""):
-    """Opus quando a proposta se diz grande ou o card é arte; senão sonnet."""
+def proposal_size(proposta):
     match = re.search(r"tamanho\W{0,6}(pequeno|m[ée]dio|grande)", proposta or "", re.IGNORECASE)
-    if match and match.group(1).lower() == "grande":
-        return "opus"
-    return "opus" if ART.search(f"{titulo} {proposta or ''}") else "sonnet"
+    return match.group(1).lower().replace("é", "e") if match else None
+
+
+def parse_usage(stdout):
+    """(custo US$, turnos, ms) do JSON que a CLI imprime com --output-format json; zeros se não vier."""
+    try:
+        data = json.loads(stdout)
+    except (TypeError, ValueError):
+        return 0.0, 0, 0
+    if not isinstance(data, dict):
+        return 0.0, 0, 0
+    return (float(data.get("total_cost_usd") or 0), int(data.get("num_turns") or 0),
+            int(data.get("duration_ms") or 0))
+
+
+def planner_model(proposta, titulo=""):
+    """Planejar não é arte: sonnet, e opus só quando a própria proposta se diz grande."""
+    return "opus" if proposal_size(proposta) == "grande" else "sonnet"
+
+
+# Quantas tarefas o plano deve ter, por tamanho: cada tarefa abre uma sessão nova do Claude, que relê o
+# repositório e o CARD.md (o grosso do custo), então card pequeno tem pouquíssimas.
+TASK_HINT = {"pequeno": 2, "medio": 4, "grande": MAX_TASKS}
+
+
+def task_limit(proposta):
+    return TASK_HINT.get(proposal_size(proposta) or "", 4)
 
 
 def ladder(tier, public):
@@ -115,7 +144,8 @@ def ladder(tier, public):
     start = TIERS.index(tier) if tier in TIERS else TIERS.index("haiku")
     if not public and start == 0:
         start = 1
-    return [(level, attempt) for level in TIERS[start:] for attempt in range(1, ATTEMPTS + 1)]
+    return [(level, attempt) for level in TIERS[start:]
+            for attempt in range(1, (max(ATTEMPTS[level], 2) if level == TIERS[start] else ATTEMPTS[level]) + 1)]
 
 
 def parse_plan(text):
@@ -189,7 +219,7 @@ def execute(job, box):
     model = planner_model(item.get("proposta"), item.get("titulo", ""))
     with heartbeat(job["id"], f"planejando ({model})"):
         box.run_claude("plan", model, PLANNER.format(id=item["id"], repo=info["repo"], rubric=RUBRIC,
-                                                    max_tasks=MAX_TASKS, feedback=feedback))
+                                                    max_tasks=task_limit(item.get("proposta")), feedback=feedback))
     plan = parse_plan(box.read("PLAN.json"))
     kb.add_comment(item["id"], "claude", plan_comment(plan, model))
 
@@ -197,6 +227,11 @@ def execute(job, box):
     for n, task in enumerate(plan["tasks"], 1):
         previous = ""
         for tier, attempt in ladder(task["tier"], info["public"]):
+            spent = kb.job_cost(job["id"])
+            if spent > BUDGET_USD:
+                raise ExecFailed(f"Teto de gasto da execução atingido (US$ {spent:.2f} de US$ {BUDGET_USD:.2f}, "
+                                 f"equivalente em API) antes da tarefa {n}/{total}. O trabalho feito segue no branch; "
+                                 "reprove para continuar ou ajuste a proposta.")
             with heartbeat(job["id"], f"tarefa {n}/{total} · {tier} · tentativa {attempt}: {task['title']}"):
                 start, stamp = box.head(), box.artifacts_stamp()
                 check_line = f"Antes do commit, rode `{task['check']}` e só termine quando passar.\n" if task["check"] else ""
@@ -394,6 +429,8 @@ class Sandbox:
         with open(log, "a", encoding="utf-8") as handle:
             handle.write(f"\n== {datetime.now().isoformat()} {kind} {model} rc={result.returncode}\n"
                          f"{result.stdout[-4000:]}\n{result.stderr[-2000:]}\n")
+        cost, turns, ms = parse_usage(result.stdout)
+        kb.record_run(self.job["card_id"], kind, model, cost, turns, ms, job_id=self.job["id"])
         return result.returncode
 
     def read(self, name):

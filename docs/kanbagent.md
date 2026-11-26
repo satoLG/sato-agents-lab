@@ -92,6 +92,20 @@ Com a revisão concluída, o card mostra o parecer e dois botões: **Aprovar (me
 **Reprovar** volta para `execucao` com o parecer pré-preenchido como texto, o que dispara o executor de
 novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
 
+## Custo da execução
+
+Cada chamada do Claude (planejar, tarefa, revisão) grava uma linha em `card_runs` com modelo, turnos e o
+`total_cost_usd` que a CLI informa (equivalente em API, não o desconto exato da assinatura). O card mostra
+o total e o gasto por modelo. O que mais custa é o número de sessões, não o trabalho: cada tarefa abre uma
+sessão nova que relê o repositório e o `CARD.md`. Por isso:
+
+- o planejador roda em sonnet (opus só se a proposta for "grande") e agrupa passos: pequeno = até 2
+  tarefas, médio = até 4;
+- tentativas por nível: free e haiku 2x, sonnet e opus 1x (sobe de nível em vez de repetir o caro); o nível
+  em que a tarefa começa tem 2 tentativas;
+- teto por execução (`KANBAGENT_CARD_BUDGET_USD`, padrão 5): ao passar, a execução para antes da próxima
+  tarefa, o trabalho feito fica no branch e o card mostra o motivo.
+
 ## Artefatos (o que a execução devolve)
 
 Quando o card pede um arquivo como resultado (imagem, sprite, documento, página HTML), o executor salva a

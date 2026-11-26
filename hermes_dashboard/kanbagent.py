@@ -57,6 +57,13 @@ _SCHEMA = (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
         nome TEXT NOT NULL, arquivo TEXT NOT NULL, tamanho INTEGER NOT NULL, criado_em TEXT NOT NULL
     )""",
+    # Uma linha por chamada do Claude (planejar, executar tarefa, revisar): base do custo por card.
+    # cost_usd é o equivalente em API que a CLI informa, não o desconto exato da assinatura.
+    """CREATE TABLE IF NOT EXISTS card_runs (
+        id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id), job_id INTEGER,
+        kind TEXT NOT NULL, model TEXT NOT NULL, cost_usd REAL NOT NULL DEFAULT 0,
+        turns INTEGER NOT NULL DEFAULT 0, duration_ms INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL
+    )""",
     """CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
         kind TEXT NOT NULL, from_stage TEXT, to_stage TEXT, author TEXT NOT NULL,
@@ -376,6 +383,32 @@ def add_artifact(card_id, author, nome, data):
     return cursor.lastrowid
 
 
+# --- custo (chamadas do Claude) -------------------------------------------------------------------
+
+def record_run(card_id, kind, model, cost_usd=0.0, turns=0, duration_ms=0, job_id=None):
+    with closing(_connection()) as conn, _transaction(conn):
+        _card(conn, card_id)
+        conn.execute("INSERT INTO card_runs (card_id, job_id, kind, model, cost_usd, turns, duration_ms, criado_em)"
+                     " VALUES (?,?,?,?,?,?,?,?)",
+                     (card_id, job_id, kind, model, max(0.0, float(cost_usd or 0)), int(turns or 0),
+                      int(duration_ms or 0), _iso(None)))
+
+
+def job_cost(job_id):
+    """Gasto (US$ equivalente) de um pedido: o executor usa para respeitar o teto por execução."""
+    with closing(_connection()) as conn:
+        return conn.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM card_runs WHERE job_id=?", (job_id,)).fetchone()[0]
+
+
+def card_cost(card_id):
+    """{total, chamadas, por_modelo: [{model, chamadas, cost_usd}]} do card, do mais caro para o mais barato."""
+    with closing(_connection()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT model, COUNT(*) AS chamadas, SUM(cost_usd) AS cost_usd FROM card_runs WHERE card_id=?"
+            " GROUP BY model ORDER BY cost_usd DESC", (card_id,)).fetchall()]
+    return {"total": sum(r["cost_usd"] for r in rows), "chamadas": sum(r["chamadas"] for r in rows), "por_modelo": rows}
+
+
 def artifact(card_id, artifact_id):
     with closing(_connection()) as conn:
         row = conn.execute("SELECT * FROM card_artifacts WHERE id=? AND card_id=?", (artifact_id, card_id)).fetchone()
@@ -675,7 +708,7 @@ def card(card_id, now=None):
     final = next((e["occurred_at"] for e in reversed(events)
                   if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
     total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
-    row.update(events=events, links=links, refs=refs, artifacts=artifacts, durations=durations,
+    row.update(events=events, links=links, refs=refs, artifacts=artifacts, durations=durations, custo=card_cost(card_id),
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),

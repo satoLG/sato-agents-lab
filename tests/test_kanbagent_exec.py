@@ -30,7 +30,8 @@ def queued(proposta="**Tamanho:** pequeno"):
 class FakeBox:
     """Cada chamada do Claude vira um commit, a não ser que `outcomes` diga o contrário."""
 
-    def __init__(self, plan, outcomes=None, public=True, checks=None):
+    def __init__(self, plan, outcomes=None, public=True, checks=None, cost=0.0):
+        self.cost = cost
         self.plan, self.outcomes, self.public = plan, dict(outcomes or {}), public
         self.checks = checks or {}
         self.sha, self.calls, self.resets, self.cleaned = 0, [], [], False
@@ -45,6 +46,8 @@ class FakeBox:
 
     def run_claude(self, kind, tier, prompt):
         self.calls.append((kind, tier, prompt))
+        if self.cost:
+            kb.record_run(self.job["card_id"], kind, tier, self.cost, 5, 1000, job_id=self.job["id"])
         outcome = self.outcomes.get(len(self.calls), "commit")
         if kind != "plan" and outcome == "commit":
             self.sha += 1
@@ -161,7 +164,9 @@ def test_bad_plan_is_a_clear_failure(db, text, reason):
 
 def test_unknown_tier_becomes_haiku_and_ladder_order():
     assert worker.parse_plan(json.dumps({"tasks": [task("x", "gpt")]}))["tasks"][0]["tier"] == "haiku"
-    assert worker.ladder("sonnet", True) == [("sonnet", 1), ("sonnet", 2), ("opus", 1), ("opus", 2)]
+    assert worker.ladder("sonnet", True) == [("sonnet", 1), ("sonnet", 2), ("opus", 1)]    # sobe em vez de repetir caro
+    assert worker.ladder("haiku", True) == [("haiku", 1), ("haiku", 2), ("sonnet", 1), ("opus", 1)]
+    assert worker.ladder("opus", True) == [("opus", 1), ("opus", 2)]                       # sem para onde subir
     assert worker.ladder("free", False)[0] == ("haiku", 1)
 
 
@@ -225,6 +230,35 @@ def test_art_is_always_opus_but_copying_a_file_is_not():
         task("Copiar o PNG do sprite para public/biscuits", "free"),
         task("Ajustar texto do botão", "free")]}))
     assert [t["tier"] for t in plan["tasks"]] == ["opus", "haiku", "free", "free"]
-    assert worker.planner_model("**Tamanho** — pequeno", "fazer um sprite do dinossauro") == "opus"
+    assert worker.planner_model("**Tamanho** — pequeno", "fazer um sprite do dinossauro") == "sonnet"   # planejar não é arte
     assert worker.planner_model("**Tamanho** — pequeno", "botão de exportar CSV") == "sonnet"
     assert "SEMPRE opus para arte" in worker.RUBRIC
+
+
+def test_usage_is_recorded_per_card_and_shown(db):
+    card = queued()
+    box = FakeBox({"tasks": [task("a", "haiku"), task("b", "sonnet")], "final_check": ""}, cost=0.25)
+    box.job = None
+    worker.drain(lambda job: setattr(box, "job", job) or box)
+    cost = kb.card(card)["custo"]
+    assert cost["chamadas"] == 3 and round(cost["total"], 2) == 0.75
+    assert {m["model"] for m in cost["por_modelo"]} == {"sonnet", "haiku"}
+
+
+def test_budget_stops_the_run_and_keeps_the_work(db):
+    card = queued()
+    box = FakeBox({"tasks": [task("a", "haiku"), task("b", "haiku"), task("c", "haiku")]}, cost=3.0)
+    worker.drain(lambda job: setattr(box, "job", job) or box)
+    item = kb.card(card)
+    assert item["job"]["status"] == "failed" and "Teto de gasto" in item["job"]["error"]
+    assert [t for k, t, _ in box.calls if k != "plan"] == ["haiku"]      # 3 (plano) + 3 (tarefa) > 5: não faz a 2ª
+
+
+def test_parse_usage_reads_the_cli_json_and_tolerates_garbage():
+    assert worker.parse_usage('{"total_cost_usd": 0.31, "num_turns": 6, "duration_ms": 900}') == (0.31, 6, 900)
+    assert worker.parse_usage("timeout") == (0.0, 0, 0) and worker.parse_usage("[1]") == (0.0, 0, 0)
+
+
+def test_task_limit_follows_the_proposal_size():
+    assert worker.task_limit("**Tamanho** — pequeno") == 2 and worker.task_limit("**Tamanho** — médio") == 4
+    assert worker.task_limit("**Tamanho** — grande") == worker.MAX_TASKS and worker.task_limit("sem tamanho") == 4

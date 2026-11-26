@@ -242,3 +242,6 @@ body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-list-head { flex-directio
 body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-list-head h2 { writing-mode: horizontal-tb; }
 body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; min-height: 64px; }
 .kb-dialog-message { margin: 0; color: var(--tile-ink); }
+
+.kb-cost ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; font-size: .8rem; }
+.kb-cost li { display: flex; gap: 8px; justify-content: space-between; }
