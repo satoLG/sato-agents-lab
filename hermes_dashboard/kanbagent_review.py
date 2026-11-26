@@ -99,6 +99,8 @@ def execute(job, tools):
         model = "opus" if used_opus(item) else "sonnet"
         kb.job_progress(job["id"], f"Claude ({model}) revisando")
         code, text = tools.claude(model, prompt)
+        cost, turns, ms = getattr(tools, "last_usage", (0, 0, 0))
+        kb.record_run(item["id"], "revisao", model, cost, turns, ms, job_id=job["id"])
         if code == 0 and verdict(text):
             reviews.append((f"Claude ({model})", text))
     if not reviews:
@@ -169,6 +171,8 @@ class GitHubTools:
             data = json.loads(result.stdout)
         except ValueError:
             return result.returncode or 1, (result.stderr or result.stdout)[-400:]
+        self.last_usage = (float(data.get("total_cost_usd") or 0), int(data.get("num_turns") or 0),
+                           int(data.get("duration_ms") or 0))
         return (1 if data.get("is_error") else 0), data.get("result") or ""
 
     def comment(self, repo, number, body):

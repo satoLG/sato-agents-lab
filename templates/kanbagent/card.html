@@ -218,6 +218,14 @@
       <p class="muted">Card encerrado.</p>
       {% endif %}
 
+      {% if card.custo.chamadas %}
+      <h2>Custo</h2>
+      <div class="kb-cost" data-tip="Equivalente em API informado pela CLI do Claude; não é o desconto exato da assinatura" data-tip-pos="below">
+        <strong>US$ {{ '%.2f'|format(card.custo.total) }}</strong> <span class="muted">{{ card.custo.chamadas }} chamada(s)</span>
+        <ul>{% for m in card.custo.por_modelo %}<li><span>{{ m.model.split('/')[-1].split(':')[0] }}</span> <span class="muted">{{ m.chamadas }}x</span> <span>US$ {{ '%.2f'|format(m.cost_usd) }}</span></li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+
       {% if card.links %}
       <h2>Entregas</h2>
       <ul class="kb-links">

@@ -418,3 +418,12 @@ def test_empty_lists_are_collapsed_except_ideas_and_no_browser_confirm(client):
     for path in [*root.joinpath("static/js").glob("*.js"), *root.joinpath("templates").rglob("*.html")]:
         text = path.read_text(encoding="utf-8")
         assert "window.confirm(" not in text and "window.alert(" not in text and " alert(" not in text, path
+
+
+def test_card_page_shows_the_cost_per_model(client):
+    card_id = kb.create_card("A", "a", "sato")
+    assert "Custo" not in client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    kb.record_run(card_id, "plan", "sonnet", 0.2, 6, 1000)
+    kb.record_run(card_id, "opus", "opus", 0.5, 9, 2000)
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "US$ 0.70" in page and "2 chamada(s)" in page and "US$ 0.50" in page
