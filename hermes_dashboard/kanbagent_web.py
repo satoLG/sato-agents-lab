@@ -227,7 +227,7 @@ def card_page(card_id):
         abort(404)
     longest = max(item["durations"].values(), default=0) or 1
     return _render("kanbagent/card.html", card=item, projects=kb.projects(), longest=longest,
-                   **(_github_context() if item["etapa_atual"] in kb.REPO_EDITABLE else {}))
+                   **(_github_context() if kb.repo_editable(item) else {}))
 
 
 @bp.get("/projetos")
@@ -414,6 +414,48 @@ def ref_file(card_id, ref_id):
     # Sempre como download: um HTML anexado nunca roda no domínio do site.
     return send_file(item["path"], as_attachment=True, download_name=item["titulo"],
                      mimetype="application/octet-stream")
+
+
+# Artefato da execução: imagem abre direto; texto, SVG, HTML e PDF abrem isolados (CSP sandbox: origem
+# opaca, sem cookies nem acesso ao site); o resto baixa.
+IMAGES = {b"\x89PNG\r\n\x1a\n": "image/png", b"\xff\xd8\xff": "image/jpeg", b"GIF87a": "image/gif",
+          b"GIF89a": "image/gif"}
+ISOLATED = {".svg": "image/svg+xml", ".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf",
+            ".txt": "text/plain", ".md": "text/plain", ".json": "application/json", ".csv": "text/plain"}
+
+
+def artifact_kind(path):
+    """(mimetype, isolado) do artefato; None = só download."""
+    with open(path, "rb") as handle:
+        head = handle.read(16)
+    for magic, mimetype in IMAGES.items():
+        if head.startswith(magic):
+            return mimetype, False
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp", False
+    suffix = os.path.splitext(path)[1].lower()
+    return (ISOLATED[suffix], True) if suffix in ISOLATED else None
+
+
+@bp.get("/card/<int:card_id>/artefato/<int:artifact_id>")
+def artifact_file(card_id, artifact_id):
+    try:
+        item = kb.artifact(card_id, artifact_id)
+    except kb.NotFound:
+        abort(404)
+    kind = None if request.args.get("baixar") else artifact_kind(item["path"])
+    if kind is None:
+        return send_file(item["path"], as_attachment=True, download_name=item["nome"],
+                         mimetype="application/octet-stream")
+    mimetype, isolated = kind
+    if mimetype.startswith("text/") or mimetype == "application/json":
+        mimetype += "; charset=utf-8"
+    response = send_file(item["path"], mimetype=mimetype, download_name=item["nome"])
+    response.headers["Content-Security-Policy"] = (
+        "sandbox allow-scripts; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline';"
+        " script-src 'unsafe-inline'" if isolated else "default-src 'none'; style-src 'unsafe-inline'")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @bp.post("/projetos")

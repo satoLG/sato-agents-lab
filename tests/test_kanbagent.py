@@ -302,3 +302,30 @@ def test_sync_does_not_move_a_card_while_an_agent_works(db):
     kanbagent.change_stage(card, "execucao", "sato", text="reprovado")
     assert kanbagent.advance_to(card, "revisao_codigo", "github-sync") == []
     assert kanbagent.card(card)["etapa_atual"] == "execucao"
+
+
+def test_approved_card_without_repo_can_still_get_one(db):
+    card = kanbagent.create_card("A", "a", "sato")
+    kanbagent.change_stage(card, "proposta", "sato")
+    while (job := kanbagent.claim_job("proposta")) is not None:
+        kanbagent.finish_job(job["id"])
+    kanbagent.update_proposal(card, "p", "hermes")
+    kanbagent.change_stage(card, "revisao", "hermes")
+    kanbagent.change_stage(card, "aprovado", "sato")
+    assert kanbagent.card(card)["etapa_atual"] == "aprovado"
+    kanbagent.set_repo(card, "sato", novo_repo="satoLG/dino")
+    with pytest.raises(kanbagent.InvalidTransition):
+        kanbagent.set_repo(card, "sato", repo="satoLG/outro")      # uma vez definido, trava
+
+
+def test_artifacts_replace_same_name_and_live_beside_the_db(db):
+    card = kanbagent.create_card("A", "a", "sato")
+    first = kanbagent.artifact(card, kanbagent.add_artifact(card, "claude", "../sprite.png", b"v1"))["path"]
+    second = kanbagent.add_artifact(card, "claude", "sprite.png", b"v2")
+    item = kanbagent.card(card)
+    assert [a["id"] for a in item["artifacts"]] == [second]
+    art = kanbagent.artifact(card, second)
+    assert open(art["path"], "rb").read() == b"v2" and "kanbagent-files" in art["path"]
+    assert not Path(first).exists() and first != art["path"]
+    with pytest.raises(ValueError):
+        kanbagent.add_artifact(card, "claude", "x", b"")

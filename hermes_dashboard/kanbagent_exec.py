@@ -31,6 +31,7 @@ LOG = logging.getLogger(__name__)
 TIERS = ("free", "haiku", "sonnet", "opus")
 ATTEMPTS = 2
 MAX_TASKS = 12
+MAX_ARTIFACTS = 20          # arquivos de ../entregas/ que voltam para o card
 FREE_MODEL = os.getenv("KANBAGENT_FREE_MODEL", "nvidia/nemotron-3.5-super-vl:free")
 MAX_TURNS = {"free": 30, "haiku": 40, "sonnet": 60, "opus": 80, "plan": 40}
 RUN_TIMEOUT = 25 * 60       # cada execução do Claude
@@ -61,6 +62,11 @@ Formato de ../PLAN.json (só JSON):
   "check": "comando de shell rápido que sai 0 quando a tarefa está certa (testes focados) ou \\"\\""}}],
  "final_check": "comando que roda os testes rápidos do projeto no fim (ou \\"\\")"}}
 
+Artefatos: se o card pede um arquivo como resultado (imagem, sprite, áudio, documento, página HTML...),
+inclua nas instruções da tarefa salvar a versão final em ../entregas/ (fora do repositório, nome claro).
+É o que o Sato abre direto no card, sem precisar do repositório. Se a proposta também manda pôr o arquivo
+no repositório, a tarefa faz as duas coisas. Uma tarefa que só gera artefato pode terminar sem commit.
+
 No máximo {max_tasks} tarefas. Prefira mais tarefas baratas a poucas caras. Ferramentas no ambiente: uv
 (Python), Node 20 + npm, Playwright com Chromium. Testes de navegador só os specs da área, nunca a suíte toda.{feedback}"""
 
@@ -72,6 +78,7 @@ Tarefa {n}/{total}: {title}
 {instructions}
 
 Regras: faça só esta tarefa, com a menor mudança correta, seguindo as convenções do repositório.
+Artefato pedido pelo card (imagem, documento...): salve a versão final também em ../entregas/.
 {check_line}Faça commit no branch atual com mensagem curta no estilo do repositório. Não faça push e não troque
 de branch. Nunca commite .venv/ nem node_modules/.{previous}"""
 
@@ -169,14 +176,14 @@ def execute(job, box):
         previous = ""
         for tier, attempt in ladder(task["tier"], info["public"]):
             with heartbeat(job["id"], f"tarefa {n}/{total} · {tier} · tentativa {attempt}: {task['title']}"):
-                start = box.head()
+                start, stamp = box.head(), box.artifacts_stamp()
                 check_line = f"Antes do commit, rode `{task['check']}` e só termine quando passar.\n" if task["check"] else ""
                 box.run_claude(tier, tier, TASK.format(
                     id=item["id"], repo=info["repo"], branch=info["branch"], n=n, total=total, title=task["title"],
                     instructions=task["instructions"], check_line=check_line, previous=previous))
                 failure = None
-                if box.head() == start:
-                    failure = "não fez commit"
+                if box.head() == start and box.artifacts_stamp() == stamp:
+                    failure = "não fez commit nem salvou artefato em ../entregas/"
                 elif task["check"]:
                     code, output = box.run_check(task["check"])
                     if code != 0:
@@ -197,6 +204,18 @@ def execute(job, box):
 
     summary = "\n".join(f"- {n}. {title}: {tier}" + (f" (tentativa {attempt})" if attempt > 1 else "")
                         for n, title, tier, attempt in done)
+    with heartbeat(job["id"], "guardando os artefatos"):
+        artifacts = box.collect_artifacts()
+    for name, data in artifacts:
+        try:
+            kb.add_artifact(item["id"], "claude", name, data)
+        except ValueError as error:   # grande demais: o resto segue
+            kb.add_comment(item["id"], "claude", f"Artefato {name} ficou de fora: {error}")
+    if artifacts and not box.has_commits():
+        names = ", ".join(name for name, _ in artifacts)
+        kb.change_stage(item["id"], "revisao_codigo", "claude",
+                        text=f"Artefatos prontos (sem mudança no repositório): {names}\n{summary}")
+        return None
     with heartbeat(job["id"], "abrindo o PR"):
         url = box.publish(item, f"Tarefas e níveis usados:\n{summary}")
     kb.add_link(item["id"], url, "claude")
@@ -309,13 +328,15 @@ class Sandbox:
         (self.tmp / "CARD.md").write_text(_card_markdown(item), encoding="utf-8")
         refs = self.tmp / "refs"
         refs.mkdir()
+        (self.tmp / "entregas").mkdir()
         for r in item.get("refs") or []:
             if r["tipo"] == "arquivo" and r.get("path") and Path(r["path"]).is_file():
                 shutil.copyfile(r["path"], refs / r["titulo"])
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.dir = self.WORK_ROOT / f"kanbagent-card-{item['id']}-{stamp}"
         for command in (["sudo", "-n", "mkdir", "-p", str(self.dir)],
-                        ["sudo", "-n", "cp", "-a", str(clone), str(self.tmp / "CARD.md"), str(refs), str(self.dir)],
+                        ["sudo", "-n", "cp", "-a", str(clone), str(self.tmp / "CARD.md"), str(refs), str(self.tmp / "entregas"),
+                         str(self.dir)],
                         ["sudo", "-n", "chown", "-R", "agent:agent", str(self.dir)]):
             if _run(command, timeout=300).returncode:
                 raise ExecFailed("Não consegui preparar a pasta do usuário agent.")
@@ -370,6 +391,29 @@ class Sandbox:
         result = self._agent(f"cd {shlex.quote(str(self.dir / 'repo'))} && timeout {CHECK_TIMEOUT} bash -c \"$0\"",
                              CHECK_TIMEOUT + 60, command)
         return result.returncode, (result.stdout + result.stderr)[-4000:]
+
+    def artifacts_stamp(self):
+        """Lista (nome, tamanho, mtime) de ../entregas/: muda quando a tarefa salva um artefato."""
+        return self._agent(f"find {shlex.quote(str(self.dir / 'entregas'))} -xdev -type f -printf '%P %s %T@\\n'"
+                           " | sort").stdout
+
+    def collect_artifacts(self):
+        """Arquivos comuns de ../entregas/ (sem seguir links), até MAX_ARTIFACTS, cada um até kb.MAX_FILE."""
+        folder = self.dir / "entregas"
+        found = _run(["sudo", "-n", "find", str(folder), "-xdev", "-maxdepth", "2", "-type", "f",
+                      "-size", f"-{kb.MAX_FILE // 1024 + 1}k", "-printf", "%P\\0"])
+        names = sorted(n for n in found.stdout.split("\0") if n)[:MAX_ARTIFACTS]
+        result = []
+        for name in names:
+            data = subprocess.run(["sudo", "-n", "cat", str(folder / name)], capture_output=True, timeout=120)
+            if data.returncode == 0 and data.stdout:
+                result.append((name.replace("/", "-"), data.stdout))
+        return result
+
+    def has_commits(self):
+        count = self._agent(f"git -C {shlex.quote(str(self.dir / 'repo'))} rev-list --count"
+                            f" origin/{shlex.quote(self.base)}..HEAD").stdout.strip()
+        return count not in ("", "0")
 
     def publish(self, item, summary):
         repo_dir = shlex.quote(str(self.dir / "repo"))

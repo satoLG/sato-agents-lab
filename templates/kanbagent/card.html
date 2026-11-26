@@ -20,8 +20,8 @@
         {% elif card.novo_repo %}<span class="kb-chip" title="O executor cria antes de começar">{{ card.novo_repo }} · novo{{ ', público' if card.novo_repo_publico else '' }}</span>
         {% else %}<span class="kb-chip muted">nenhum</span>{% endif %}
         {% if gh_repos is defined and not locked %}
-        <details class="kb-inline-edit kb-repo-edit">
-          <summary class="btn ghost small" data-tip="Trocar o repositório">{{ icon('folder-git-2') }} Trocar</summary>
+        <details class="kb-inline-edit kb-repo-edit" {% if card.etapa_atual == 'aprovado' %}open{% endif %}>
+          <summary class="btn ghost small" data-tip="{{ 'Definir o repositório' if not card.repo and not card.novo_repo else 'Trocar o repositório' }}">{{ icon('folder-git-2') }} {{ 'Definir' if not card.repo and not card.novo_repo else 'Trocar' }}</summary>
           <form method="post" action="{{ url_for('kanbagent.repo_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
             {{ ui.repo_picker(gh_repos, gh_login, card.repo) }}
             <button class="btn small" type="submit">{{ icon('check') }} Salvar</button>
@@ -73,6 +73,31 @@
         <h2 id="kb-idea">{{ icon('lightbulb') }}Ideia original</h2>
         <div class="kb-pre kb-box" data-rich>{{ card.ideia_original }}</div>
       </section>
+
+      {% if card.etapa_atual == 'aprovado' and not card.repo and not card.novo_repo %}
+      <p class="notice kb-flash error" role="alert">{{ icon('triangle-exclamation-point') }} Este card não tem repositório. Defina um existente ou peça um novo para poder executar.</p>
+      {% endif %}
+
+      {% if card.artifacts %}
+      <section aria-labelledby="kb-artifacts">
+        <h2 id="kb-artifacts">{{ icon('package') }}Artefatos</h2>
+        <ul class="kb-artifacts">
+          {% for a in card.artifacts %}
+          {% set url = url_for('kanbagent.artifact_file', card_id=card.id, artifact_id=a.id) %}
+          <li>
+            {% if a.nome.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
+            <a href="{{ url }}" target="_blank" rel="noopener" class="kb-artifact-thumb"><img src="{{ url }}" alt="{{ a.nome }}" loading="lazy"></a>
+            {% endif %}
+            <div>
+              <a href="{{ url }}" target="_blank" rel="noopener">{{ a.nome }}</a>
+              <span class="muted">{{ (a.tamanho / 1024)|round(1) }} KB</span>
+              <a class="btn ghost small" href="{{ url }}?baixar=1" download data-tip="Baixar">{{ icon('download') }}</a>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
 
       <section aria-labelledby="kb-refs">
         <h2 id="kb-refs">{{ icon('paperclip') }}Referências</h2>
@@ -146,6 +171,7 @@
               {% elif e.kind == 'proposal_updated' %}atualizou a proposta
               {% elif e.kind == 'repo_changed' %}escolheu o repositório <strong>{{ e.text }}</strong>
               {% elif e.kind == 'ref_added' %}adicionou a referência {{ e.text }}
+              {% elif e.kind == 'artifact_added' %}entregou o artefato <strong>{{ e.text }}</strong>
               {% endif %}</p>
               <time datetime="{{ e.occurred_at }}">{{ e.occurred_at|kb_time }}</time>
               {% if e.text and e.kind in ('stage_change', 'comment') %}<div class="kb-pre kb-box" data-rich>{{ e.text }}</div>{% endif %}

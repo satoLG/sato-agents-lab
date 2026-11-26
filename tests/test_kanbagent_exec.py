@@ -34,6 +34,7 @@ class FakeBox:
         self.plan, self.outcomes, self.public = plan, dict(outcomes or {}), public
         self.checks = checks or {}
         self.sha, self.calls, self.resets, self.cleaned = 0, [], [], False
+        self.artifacts = []
 
     def create_repo(self, full_name, public):
         self.created = (full_name, public)
@@ -44,9 +45,21 @@ class FakeBox:
 
     def run_claude(self, kind, tier, prompt):
         self.calls.append((kind, tier, prompt))
-        if kind != "plan" and self.outcomes.get(len(self.calls), "commit") == "commit":
+        outcome = self.outcomes.get(len(self.calls), "commit")
+        if kind != "plan" and outcome == "commit":
             self.sha += 1
+        if kind != "plan" and outcome.startswith("artefato:"):
+            self.artifacts.append((outcome.split(":", 1)[1], b"\x89PNG\r\n\x1a\nimagem"))
         return 0
+
+    def artifacts_stamp(self):
+        return repr(self.artifacts)
+
+    def collect_artifacts(self):
+        return list(self.artifacts)
+
+    def has_commits(self):
+        return self.sha > 0
 
     def read(self, name):
         return json.dumps(self.plan)
@@ -102,7 +115,7 @@ def test_no_commit_counts_as_failure(db):
     box = FakeBox({"tasks": [task("t", "haiku")]}, outcomes={2: "nada"})
     worker.drain(lambda job: box)
     assert [t for k, t, _ in box.calls if k != "plan"] == ["haiku", "haiku"]
-    assert "não fez commit" in box.calls[-1][2]
+    assert "não fez commit nem salvou artefato" in box.calls[-1][2]
 
 
 def test_private_repo_never_uses_free_models(db):
@@ -181,3 +194,25 @@ def test_new_repo_is_created_before_planning_and_refs_reach_the_card_md(db):
     assert box.created == ("sato/jogo", False) and item["repo"] == "sato/jogo"
     assert item["etapa_atual"] == "revisao_codigo"
     assert "Arte: https://example.com/arte" in worker._card_markdown(item)
+
+
+def test_artifacts_come_back_to_the_card_alongside_the_pr(db):
+    card = queued()
+    box = FakeBox({"tasks": [task("sprite", "sonnet"), task("usar no site", "haiku")]},
+                  outcomes={2: "commit", 3: "commit"})
+    box.artifacts.append(("sprite.png", b"\x89PNG\r\n\x1a\nimagem"))
+    worker.drain(lambda job: box)
+    item = kb.card(card)
+    assert item["etapa_atual"] == "revisao_codigo" and [a["nome"] for a in item["artifacts"]] == ["sprite.png"]
+    assert "../entregas/" in box.calls[0][2] and "../entregas/" in box.calls[1][2]
+
+
+def test_artifact_only_card_skips_the_pr(db):
+    card = queued()
+    box = FakeBox({"tasks": [task("desenhar", "sonnet")]}, outcomes={2: "artefato:dino.png"})
+    worker.drain(lambda job: box)
+    item = kb.card(card)
+    assert item["etapa_atual"] == "revisao_codigo" and not item["links"]
+    assert [a["nome"] for a in item["artifacts"]] == ["dino.png"]
+    assert "Artefatos prontos" in item["events"][-1]["text"]
+    assert not hasattr(box, "summary")      # publish não foi chamado

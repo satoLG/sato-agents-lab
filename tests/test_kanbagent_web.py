@@ -362,3 +362,44 @@ def test_avatar_upload_rejects_svg_and_big_files(client):
     assert av.sniff(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp" and av.sniff(b"\xff\xd8\xff\xe0") == "jpg"
     assert client.post("/kanbagent/avatares/fulano", content_type="multipart/form-data",
                        data={"csrf": client.csrf, "imagem": (_io.BytesIO(PNG), "x.png")}).status_code == 404
+
+
+def test_artifacts_open_isolated_from_the_site(client):
+    card_id = kb.create_card("A", "a", "sato")
+    png = kb.add_artifact(card_id, "claude", "dino.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+    html = kb.add_artifact(card_id, "claude", "demo.html", b"<script>fetch('/api/stats')</script>")
+    fake = kb.add_artifact(card_id, "claude", "fake.png", b"<svg onload=alert(1)>")
+    other = kb.add_artifact(card_id, "claude", "dados.bin", b"\x00\x01")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Artefatos" in page and f"/artefato/{png}" in page and "entregou o artefato" in page
+
+    response = client.get(f"/kanbagent/card/{card_id}/artefato/{png}")
+    assert response.mimetype == "image/png" and "attachment" not in response.headers.get("Content-Disposition", "")
+    response.close()
+    response = client.get(f"/kanbagent/card/{card_id}/artefato/{html}")
+    assert response.mimetype == "text/html" and "sandbox" in response.headers["Content-Security-Policy"]
+    response.close()
+    for artifact_id in (fake, other):      # extensão de imagem sem bytes de imagem não abre
+        response = client.get(f"/kanbagent/card/{card_id}/artefato/{artifact_id}")
+        assert response.mimetype == "application/octet-stream" and "attachment" in response.headers["Content-Disposition"]
+        response.close()
+    response = client.get(f"/kanbagent/card/{card_id}/artefato/{png}?baixar=1")
+    assert "attachment" in response.headers["Content-Disposition"]
+    response.close()
+    assert client.get(f"/kanbagent/card/{card_id + 1}/artefato/{png}").status_code == 404
+
+
+def test_queued_card_without_repo_shows_the_picker(client):
+    card_id = kb.create_card("A", "a", "sato")
+    kb.change_stage(card_id, "proposta", "sato")
+    while (job := kb.claim_job("proposta")) is not None:
+        kb.finish_job(job["id"])
+    kb.update_proposal(card_id, "p", "hermes")
+    kb.change_stage(card_id, "revisao", "hermes")
+    kb.change_stage(card_id, "aprovado", "sato")
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "não tem repositório" in page and "Definir" in page
+    form(client, f"/kanbagent/card/{card_id}/repo", repo="satoLG/biscoidino")
+    assert kb.card(card_id)["repo"] == "satoLG/biscoidino"
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "não tem repositório" not in page and "Trocar o repositório" not in page

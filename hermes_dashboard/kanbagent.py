@@ -19,7 +19,7 @@ DB_PATH = Path(os.getenv("KANBAGENT_DB_PATH", str(config.HERMES_HOME / "kanbagen
 STAGES = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue", "descartado")
 TERMINAL = {"entregue", "descartado"}
 MAIN_PATH = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue")
-EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated", "repo_changed", "ref_added")
+EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated", "repo_changed", "ref_added", "artifact_added")
 AUTHORS = ("sato", "hermes", "github-sync", "claude")
 
 _SCHEMA = (
@@ -51,6 +51,11 @@ _SCHEMA = (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
         tipo TEXT NOT NULL CHECK (tipo IN ('link', 'arquivo')), titulo TEXT NOT NULL DEFAULT '',
         url TEXT, arquivo TEXT, tamanho INTEGER, criado_em TEXT NOT NULL
+    )""",
+    # Artefatos que a execução devolve (imagem, documento...): abrem no card, fora do repositório.
+    """CREATE TABLE IF NOT EXISTS card_artifacts (
+        id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
+        nome TEXT NOT NULL, arquivo TEXT NOT NULL, tamanho INTEGER NOT NULL, criado_em TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
@@ -266,12 +271,19 @@ def create_card(titulo, ideia_original, author, project_id=None, repo_id=None, o
         return cursor.lastrowid
 
 
+def repo_editable(row):
+    """O Sato troca o repositório até a proposta ser aprovada. Um card aprovado SEM repositório ainda
+    pode receber um (ou "novo") enquanto espera na fila: sem isso ele nunca executaria."""
+    return row["etapa_atual"] in REPO_EDITABLE or (
+        row["etapa_atual"] == "aprovado" and not row["repo_id"] and not row["novo_repo"])
+
+
 def set_repo(card_id, author, repo=None, novo_repo=None, publico=False):
-    """Troca o repositório do card (só até a proposta ser aprovada). O executor (`claude`) usa para
-    gravar o repositório que acabou de criar."""
+    """Troca o repositório do card (ver `repo_editable`). O executor (`claude`) usa para gravar o
+    repositório que acabou de criar."""
     with closing(_connection()) as conn, _transaction(conn):
         row = _card(conn, card_id)
-        if author != "claude" and row["etapa_atual"] not in REPO_EDITABLE:
+        if author != "claude" and not repo_editable(row):
             raise InvalidTransition("O repositório fica fixo depois que a proposta é aprovada.")
         if author == "sato" and _open_job(conn, card_id):
             raise InvalidTransition(LOCKED)
@@ -328,6 +340,48 @@ def _add_ref(card_id, author, tipo, titulo, url=None, arquivo=None, tamanho=None
         cursor = conn.execute("INSERT INTO card_refs (card_id, tipo, titulo, url, arquivo, tamanho, criado_em)"
                               " VALUES (?,?,?,?,?,?,?)", (card_id, tipo, titulo, url, arquivo, tamanho, occurred))
         return cursor.lastrowid
+
+
+# --- artefatos (o que a execução devolve para abrir direto no card) ---------------------------------
+
+def _safe_name(nome):
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(nome or "arquivo")).strip("-.")[:120] or "arquivo"
+
+
+def add_artifact(card_id, author, nome, data):
+    """Guarda um artefato da execução. Um artefato com o mesmo nome substitui o anterior (nova rodada)."""
+    if not data:
+        raise ValueError("Artefato vazio.")
+    if len(data) > MAX_FILE:
+        raise ValueError("Artefato passa de 20 MB.")
+    safe = _safe_name(nome)
+    folder = _files_dir() / str(card_id)
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    stored = f"art-{uuid.uuid4().hex[:12]}-{safe}"
+    (folder / stored).write_bytes(data)
+    try:
+        with closing(_connection()) as conn, _transaction(conn):
+            _card(conn, card_id)
+            old = conn.execute("SELECT id, arquivo FROM card_artifacts WHERE card_id=? AND nome=?",
+                               (card_id, safe)).fetchall()
+            conn.execute("DELETE FROM card_artifacts WHERE card_id=? AND nome=?", (card_id, safe))
+            occurred = _insert_event(conn, card_id, "artifact_added", author, text=safe)
+            cursor = conn.execute("INSERT INTO card_artifacts (card_id, nome, arquivo, tamanho, criado_em)"
+                                  " VALUES (?,?,?,?,?)", (card_id, safe, f"{card_id}/{stored}", len(data), occurred))
+    except Exception:
+        (folder / stored).unlink(missing_ok=True)
+        raise
+    for row in old:
+        (_files_dir() / row["arquivo"]).unlink(missing_ok=True)
+    return cursor.lastrowid
+
+
+def artifact(card_id, artifact_id):
+    with closing(_connection()) as conn:
+        row = conn.execute("SELECT * FROM card_artifacts WHERE id=? AND card_id=?", (artifact_id, card_id)).fetchone()
+    if row is None:
+        raise NotFound(f"Artefato {artifact_id} não existe.")
+    return dict(row, path=str(_files_dir() / row["arquivo"]))
 
 
 def ref(card_id, ref_id):
@@ -612,6 +666,8 @@ def card(card_id, now=None):
             " WHERE l.card_id=? ORDER BY l.id", (card_id,)).fetchall()]
         refs = [dict(r, path=str(_files_dir() / r["arquivo"]) if r["arquivo"] else None) for r in conn.execute(
             "SELECT * FROM card_refs WHERE card_id=? ORDER BY id", (card_id,)).fetchall()]
+        artifacts = [dict(a) for a in conn.execute(
+            "SELECT * FROM card_artifacts WHERE card_id=? ORDER BY id", (card_id,)).fetchall()]
         row["na_etapa_desde"] = _entered_current(conn, card_id)
     row.update(dict(extra))
     durations = stage_durations(card_id, now=now)
@@ -619,7 +675,7 @@ def card(card_id, now=None):
     final = next((e["occurred_at"] for e in reversed(events)
                   if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
     total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
-    row.update(events=events, links=links, refs=refs, durations=durations,
+    row.update(events=events, links=links, refs=refs, artifacts=artifacts, durations=durations,
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),
