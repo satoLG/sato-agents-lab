@@ -144,6 +144,11 @@ def heartbeat(job_id, text):
 def execute(job, box):
     """Planeja e executa o card do pedido `job` usando `box` (sandbox real ou falso nos testes)."""
     item = kb.card(job["card_id"])
+    if item.get("novo_repo") and not item.get("repo"):
+        with heartbeat(job["id"], f"criando o repositório {item['novo_repo']}"):
+            created = box.create_repo(item["novo_repo"], bool(item.get("novo_repo_publico")))
+        kb.set_repo(item["id"], "claude", repo=created)
+        item = kb.card(item["id"])
     with heartbeat(job["id"], "preparando o repositório"):
         info = box.prepare(item)
     feedback = ""
@@ -253,7 +258,14 @@ def _openrouter_key():
 
 def _card_markdown(item):
     parts = [f"# {item['titulo']}", "", "## Ideia original", item["ideia_original"], "",
-             "## Proposta aprovada", item.get("proposta") or "(sem proposta)", "", "## Histórico"]
+             "## Proposta aprovada", item.get("proposta") or "(sem proposta)", ""]
+    refs = item.get("refs") or []
+    if refs:
+        parts.append("## Referências")
+        parts += [f"- {r['titulo'] or r['url']}: {r['url']}" if r["tipo"] == "link"
+                  else f"- arquivo anexo: ../refs/{r['titulo']}" for r in refs]
+        parts.append("")
+    parts.append("## Histórico")
     for e in item["events"]:
         if e["text"] and e["kind"] in ("comment", "stage_change") and e["author"] != "claude":
             parts.append(f"- {e['occurred_at']} {e['author']} ({e['from_stage'] or ''}→{e['to_stage'] or 'comentário'}): {e['text']}")
@@ -295,10 +307,15 @@ class Sandbox:
                     env={**os.environ, "GH_TOKEN": self.token})
         public = view.returncode == 0 and view.stdout.strip() == "false"
         (self.tmp / "CARD.md").write_text(_card_markdown(item), encoding="utf-8")
+        refs = self.tmp / "refs"
+        refs.mkdir()
+        for r in item.get("refs") or []:
+            if r["tipo"] == "arquivo" and r.get("path") and Path(r["path"]).is_file():
+                shutil.copyfile(r["path"], refs / r["titulo"])
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.dir = self.WORK_ROOT / f"kanbagent-card-{item['id']}-{stamp}"
         for command in (["sudo", "-n", "mkdir", "-p", str(self.dir)],
-                        ["sudo", "-n", "cp", "-a", str(clone), str(self.tmp / "CARD.md"), str(self.dir)],
+                        ["sudo", "-n", "cp", "-a", str(clone), str(self.tmp / "CARD.md"), str(refs), str(self.dir)],
                         ["sudo", "-n", "chown", "-R", "agent:agent", str(self.dir)]):
             if _run(command, timeout=300).returncode:
                 raise ExecFailed("Não consegui preparar a pasta do usuário agent.")
@@ -309,6 +326,15 @@ class Sandbox:
         self._agent(f"cd {shlex.quote(str(self.dir / 'repo'))} && git config user.name 'Sato Agent (Claude Code)'"
                     " && git config user.email agent@sato-agents.local")
         return {"repo": repo, "public": public, "branch": self.branch}
+
+    def create_repo(self, full_name, public):
+        """Cria o repositório do card no GitHub (com README, para já ter o branch principal)."""
+        env = {**os.environ, "GH_TOKEN": self.token}
+        made = _run(["gh", "repo", "create", full_name, "--public" if public else "--private", "--add-readme"],
+                    timeout=120, env=env)
+        if made.returncode:
+            raise ExecFailed(f"Não consegui criar {full_name}: {made.stderr.strip()[-300:]}")
+        return full_name
 
     def run_claude(self, kind, tier, prompt):
         free = tier == "free"

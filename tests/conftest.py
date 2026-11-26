@@ -12,6 +12,7 @@ import pytest
 
 # Os testes nunca disparam o Hermes de verdade.
 os.environ.setdefault("KANBAGENT_HERMES_WORKER", "0")
+os.environ.setdefault("KANBAGENT_GITHUB", "0")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

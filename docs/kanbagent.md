@@ -48,6 +48,14 @@ o crontab roda o mesmo comando a cada 2 minutos para pegar o que sobrar. O worke
 falha, o card destrava e mostra o motivo com "↻ Pedir de novo". Ao voltar para `ideia` e ir de novo
 para `proposta`, o Hermes reescreve em cima de tudo que já foi escrito.
 
+## Repositório e referências do card
+
+Ao anotar a ideia, o repositório vem da lista do GitHub do Sato (`kanbagent_github.py`, cache de 10 min,
+mesmo token do executor) ou é um **repositório novo** (privado por padrão), que o executor cria antes de
+planejar. O repositório só muda até a proposta ser aprovada; depois fica fixo. Issues e PRs não são
+ligados à mão: nascem do fluxo. Links e arquivos de referência entram enquanto a ideia amadurece
+(ideia, proposta, revisão) e seguem com o card.
+
 ## Claude executa o card (níveis por tarefa)
 
 Levar um card da Fila de execução para `execucao` (ou reprovar a entrega em `revisao_codigo`) exige
@@ -89,9 +97,10 @@ novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
 - `projects` — slug, nome, descrição, criado_em, arquivado_em.
 - `repos` — full_name (`owner/repo`).
 - `project_repos` — projeto ↔ repositório (N:N; um projeto pode envolver vários repos).
-- `cards` — projeto, repo opcional (do projeto), título, `ideia_original` (nunca sobrescrita),
+- `cards` — projeto, repo opcional (qualquer um do GitHub; entra no projeto sozinho) ou `novo_repo` (+ `novo_repo_publico`) que o executor cria, título, `ideia_original` (nunca sobrescrita),
   proposta (markdown), `etapa_atual` (cache), criado_em, atualizado_em.
-- `card_links` — issues/PRs ligados ao card (repo, número, url, estado conhecido).
+- `card_links` — issues/PRs ligados ao card pelo próprio fluxo (executor, Hermes, API), não pela página.
+- `card_refs` — referências da ideia: links e arquivos anexos (em `~/.hermes/kanbagent-files/<card>/`, baixados sempre como anexo). Seguem para o Hermes (proposta) e para o Claude (`../refs/` no plano).
 - `events` — `stage_change` | `comment` | `link_added` | `proposal_updated`, de/para etapa, autor
   (`sato` | `hermes` | `github-sync`), texto, `occurred_at` UTC. **Só INSERT.**
 

@@ -9,10 +9,10 @@ import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 
 from . import kanbagent as kb
-from . import kanbagent_exec, kanbagent_hermes, kanbagent_review
+from . import kanbagent_exec, kanbagent_github, kanbagent_hermes, kanbagent_review
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -169,6 +169,28 @@ def _render(template, **context):
     return render_template(template, asset_version=current_app.config.get("ASSET_VERSION", ""), **context)
 
 
+NEW_REPO = "__novo__"
+
+
+def _repo_fields():
+    """Repositório escolhido no formulário: (`owner/repo` existente, repo novo a criar, público?)."""
+    choice = _text("repo", limit=200)
+    if choice != NEW_REPO:
+        return choice or None, None, False
+    name = _text("novo_repo", True, 140)
+    if "/" not in name:
+        login, _ = kanbagent_github.repos()
+        if not login:
+            raise ValueError("Escreva o repositório novo como dono/nome.")
+        name = f"{login}/{name}"
+    return None, name, request.form.get("publico") == "1"
+
+
+def _github_context():
+    login, repos = kanbagent_github.repos()
+    return {"gh_login": login, "gh_repos": repos}
+
+
 @bp.get("")
 def board():
     filters = _filters()
@@ -181,7 +203,7 @@ def board():
              "returns": [f"{a}>{b}" for a, b in sorted(kb.RETURNS)],
              "stages": kb.STAGE_LABELS}
     return _render("kanbagent/board.html", columns=columns, projects=kb.projects(), filters=filters,
-                   show_discarded=request.args.get("descartados") == "1", rules=rules)
+                   show_discarded=request.args.get("descartados") == "1", rules=rules, **_github_context())
 
 
 @bp.get("/card/<int:card_id>")
@@ -191,7 +213,8 @@ def card_page(card_id):
     except kb.NotFound:
         abort(404)
     longest = max(item["durations"].values(), default=0) or 1
-    return _render("kanbagent/card.html", card=item, projects=kb.projects(), longest=longest)
+    return _render("kanbagent/card.html", card=item, projects=kb.projects(), longest=longest,
+                   **(_github_context() if item["etapa_atual"] in kb.REPO_EDITABLE else {}))
 
 
 @bp.get("/projetos")
@@ -216,9 +239,9 @@ def metrics_page():
 def create_card_form():
     try:
         project_id = _int(request.form.get("projeto"))
-        repo_id = _int(request.form.get("repo"))
+        repo, novo, publico = _repo_fields()
         card_id = kb.create_card(_text("titulo", True, 200), _text("ideia", True), "sato",
-                                 project_id=project_id, repo_id=repo_id)
+                                 project_id=project_id, repo=repo, novo_repo=novo, publico=publico)
     except (ValueError, kb.NotFound) as error:
         return _back(error=error)
     return _back(card_id)
@@ -294,13 +317,48 @@ def comment_form(card_id):
     return _back(card_id)
 
 
-@bp.post("/card/<int:card_id>/link")
-def link_form(card_id):
+@bp.post("/card/<int:card_id>/repo")
+def repo_form(card_id):
     try:
-        kb.add_link(card_id, _text("url", True, 500), "sato")
+        repo, novo, publico = _repo_fields()
+        kb.set_repo(card_id, "sato", repo=repo, novo_repo=novo, publico=publico)
     except (ValueError, kb.NotFound) as error:
         return _back(card_id, error)
     return _back(card_id)
+
+
+@bp.post("/card/<int:card_id>/referencia")
+def ref_link_form(card_id):
+    try:
+        kb.add_ref_link(card_id, _text("url", True, 1000), "sato", _text("titulo", limit=200))
+    except (ValueError, kb.NotFound) as error:
+        return _back(card_id, error)
+    return _back(card_id)
+
+
+@bp.post("/card/<int:card_id>/anexo")
+def ref_file_form(card_id):
+    upload = request.files.get("arquivo")
+    try:
+        if upload is None or not upload.filename:
+            raise ValueError("Escolha um arquivo.")
+        kb.add_ref_file(card_id, "sato", upload.filename, upload.read(kb.MAX_FILE + 1))
+    except (ValueError, kb.NotFound) as error:
+        return _back(card_id, error)
+    return _back(card_id)
+
+
+@bp.get("/card/<int:card_id>/anexo/<int:ref_id>")
+def ref_file(card_id, ref_id):
+    try:
+        item = kb.ref(card_id, ref_id)
+    except kb.NotFound:
+        abort(404)
+    if item["tipo"] != "arquivo":
+        abort(404)
+    # Sempre como download: um HTML anexado nunca roda no domínio do site.
+    return send_file(item["path"], as_attachment=True, download_name=item["titulo"],
+                     mimetype="application/octet-stream")
 
 
 @bp.post("/projetos")
@@ -391,10 +449,9 @@ def api_create_card():
     data = request.get_json(silent=True) or {}
     try:
         project_id = _resolve_project(data)
-        repo = data.get("repo")
-        repo_id = kb.repo_id(repo) if repo else None
         card_id = kb.create_card(str(data.get("titulo", "")).strip()[:200], str(data.get("ideia", "")).strip(),
-                                 _author(), project_id=project_id, repo_id=repo_id)
+                                 _author(), project_id=project_id, repo=data.get("repo") or None,
+                                 novo_repo=data.get("novo_repo") or None, publico=bool(data.get("publico")))
     except Exception as error:
         return _api_error(error)
     return jsonify({"id": card_id, "url": url_for("kanbagent.card_page", card_id=card_id)}), 201

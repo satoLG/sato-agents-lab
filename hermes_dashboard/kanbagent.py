@@ -7,6 +7,7 @@ verdade do tempo e só recebe INSERT; `cards.etapa_atual` é cache do último
 import os
 import re
 import sqlite3
+import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ DB_PATH = Path(os.getenv("KANBAGENT_DB_PATH", str(config.HERMES_HOME / "kanbagen
 STAGES = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue", "descartado")
 TERMINAL = {"entregue", "descartado"}
 MAIN_PATH = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue")
-EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated")
+EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated", "repo_changed", "ref_added")
 AUTHORS = ("sato", "hermes", "github-sync", "claude")
 
 _SCHEMA = (
@@ -44,6 +45,12 @@ _SCHEMA = (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
         repo_id INTEGER REFERENCES repos(id), numero INTEGER, url TEXT NOT NULL,
         estado TEXT, criado_em TEXT NOT NULL
+    )""",
+    # Referências da ideia (links e arquivos anexos) que seguem com o card até a execução.
+    """CREATE TABLE IF NOT EXISTS card_refs (
+        id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
+        tipo TEXT NOT NULL CHECK (tipo IN ('link', 'arquivo')), titulo TEXT NOT NULL DEFAULT '',
+        url TEXT, arquivo TEXT, tamanho INTEGER, criado_em TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
@@ -138,6 +145,10 @@ def _connection():
             conn.execute("ALTER TABLE agent_jobs ADD COLUMN heartbeat_at TEXT")
         if "result" not in job_columns:
             conn.execute("ALTER TABLE agent_jobs ADD COLUMN result TEXT")
+        card_columns = {column[1] for column in conn.execute("PRAGMA table_info(cards)")}
+        if "novo_repo" not in card_columns:   # repositório que o executor vai criar (owner/nome)
+            conn.execute("ALTER TABLE cards ADD COLUMN novo_repo TEXT")
+            conn.execute("ALTER TABLE cards ADD COLUMN novo_repo_publico INTEGER NOT NULL DEFAULT 0")
     if DB_PATH.exists():
         os.chmod(DB_PATH, 0o600)
     return conn
@@ -183,39 +194,151 @@ def create_project(slug, nome, descricao=""):
         return cursor.lastrowid
 
 
+REPO_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
+# Até a proposta ser aprovada o card pode trocar de repositório; depois ele é fixo.
+REPO_EDITABLE = ("ideia", "proposta", "revisao")
+
+
+def _check_repo(full_name):
+    full_name = (full_name or "").strip()
+    if not REPO_NAME.match(full_name) or full_name.endswith((".", ".git")):
+        raise ValueError("Repositório precisa estar no formato owner/repo.")
+    return full_name
+
+
+def _repo_id(conn, full_name, project_id=None):
+    """Id do repositório (cria a linha se preciso) e liga ao projeto, se houver."""
+    full_name = _check_repo(full_name)
+    conn.execute("INSERT OR IGNORE INTO repos (full_name) VALUES (?)", (full_name,))
+    repo_id = conn.execute("SELECT id FROM repos WHERE full_name=?", (full_name,)).fetchone()[0]
+    if project_id is not None:
+        conn.execute("INSERT OR IGNORE INTO project_repos (project_id, repo_id) VALUES (?,?)", (project_id, repo_id))
+    return repo_id
+
+
 def add_repo_to_project(project_id, full_name):
     """Liga `owner/repo` ao projeto (cria o repo se preciso); devolve o id do repo. Repetir não duplica."""
-    owner, _, name = (full_name or "").partition("/")
-    if not owner or not name or "/" in name:
-        raise ValueError("Repositório precisa estar no formato owner/repo.")
     with closing(_connection()) as conn, _transaction(conn):
         if conn.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone() is None:
             raise NotFound(f"Projeto {project_id} não existe.")
-        conn.execute("INSERT OR IGNORE INTO repos (full_name) VALUES (?)", (full_name,))
-        repo_id = conn.execute("SELECT id FROM repos WHERE full_name=?", (full_name,)).fetchone()[0]
-        conn.execute("INSERT OR IGNORE INTO project_repos (project_id, repo_id) VALUES (?,?)", (project_id, repo_id))
-        return repo_id
+        return _repo_id(conn, full_name, project_id)
 
 
-def create_card(titulo, ideia_original, author, project_id=None, repo_id=None, occurred_at=None):
-    """Grava o card em `ideia` com o evento inicial `None → ideia`, na mesma transação."""
+def _repo_choice(conn, project_id, repo_id, repo, novo_repo):
+    """(repo_id, novo_repo) a partir do que veio do formulário: id, `owner/repo` existente ou repo a criar."""
+    if novo_repo:
+        if repo or repo_id:
+            raise ValueError("Escolha um repositório existente ou um novo, não os dois.")
+        novo_repo = _check_repo(novo_repo)
+        if conn.execute("SELECT 1 FROM repos WHERE full_name=?", (novo_repo,)).fetchone():
+            raise ValueError(f"{novo_repo} já existe; escolha na lista.")
+        return None, novo_repo
+    if repo:
+        return _repo_id(conn, repo, project_id), None
+    if repo_id is not None:
+        if conn.execute("SELECT 1 FROM repos WHERE id=?", (repo_id,)).fetchone() is None:
+            raise NotFound(f"Repositório {repo_id} não existe.")
+        if project_id is not None:
+            conn.execute("INSERT OR IGNORE INTO project_repos (project_id, repo_id) VALUES (?,?)", (project_id, repo_id))
+    return repo_id, None
+
+
+def create_card(titulo, ideia_original, author, project_id=None, repo_id=None, occurred_at=None,
+                repo=None, novo_repo=None, publico=False):
+    """Grava o card em `ideia` com o evento inicial `None → ideia`, na mesma transação.
+
+    O repositório pode ser qualquer um do GitHub (`repo` = owner/repo, entra no projeto sozinho) ou um
+    repositório novo (`novo_repo`), que o executor cria antes de começar.
+    """
     if not titulo or not ideia_original:
         raise ValueError("Card precisa de título e ideia original.")
     with closing(_connection()) as conn, _transaction(conn):
         if project_id is not None and conn.execute(
                 "SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone() is None:
             raise NotFound(f"Projeto {project_id} não existe.")
-        if repo_id is not None and (project_id is None or conn.execute(
-                "SELECT 1 FROM project_repos WHERE project_id=? AND repo_id=?",
-                (project_id, repo_id)).fetchone() is None):
-            raise ValueError("O repositório do card precisa ser um dos repositórios do projeto.")
+        repo_id, novo_repo = _repo_choice(conn, project_id, repo_id, repo, novo_repo)
         occurred = _iso(occurred_at)
         cursor = conn.execute(
-            "INSERT INTO cards (project_id, repo_id, titulo, ideia_original, etapa_atual, criado_em, atualizado_em)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (project_id, repo_id, titulo, ideia_original, "ideia", occurred, occurred))
+            "INSERT INTO cards (project_id, repo_id, titulo, ideia_original, etapa_atual, criado_em, atualizado_em,"
+            " novo_repo, novo_repo_publico) VALUES (?,?,?,?,?,?,?,?,?)",
+            (project_id, repo_id, titulo, ideia_original, "ideia", occurred, occurred, novo_repo, int(bool(publico))))
         _insert_event(conn, cursor.lastrowid, "stage_change", author, to_stage="ideia", occurred_at=occurred)
         return cursor.lastrowid
+
+
+def set_repo(card_id, author, repo=None, novo_repo=None, publico=False):
+    """Troca o repositório do card (só até a proposta ser aprovada). O executor (`claude`) usa para
+    gravar o repositório que acabou de criar."""
+    with closing(_connection()) as conn, _transaction(conn):
+        row = _card(conn, card_id)
+        if author != "claude" and row["etapa_atual"] not in REPO_EDITABLE:
+            raise InvalidTransition("O repositório fica fixo depois que a proposta é aprovada.")
+        if author == "sato" and _open_job(conn, card_id):
+            raise InvalidTransition(LOCKED)
+        repo_id, novo = _repo_choice(conn, row["project_id"], None, repo, novo_repo)
+        if repo_id is None and novo is None:
+            raise ValueError("Escolha um repositório.")
+        conn.execute("UPDATE cards SET repo_id=?, novo_repo=?, novo_repo_publico=? WHERE id=?",
+                     (repo_id, novo, int(bool(publico)) if novo else 0, card_id))
+        label = repo or f"{novo} (novo, {'público' if publico else 'privado'})"
+        _insert_event(conn, card_id, "repo_changed", author, text=label)
+
+
+# --- referências (links e arquivos que seguem com o card) ------------------------------------------
+
+def _files_dir():
+    return DB_PATH.parent / "kanbagent-files"   # ao lado do banco (os testes trocam o DB_PATH)
+
+
+MAX_FILE = 20 * 1024 * 1024
+REFS_EDITABLE = ("ideia", "proposta", "revisao")
+
+
+def add_ref_link(card_id, url, author, titulo=""):
+    url = (url or "").strip()
+    if not re.match(r"^https?://\S+$", url) or len(url) > 1000:
+        raise ValueError("Use um link http(s) completo.")
+    return _add_ref(card_id, author, "link", titulo.strip()[:200], url=url)
+
+
+def add_ref_file(card_id, author, nome, data):
+    """Guarda o anexo em FILES_DIR/<card>/ e registra a referência. `data` são os bytes."""
+    if not data:
+        raise ValueError("Arquivo vazio.")
+    if len(data) > MAX_FILE:
+        raise ValueError("Arquivo passa de 20 MB.")
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(nome or "arquivo")).strip("-.")[:120] or "arquivo"
+    folder = _files_dir() / str(card_id)
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    stored = f"{uuid.uuid4().hex[:12]}-{safe}"
+    (folder / stored).write_bytes(data)
+    try:
+        return _add_ref(card_id, author, "arquivo", safe, arquivo=f"{card_id}/{stored}", tamanho=len(data))
+    except Exception:
+        (folder / stored).unlink(missing_ok=True)
+        raise
+
+
+def _add_ref(card_id, author, tipo, titulo, url=None, arquivo=None, tamanho=None):
+    with closing(_connection()) as conn, _transaction(conn):
+        row = _card(conn, card_id)
+        if author == "sato" and row["etapa_atual"] not in REFS_EDITABLE:
+            raise InvalidTransition("Referências entram até a proposta ser aprovada.")
+        occurred = _insert_event(conn, card_id, "ref_added", author, text=url or titulo)
+        cursor = conn.execute("INSERT INTO card_refs (card_id, tipo, titulo, url, arquivo, tamanho, criado_em)"
+                              " VALUES (?,?,?,?,?,?,?)", (card_id, tipo, titulo, url, arquivo, tamanho, occurred))
+        return cursor.lastrowid
+
+
+def ref(card_id, ref_id):
+    with closing(_connection()) as conn:
+        row = conn.execute("SELECT * FROM card_refs WHERE id=? AND card_id=?", (ref_id, card_id)).fetchone()
+    if row is None:
+        raise NotFound(f"Referência {ref_id} não existe.")
+    item = dict(row)
+    if item["arquivo"]:
+        item["path"] = str(_files_dir() / item["arquivo"])
+    return item
 
 
 def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
@@ -232,7 +355,7 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
             raise InvalidTransition(f"Transição inválida: {from_stage} → {to_stage}.")
         if author == "sato" and _open_job(conn, card_id):
             raise InvalidTransition(LOCKED)
-        if to_stage == "execucao" and author == "sato" and not row["repo_id"]:
+        if to_stage == "execucao" and author == "sato" and not row["repo_id"] and not row["novo_repo"]:
             raise InvalidTransition("Ligue o card a um repositório antes de executar.")
         if (from_stage, to_stage) in NEEDS_TEXT and not text:
             raise InvalidTransition(f"Voltar de {from_stage} para {to_stage} exige comentário.")
@@ -487,6 +610,8 @@ def card(card_id, now=None):
         links = [dict(link) for link in conn.execute(
             "SELECT l.*, r.full_name AS repo FROM card_links l LEFT JOIN repos r ON r.id=l.repo_id"
             " WHERE l.card_id=? ORDER BY l.id", (card_id,)).fetchall()]
+        refs = [dict(r, path=str(_files_dir() / r["arquivo"]) if r["arquivo"] else None) for r in conn.execute(
+            "SELECT * FROM card_refs WHERE card_id=? ORDER BY id", (card_id,)).fetchall()]
         row["na_etapa_desde"] = _entered_current(conn, card_id)
     row.update(dict(extra))
     durations = stage_durations(card_id, now=now)
@@ -494,7 +619,7 @@ def card(card_id, now=None):
     final = next((e["occurred_at"] for e in reversed(events)
                   if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
     total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
-    row.update(events=events, links=links, durations=durations,
+    row.update(events=events, links=links, refs=refs, durations=durations,
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),

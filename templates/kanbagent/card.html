@@ -15,7 +15,20 @@
     <p class="muted">na lista <span class="kb-stage" data-stage="{{ card.etapa_atual }}">{{ kb_labels[card.etapa_atual] }}</span> há {{ card.na_etapa_desde|kb_since }}</p>
     <div class="kb-facts">
       {% if card.projeto %}<div><span class="kb-fact-label">Projeto</span><span class="kb-label kb-label-text" style="--hue: {{ (card.project_id * 67) % 360 }}">{{ card.projeto }}</span></div>{% endif %}
-      {% if card.repo %}<div><span class="kb-fact-label">Repositório</span><span class="kb-chip">{{ card.repo }}</span></div>{% endif %}
+      <div><span class="kb-fact-label">Repositório</span>
+        {% if card.repo %}<span class="kb-chip">{{ card.repo }}</span>
+        {% elif card.novo_repo %}<span class="kb-chip" title="O executor cria antes de começar">{{ card.novo_repo }} · novo{{ ', público' if card.novo_repo_publico else '' }}</span>
+        {% else %}<span class="kb-chip muted">nenhum</span>{% endif %}
+        {% if gh_repos is defined and not locked %}
+        <details class="kb-inline-edit kb-repo-edit">
+          <summary class="btn ghost small">Trocar</summary>
+          <form method="post" action="{{ url_for('kanbagent.repo_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
+            {{ ui.repo_picker(gh_repos, gh_login, card.repo) }}
+            <button class="btn small" type="submit">Salvar</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
       <div><span class="kb-fact-label">Tempo total</span><span class="kb-chip">⏱ {{ card.total_seconds|kb_duration }}</span></div>
       <div><span class="kb-fact-label">Criado</span><span class="kb-chip">{{ card.criado_em|kb_time }}</span></div>
     </div>
@@ -59,6 +72,31 @@
       <section aria-labelledby="kb-idea">
         <h2 id="kb-idea"><span aria-hidden="true">💡</span> Ideia original</h2>
         <p class="kb-pre kb-box">{{ card.ideia_original }}</p>
+      </section>
+
+      <section aria-labelledby="kb-refs">
+        <h2 id="kb-refs">Referências</h2>
+        {% if card.refs %}
+        <ul class="kb-refs">
+          {% for r in card.refs %}
+          <li>{% if r.tipo == 'link' %}<a href="{{ r.url }}" rel="noopener noreferrer" target="_blank">{{ r.titulo or r.url }}</a>
+          {% else %}<a href="{{ url_for('kanbagent.ref_file', card_id=card.id, ref_id=r.id) }}" download>{{ r.titulo }}</a> <span class="muted">{{ (r.tamanho / 1024)|round(1) }} KB</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% elif card.etapa_atual not in ('ideia', 'proposta', 'revisao') %}<p class="muted">Sem referências.</p>{% endif %}
+        {% if card.etapa_atual in ('ideia', 'proposta', 'revisao') and not locked %}
+        <div class="kb-ref-forms">
+          <form method="post" action="{{ url_for('kanbagent.ref_link_form', card_id=card.id) }}" class="kb-form kb-ref-form">{{ ui.csrf() }}
+            <input name="url" type="url" required placeholder="https://… (link de referência)" aria-label="Link de referência">
+            <input name="titulo" maxlength="200" placeholder="Título (opcional)" aria-label="Título do link">
+            <button class="btn ghost small" type="submit">Adicionar</button>
+          </form>
+          <form method="post" action="{{ url_for('kanbagent.ref_file_form', card_id=card.id) }}" enctype="multipart/form-data" class="kb-form kb-ref-form">{{ ui.csrf() }}
+            <input name="arquivo" type="file" required aria-label="Arquivo anexo (até 20 MB)">
+            <button class="btn ghost small" type="submit">Anexar</button>
+          </form>
+        </div>
+        {% endif %}
       </section>
 
       <section aria-labelledby="kb-proposal">
@@ -146,23 +184,16 @@
         <button class="btn danger" type="submit">🗑 Descartar</button>
       </form>
       {% endif %}
-      {% if card.etapa_atual in ('aprovado', 'execucao', 'revisao_codigo') %}
-      <p class="muted kb-hint">Ligue a issue ou o PR: o sync com o GitHub move o card até "Entregue" sozinho, com as datas reais.</p>
-      {% endif %}
       {% else %}
       <p class="muted">Card encerrado.</p>
       {% endif %}
 
-      <h2>Issues e PRs</h2>
       {% if card.links %}
+      <h2>Entregas</h2>
       <ul class="kb-links">
         {% for l in card.links %}<li><a href="{{ l.url }}" rel="noopener" target="_blank">{{ l.repo }}{{ '#' }}{{ l.numero }}</a> <span class="kb-badge">{{ 'PR' if l.tipo == 'pr' else 'issue' }}</span>{% if l.estado %} <span class="kb-badge">{{ l.estado }}</span>{% endif %}</li>{% endfor %}
       </ul>
       {% endif %}
-      <form method="post" action="{{ url_for('kanbagent.link_form', card_id=card.id) }}" class="kb-form">{{ ui.csrf() }}
-        <input name="url" type="url" required placeholder="https://github.com/owner/repo/issues/123" aria-label="URL da issue ou PR">
-        <button class="btn ghost small" type="submit">🔗 Ligar</button>
-      </form>
     </aside>
   </div>
 </article>

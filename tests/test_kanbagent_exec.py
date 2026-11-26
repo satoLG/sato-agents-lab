@@ -35,6 +35,10 @@ class FakeBox:
         self.checks = checks or {}
         self.sha, self.calls, self.resets, self.cleaned = 0, [], [], False
 
+    def create_repo(self, full_name, public):
+        self.created = (full_name, public)
+        return full_name
+
     def prepare(self, item):
         return {"repo": item["repo"], "public": self.public, "branch": f"kanbagent/card-{item['id']}"}
 
@@ -162,3 +166,18 @@ def test_proposal_worker_ignores_execution_jobs(db):
     queued()
     assert kb.claim_job("proposta") is None
     assert kb.claim_job("execucao")["kind"] == "execucao"
+
+
+def test_new_repo_is_created_before_planning_and_refs_reach_the_card_md(db):
+    card = kb.create_card("Jogo", "ideia", "sato", novo_repo="sato/jogo", publico=False)
+    kb.add_ref_link(card, "https://example.com/arte", "sato", "Arte")
+    kb.change_stage(card, "proposta", "hermes")
+    kb.update_proposal(card, "p", "hermes")
+    for stage, who in (("revisao", "hermes"), ("aprovado", "sato"), ("execucao", "sato")):
+        kb.change_stage(card, stage, who)
+    box = FakeBox({"tasks": [task("t", "free")]}, public=False)
+    worker.drain(lambda job: box)
+    item = kb.card(card)
+    assert box.created == ("sato/jogo", False) and item["repo"] == "sato/jogo"
+    assert item["etapa_atual"] == "revisao_codigo"
+    assert "Arte: https://example.com/arte" in worker._card_markdown(item)
