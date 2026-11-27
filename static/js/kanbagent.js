@@ -1,7 +1,7 @@
 // kanbagent: conforto por cima dos formulários. Sem JS tudo funciona por formulário e link;
 // com JS os cards se arrastam entre as listas, e só acendem as listas permitidas pelas regras.
 import {press, release} from './button-sounds.js';
-import {enhanceRich} from './rich-text.js';
+import {enhanceRich, richElement} from './rich-text.js';
 import {needsClamp} from './clamp.js';
 
 enhanceRich();
@@ -373,4 +373,119 @@ function setupDrag(board) {
     document.body.append(note);
     setTimeout(() => note.remove(), 5000);
   }
+}
+
+
+// Chat com um agente do time: envia sem recarregar e acompanha a resposta (pendente → texto). Sem JS o
+// formulário envia e a página recarrega.
+const chatBox = document.querySelector('[data-chat]');
+if (chatBox) {
+  const log = chatBox.querySelector('.kb-chat-log');
+  const form = chatBox.querySelector('.kb-chat-form');
+  const input = form.querySelector('textarea');
+  const headers = {'Content-Type': 'application/json', 'X-Chat-CSRF': chatBox.dataset.csrf};
+  let timer = null;
+  const scrollDown = () => { log.scrollTop = log.scrollHeight; };
+  const render = (m) => {
+    const li = document.createElement('li');
+    const mine = m.autor === 'sato';
+    li.className = `kb-msg${mine ? ' mine' : ''}${m.status !== 'done' ? ` ${m.status}` : ''}`;
+    li.dataset.id = m.id;
+    li.dataset.status = m.status;
+    const img = document.createElement('img');
+    img.src = mine ? chatBox.dataset.satoAvatar : chatBox.dataset.agentAvatar;
+    img.alt = ''; img.width = 32; img.height = 32;
+    const body = document.createElement('div');
+    body.className = 'kb-msg-body';
+    const meta = document.createElement('p');
+    meta.className = 'kb-msg-meta';
+    const who = document.createElement('strong');
+    who.textContent = mine ? 'Você' : chatBox.dataset.agentName;
+    const time = document.createElement('time');
+    time.dateTime = m.criado_em;
+    time.textContent = ` ${clock(m.criado_em)}`;
+    meta.append(who, time);
+    body.append(meta);
+    if (m.status === 'done') body.append(richElement(m.texto));
+    else if (m.status === 'failed') {
+      const p = document.createElement('p');
+      p.className = 'kb-msg-error';
+      p.textContent = `Não respondeu: ${m.erro || 'erro'}`;
+      body.append(p);
+    } else {
+      const p = document.createElement('p');
+      p.className = 'kb-typing';
+      p.setAttribute('aria-label', `${chatBox.dataset.agentName} está escrevendo`);
+      p.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+      body.append(p);
+    }
+    li.append(img, body);
+    return li;
+  };
+  const upsert = (m) => {
+    log.querySelector('.kb-chat-empty')?.remove();
+    const old = log.querySelector(`[data-id="${m.id}"]`);
+    const node = render(m);
+    if (old) old.replaceWith(node); else log.append(node);
+  };
+  const pending = () => log.querySelector('[data-status="pending"], [data-status="running"]');
+  const poll = async () => {
+    timer = null;
+    const first = pending();
+    if (!first) return;
+    try {
+      const after = Number(first.dataset.id) - 1;
+      const response = await fetch(`${chatBox.dataset.chat}?depois=${after}`, {credentials: 'same-origin'});
+      if (response.ok) for (const m of await response.json()) upsert(m);
+      scrollDown();
+    } catch { /* tenta de novo */ }
+    if (pending()) timer = setTimeout(poll, 2500);
+  };
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const texto = input.value.trim();
+    if (!texto) return;
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      const response = await fetch(chatBox.dataset.send, {method: 'POST', credentials: 'same-origin', headers,
+                                                           body: JSON.stringify({texto})});
+      const data = await response.json();
+      if (!response.ok) { alertBox(data.error || 'Não foi possível enviar.'); return; }
+      input.value = '';
+      for (const m of data) upsert(m);
+      scrollDown();
+      if (!timer) timer = setTimeout(poll, 1500);
+    } catch {
+      alertBox('Sem conexão. Tente de novo.');
+    } finally {
+      button.disabled = false;
+      input.focus();
+    }
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  function alertBox(text) {
+    let note = form.querySelector('.kb-chat-note');
+    if (!note) {
+      note = document.createElement('p');
+      note.className = 'kb-chat-note';
+      note.setAttribute('role', 'alert');
+      form.prepend(note);
+    }
+    note.textContent = text;
+    setTimeout(() => note.remove(), 5000);
+  }
+  for (const t of log.querySelectorAll('time[datetime]')) t.textContent = clock(t.dateTime);
+  scrollDown();
+  if (pending()) timer = setTimeout(poll, 1500);
+}
+
+function clock(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
 }

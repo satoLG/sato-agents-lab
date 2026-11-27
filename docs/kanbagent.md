@@ -70,6 +70,13 @@ comenta e chama o Requisitos, mas não escreve proposta: a API recusa. Os perfis
 `~/.hermes/profiles/<perfil>/` (SOUL.md próprio, `KANBAGENT_AGENT` no `.env`). A página **Time** mostra
 cada agente, o que está fazendo e quanto já custou.
 
+**Conversar** abre um chat direto com o agente (`/kanbagent/time/<agente>`), estilo Slack: lista de
+conversas à esquerda, mensagens à direita. A resposta é gerada pelo worker `kanbagent_chat` (disparado
+ao enviar): Requisitos e Revisor respondem no próprio perfil Hermes; Planejador e Programador respondem
+pelo Claude (Sonnet) como `agent`, sem repositório nem ferramentas. Cada agente recebe o seu papel, as
+últimas 12 mensagens e os cards citados com `#N`. Uma pergunta por vez por agente; sem resposta em 20
+min, a mensagem aparece como falha. O custo do chat do Claude entra no custo do agente na página Time.
+
 ## A proposta é a spec (ADR 0013)
 
 A proposta do Hermes tem formato fixo e a parte que importa para a entrega é:

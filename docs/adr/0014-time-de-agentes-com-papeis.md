@@ -33,6 +33,10 @@ de colaboradores, cada um com papel claro, e conversar com cada um.
   respeita `prefers-reduced-motion`), cargo, motor e modelo, o que faz e o que não faz, a etapa, se
   está ocupado (e em qual card) e números (cards, ações, custo).
 
+- **Chat direto com cada agente** (`/kanbagent/time/<agente>`, tabela `agent_messages`, worker
+  `kanbagent_chat`): conversa no papel do agente, com os cards citados por `#N`. Hermes responde no
+  perfil; Claude responde sem repositório nem ferramentas.
+
 ## Consequências
 - Quem escreve a spec não é quem julga a entrega: o Revisor não tem a memória da proposta.
 - Para mudar o comportamento de um agente, edite o SOUL.md do perfil dele em

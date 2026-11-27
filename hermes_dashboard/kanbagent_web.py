@@ -13,6 +13,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 
 from . import kanbagent as kb
 from . import kanbagent_team as team
+from . import kanbagent_chat as chat
 from . import kanbagent_avatars, kanbagent_exec, kanbagent_github, kanbagent_hermes, kanbagent_review
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
@@ -247,7 +248,53 @@ def projects_page():
 @bp.get("/time")
 def team_page():
     busy = team.status(kb.open_jobs())
-    return _render("kanbagent/team.html", agents=team.team(), busy=busy, stats=kb.team_stats())
+    stats = kb.team_stats()
+    for slug, cost in chat.chat_cost().items():
+        if slug in stats:
+            stats[slug]["custo"] += cost
+    return _render("kanbagent/team.html", agents=team.team(), busy=busy, stats=stats)
+
+
+def _chat_json(rows):
+    return [{"id": m["id"], "autor": m["autor"], "texto": m["texto"], "status": m["status"], "erro": m["erro"],
+             "criado_em": m["criado_em"]} for m in rows]
+
+
+@bp.get("/time/<agent>")
+def chat_page(agent):
+    current = team.agent(agent)
+    if current is None:
+        abort(404)
+    busy = team.status(kb.open_jobs())
+    return _render("kanbagent/chat.html", agents=team.team(), current=current, busy=busy,
+                   last=chat.last_messages(), messages=chat.messages(agent))
+
+
+@bp.get("/time/<agent>/mensagens")
+def chat_messages(agent):
+    if agent not in team.AGENTS:
+        abort(404)
+    return jsonify(_chat_json(chat.messages(agent, after=request.args.get("depois", 0, type=int))))
+
+
+@bp.post("/time/<agent>/mensagem")
+def chat_send(agent):
+    wants_json = request.is_json
+    text = (request.get_json(silent=True) or {}).get("texto") if wants_json else request.form.get("texto")
+    try:
+        sent = chat.send(agent, text)
+    except kb.NotFound:
+        abort(404)
+    except (ValueError, kb.InvalidTransition) as error:
+        if wants_json:
+            return jsonify({"error": str(error)}), 409
+        flash(str(error), "error")
+        return redirect(url_for("kanbagent.chat_page", agent=agent), code=303)
+    if os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
+        chat.spawn()
+    if wants_json:
+        return jsonify(_chat_json(sent)), 201
+    return redirect(url_for("kanbagent.chat_page", agent=agent), code=303)
 
 
 @bp.get("/ajustes")

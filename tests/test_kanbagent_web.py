@@ -518,3 +518,27 @@ def test_api_agent_header_only_names_hermes_agents(api):
         assert response.status_code == 409
     kb_card = kb.card(card_id)
     assert kb_card["proposta"] in (None, "") and kb_card["events"][0]["author"] == "hermes"
+
+
+
+def test_chat_page_sends_and_polls_messages(client, monkeypatch):
+    from hermes_dashboard import kanbagent_chat as chat
+    monkeypatch.setattr(chat, "LOCK_PATH", kb.DB_PATH.parent / "chat.lock")
+    page = client.get("/kanbagent/time/revisor").get_data(as_text=True)
+    assert "Revisor de código" in page and "data-chat" in page and "kb-chat-empty" in page
+    assert 'aria-current="page"' in page and "Requisitos" in page          # lista de conversas
+    assert client.get("/kanbagent/time/ninguem").status_code == 404
+    response = client.post("/kanbagent/time/revisor/mensagem", json={"texto": "oi"},
+                           headers={"X-Chat-CSRF": client.csrf})
+    assert response.status_code == 201 and [m["status"] for m in response.get_json()] == ["done", "pending"]
+    again = client.post("/kanbagent/time/revisor/mensagem", json={"texto": "oi"}, headers={"X-Chat-CSRF": client.csrf})
+    assert again.status_code == 409
+    chat.drain({"hermes": lambda a, p: (0, "**Olá**, Sato.", 0.0), "claude": None})
+    data = client.get("/kanbagent/time/revisor/mensagens?depois=1").get_json()
+    assert [(m["autor"], m["texto"]) for m in data] == [("revisor", "**Olá**, Sato.")]
+    page = client.get("/kanbagent/time/revisor").get_data(as_text=True)
+    assert "**Olá**, Sato." in page and "data-rich" in page
+    assert "Olá**, Sato." in client.get("/kanbagent/time/planejador").get_data(as_text=True)   # prévia na lista
+    form = client.post("/kanbagent/time/planejador/mensagem", data={"csrf": client.csrf, "texto": "sem JS"})
+    assert form.status_code == 303
+    assert "Conversar" in client.get("/kanbagent/time").get_data(as_text=True)
