@@ -210,7 +210,7 @@ def test_api_flow_with_token(api):
 
     response = api.post(f"/kanbagent/api/cards/{card_id}/proposal",
                         json={"proposta": "Plano", "revisar": True}, headers=h)
-    assert response.status_code == 409 and "Requisitos" in response.get_json()["error"]   # o Sato Agent não propõe
+    assert response.status_code == 409 and "Mapeador" in response.get_json()["error"]   # o Sato Agent não propõe
     response = api.post(f"/kanbagent/api/cards/{card_id}/proposal", json={"proposta": "Plano", "revisar": True},
                         headers={**h, "X-Kanbagent-Agent": "requisitos"})
     assert response.status_code == 200
@@ -342,9 +342,11 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 def test_avatars_have_defaults_and_can_be_replaced(client):
     import io as _io
+    from hermes_dashboard import kanbagent_avatars
     card_id = kb.create_card("A", "a", "sato")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
-    assert 'src="/kanbagent/avatar/sato?v=0"' in page
+    default_v = kanbagent_avatars.version("sato")
+    assert f'src="/kanbagent/avatar/sato?v={default_v}"' in page
     response = client.get("/kanbagent/avatar/claude")
     assert response.status_code == 200 and response.mimetype == "image/svg+xml"
     assert "default-src 'none'" in response.headers["Content-Security-Policy"]
@@ -358,7 +360,7 @@ def test_avatars_have_defaults_and_can_be_replaced(client):
     assert response.data == PNG and response.mimetype == "image/png"
     response.close()   # no Windows o arquivo aberto impediria o reset
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
-    assert "/kanbagent/avatar/sato?v=0" not in page and "Padrão" in client.get("/kanbagent/ajustes").get_data(as_text=True)
+    assert f"/kanbagent/avatar/sato?v={default_v}\"" not in page and "Padrão" in client.get("/kanbagent/ajustes").get_data(as_text=True)
 
     client.post("/kanbagent/avatares/sato/padrao", data={"csrf": client.csrf})
     assert client.get("/kanbagent/avatar/sato").mimetype == "image/svg+xml"
@@ -494,9 +496,11 @@ def test_card_page_shows_the_spec_and_blocks_approval_without_criteria(client):
 
 def test_team_page_lists_the_four_agents_with_status_and_stats(client):
     page = client.get("/kanbagent/time").get_data(as_text=True)
-    for name in ("Requisitos", "Planejador", "Programador", "Revisor"):
+    for name in ("Mapeador", "Planejador", "Programador", "Revisor"):
         assert f"<h2>{name}</h2>" in page
     assert page.count("Livre") == 4 and "perfil requisitos" in page
+    # o robô 3D de cada agente, nas cores dele, por cima da imagem parada
+    assert page.count('<canvas data-bot="') == 4 and 'data-bot-led="#ffc93c"' in page
     card_id = kb.create_card("Exportar CSV", "i", "sato")
     kb.change_stage(card_id, "proposta", "sato")
     kb.job_progress(kb.claim_job("proposta")["id"], "lendo o card")
@@ -505,7 +509,7 @@ def test_team_page_lists_the_four_agents_with_status_and_stats(client):
     assert "Exportar CSV</a> · lendo o card" in page and page.count("Livre") == 3 and "US$ 0.50" in page
     for slug in ("requisitos", "planejador", "programador", "revisor"):
         response = client.get(f"/kanbagent/avatar/{slug}")
-        assert response.status_code == 200 and b"@keyframes" in response.data
+        assert response.status_code == 200 and response.data[1:4] == b"PNG"
         response.close()
 
 
@@ -526,7 +530,7 @@ def test_chat_page_sends_and_polls_messages(client, monkeypatch):
     monkeypatch.setattr(chat, "LOCK_PATH", kb.DB_PATH.parent / "chat.lock")
     page = client.get("/kanbagent/time/revisor").get_data(as_text=True)
     assert "Revisor de código" in page and "data-chat" in page and "kb-chat-empty" in page
-    assert 'aria-current="page"' in page and "Requisitos" in page          # lista de conversas
+    assert 'aria-current="page"' in page and "Mapeador" in page          # lista de conversas
     assert client.get("/kanbagent/time/ninguem").status_code == 404
     response = client.post("/kanbagent/time/revisor/mensagem", json={"texto": "oi"},
                            headers={"X-Chat-CSRF": client.csrf})

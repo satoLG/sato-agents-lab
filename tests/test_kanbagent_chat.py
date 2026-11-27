@@ -40,7 +40,7 @@ def test_worker_answers_with_the_agent_engine_and_role_prompt(db):
 
     assert chat.drain({"hermes": hermes, "claude": claude}) == 2
     (who1, p1), (who2, p2) = seen
-    assert who1 == "requisitos" and "agente Requisitos" in p1 and "Exportar CSV" in p1 and "#999: não existe" in p1
+    assert who1 == "requisitos" and "agente Mapeador" in p1 and "Exportar CSV" in p1 and "#999: não existe" in p1
     assert "Sato: o que falta" in p1 and "kanbagent.sh card N" in p1
     assert who2 == "programador" and "não tem acesso a repositório" in p2
     assert chat.messages("requisitos")[-1]["texto"] == "Faltam critérios."
@@ -48,7 +48,7 @@ def test_worker_answers_with_the_agent_engine_and_role_prompt(db):
     # a próxima pergunta leva a conversa anterior
     chat.send("requisitos", "e agora?")
     chat.drain({"hermes": hermes, "claude": claude})
-    assert "Requisitos: Faltam critérios." in seen[-1][1] and "Sato: e agora?" in seen[-1][1]
+    assert "Mapeador: Faltam critérios." in seen[-1][1] and "Sato: e agora?" in seen[-1][1]
 
 
 def test_failures_are_shown_and_old_pending_replies_expire(db):

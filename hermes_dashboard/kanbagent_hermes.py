@@ -24,7 +24,7 @@ HERMES_BIN = Path(os.getenv("KANBAGENT_HERMES_BIN", str(config.HERMES_HOME / "he
 LOCK_PATH = config.HERMES_HOME / "kanbagent-hermes.lock"
 TIMEOUT = 15 * 60   # abaixo do JOB_STALE (20 min) do domínio
 
-PROMPT = """Card {id} do kanbagent ("{titulo}") acabou de ser movido para Proposta. Você é o agente Requisitos.
+PROMPT = """Card {id} do kanbagent ("{titulo}") acabou de ser movido para Proposta. Você é o agente Mapeador.
 
 Use a skill kanbagent-proposta para escrever a proposta deste card agora e grave com
 `~/.hermes/scripts/kanbagent.sh proposal {id} ARQUIVO` (isso leva o card para "Em revisão").
@@ -111,7 +111,7 @@ def run_hermes(prompt, on_event, timeout=TIMEOUT, skill="kanbagent-proposta", pr
 
 
 def run_requisitos(prompt, on_event):
-    """A proposta é do agente Requisitos: perfil Hermes próprio, que se identifica na API."""
+    """A proposta é do agente Mapeador: perfil Hermes próprio, que se identifica na API."""
     return run_hermes(prompt, on_event, profile=team.AGENTS["requisitos"]["perfil"])
 
 

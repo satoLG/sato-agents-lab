@@ -134,8 +134,13 @@ def card_moves(item):
 def _labels():
     return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
             "kb_action": action, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
-            "kb_job_text": JOB_TEXT, "kb_review": kb.review, "kb_avatar": avatar_url,
+            "kb_job_text": JOB_TEXT, "kb_review": kb.review, "kb_avatar": avatar_url, "kb_avatar_custom": avatar_custom,
             "kb_user_stages": kb.USER_STAGES}
+
+
+def avatar_custom(author):
+    """O Sato trocou a imagem padrão? (aí o robô 3D da página Time dá lugar à foto)."""
+    return author in kanbagent_avatars.DEFAULTS and kanbagent_avatars.custom(author) is not None
 
 
 def avatar_url(author):

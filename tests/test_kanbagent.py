@@ -393,10 +393,10 @@ def test_approval_requires_acceptance_criteria(db):
 
 def test_each_agent_acts_only_in_its_role(db):
     card = kanbagent.create_card("A", "a", "hermes")
-    kanbagent.change_stage(card, "proposta", "hermes")                 # o Sato Agent chama o Requisitos
+    kanbagent.change_stage(card, "proposta", "hermes")                 # o Sato Agent chama o Mapeador
     assert kanbagent.card(card)["job"]["kind"] == "proposta"
     for intruder in ("hermes", "revisor", "programador", "planejador"):
-        with pytest.raises(kanbagent.InvalidTransition, match="Requisitos"):
+        with pytest.raises(kanbagent.InvalidTransition, match="Mapeador"):
             kanbagent.update_proposal(card, "p", intruder)
     kanbagent.update_proposal(card, "p\n**Critérios de aceite**\n- C1: x — verificar: teste", "requisitos")
     kanbagent.change_stage(card, "revisao", "requisitos")

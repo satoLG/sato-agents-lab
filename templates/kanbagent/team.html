@@ -1,39 +1,33 @@
 {% extends "kanbagent/_layout.html" %}
+{% import "kanbagent/_bot.html" as avatar with context %}
 {% set kb_page = 'team' %}
 {% block title %}Time · kanbagent{% endblock %}
 {% block kb_content %}
-<div class="kb-head"><div><h1>Time</h1><p class="muted">Quem faz o quê no quadro. Cada agente só age na sua etapa; você aprova a proposta e a entrega.</p></div></div>
+<div class="kb-head"><div><h1>Time</h1><p class="muted">Cada agente age só na sua etapa. Você aprova a proposta e a entrega.</p></div></div>
 
 <ol class="kb-team" aria-label="Agentes, na ordem em que o card passa por eles">
   {% for a in agents %}
   {% set job = busy.get(a.slug) %}
   {% set st = stats[a.slug] %}
   <li class="kb-agent card" style="--agent: {{ a.cor }}" data-agent="{{ a.slug }}">
-    <div class="kb-agent-top">
-      <span class="kb-agent-pic">
-        <img src="{{ kb_avatar(a.slug) }}" alt="" width="88" height="88">
-        <span class="kb-presence {{ 'busy' if job else 'free' }}" aria-hidden="true"></span>
-      </span>
-      <div>
-        <h2>{{ a.nome }}</h2>
-        <p class="kb-agent-role">{{ a.cargo }}</p>
-        <p class="kb-agent-engine">{{ icon('bot') }} {{ 'Hermes · perfil ' ~ a.perfil if a.motor == 'hermes' else 'Claude Code' }} · {{ a.modelo }}</p>
-      </div>
-    </div>
-    <p class="kb-agent-status" role="status">
-      {% if job %}{{ icon('loader-circle') }} <a href="{{ url_for('kanbagent.card_page', card_id=job.card_id) }}">#{{ job.card_id }} {{ job.titulo }}</a>{% if job.progress %} · {{ job.progress }}{% endif %}
-      {% else %}<span class="muted">Livre</span>{% endif %}
+    {{ avatar.bot(a, 112, 'busy' if job else 'free') }}
+    <h2>{{ a.nome }}</h2>
+    <p class="kb-agent-role">{{ a.cargo }}</p>
+    <p class="kb-agent-tags">
+      <span class="kb-chip" title="{{ 'Hermes · perfil ' ~ a.perfil if a.motor == 'hermes' else 'Claude Code' }}">{{ icon('bot') }} {{ 'Hermes' if a.motor == 'hermes' else 'Claude' }} · {{ a.modelo }}</span>
+      {% for s in a.etapas %}<span class="kb-chip">{{ kb_labels[s] }}</span>{% endfor %}
     </p>
-    <p>{{ a.resumo }}</p>
-    <ul class="kb-agent-does">{% for f in a.faz %}<li>{{ icon('check') }} {{ f }}</li>{% endfor %}</ul>
-    <p class="kb-agent-not muted">{{ a.nao_faz }}</p>
-    <p class="kb-agent-stages">Etapa: {% for s in a.etapas %}<span class="kb-chip">{{ kb_labels[s] }}</span>{% endfor %}</p>
-    <a class="btn kb-agent-talk" href="{{ url_for('kanbagent.chat_page', agent=a.slug) }}">{{ icon('message-circle') }} Conversar</a>
+    <p class="kb-agent-summary" title="{{ a.resumo }}">{{ a.curto }}</p>
+    <p class="kb-agent-status{% if job %} busy{% endif %}" role="status">
+      {% if job %}{{ icon('loader-circle') }} <a href="{{ url_for('kanbagent.card_page', card_id=job.card_id) }}" title="{{ job.titulo }}{% if job.progress %} · {{ job.progress }}{% endif %}">#{{ job.card_id }} {{ job.titulo }}</a>{% if job.progress %} · {{ job.progress }}{% endif %}
+      {% else %}Livre{% endif %}
+    </p>
     <dl class="kb-agent-stats">
       <div><dt>Cards</dt><dd>{{ st.cards }}</dd></div>
       <div><dt>Ações</dt><dd>{{ st.eventos }}</dd></div>
       <div><dt>Custo</dt><dd>{{ 'US$ %.2f'|format(st.custo) if st.custo else '—' }}</dd></div>
     </dl>
+    <a class="btn kb-agent-talk" href="{{ url_for('kanbagent.chat_page', agent=a.slug) }}">{{ icon('message-circle') }} Conversar</a>
   </li>
   {% endfor %}
 </ol>

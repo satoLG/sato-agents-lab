@@ -60,19 +60,21 @@ ligados à mão: nascem do fluxo. Links e arquivos de referência entram enquant
 
 | Agente | Motor | Etapa | Faz |
 |---|---|---|---|
-| Requisitos | Hermes, perfil `requisitos` | Proposta | escreve a proposta/spec com critérios de aceite |
+| Mapeador | Hermes, perfil `requisitos` | Proposta | escreve a proposta/spec com critérios de aceite |
 | Planejador | Claude Sonnet (Opus se grande) | início da Execução | quebra a spec em tarefas que cobrem todos os critérios |
 | Programador | Claude, nível por tarefa | Execução | faz as tarefas, artefatos, `specs/card-N.md` e o PR |
 | Revisor | Hermes, perfil `revisor` (+ Claude em diff grande) | Revisão de código | confere o PR critério por critério |
 
 Você (Sato) aprova a proposta e a entrega. O Sato Agent principal (Hermes `default`) cria cards,
-comenta e chama o Requisitos, mas não escreve proposta: a API recusa. Os perfis ficam em
+comenta e chama o Mapeador, mas não escreve proposta: a API recusa. Os perfis ficam em
 `~/.hermes/profiles/<perfil>/` (SOUL.md próprio, `KANBAGENT_AGENT` no `.env`). A página **Time** mostra
-cada agente, o que está fazendo e quanto já custou.
+cada agente, o que está fazendo e quanto já custou. O avatar é o robô da home em 3D, com carcaça e LED
+do visor nas cores do agente (`static/js/team-bots.js`, um só WebGL para a página, 24 fps, pausa fora
+da tela); no resto do quadro vai um PNG parado do mesmo robô.
 
 **Conversar** abre um chat direto com o agente (`/kanbagent/time/<agente>`), estilo Slack: lista de
 conversas à esquerda, mensagens à direita. A resposta é gerada pelo worker `kanbagent_chat` (disparado
-ao enviar): Requisitos e Revisor respondem no próprio perfil Hermes; Planejador e Programador respondem
+ao enviar): Mapeador e Revisor respondem no próprio perfil Hermes; Planejador e Programador respondem
 pelo Claude (Sonnet) como `agent`, sem repositório nem ferramentas. Cada agente recebe o seu papel, as
 últimas 12 mensagens e os cards citados com `#N`. Uma pergunta por vez por agente; sem resposta em 20
 min, a mensagem aparece como falha. O custo do chat do Claude entra no custo do agente na página Time.

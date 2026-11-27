@@ -1,0 +1,6 @@
+{# Avatar de agente do time: o robô 3D da home nas cores do agente (static/js/team-bots.js), por cima da
+   imagem parada, que fica quando não há WebGL ou quando o Sato trocou a imagem em Ajustes. #}
+{% macro bot(a, size, presence=None) %}<span class="kb-bot" style="--agent: {{ a.cor }}; --size: {{ size }}px">
+  <img src="{{ kb_avatar(a.slug) }}" alt="" width="{{ size }}" height="{{ size }}">
+  {%- if not kb_avatar_custom(a.slug) %}<canvas data-bot="{{ a.slug }}" data-bot-shell="{{ a.cor }}" data-bot-led="{{ a.led }}" aria-hidden="true"></canvas>{% endif %}
+  {%- if presence %}<span class="kb-presence {{ presence }}" aria-hidden="true"></span>{% endif %}</span>{% endmacro %}
