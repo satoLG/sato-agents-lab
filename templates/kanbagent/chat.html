@@ -1,0 +1,53 @@
+{% extends "kanbagent/_layout.html" %}
+{% import "kanbagent/_macros.html" as ui %}
+{% set kb_page = 'team' %}
+{% block title %}{{ current.nome }} · Time · kanbagent{% endblock %}
+{% block kb_content %}
+<div class="kb-chat" style="--agent: {{ current.cor }}">
+  <nav class="kb-chat-list" aria-label="Conversas com o time">
+    <p class="kb-chat-list-title"><a href="{{ url_for('kanbagent.team_page') }}">{{ icon('users') }} Time</a></p>
+    <ul>
+      {% for a in agents %}
+      {% set prev = last.get(a.slug) %}
+      <li><a href="{{ url_for('kanbagent.chat_page', agent=a.slug) }}" {% if a.slug == current.slug %}aria-current="page"{% endif %} style="--agent: {{ a.cor }}">
+        <span class="kb-chat-pic"><img src="{{ kb_avatar(a.slug) }}" alt="" width="36" height="36"><span class="kb-presence {{ 'busy' if busy.get(a.slug) else 'free' }}" aria-hidden="true"></span></span>
+        <span class="kb-chat-who"><strong>{{ a.nome }}</strong>
+          <small>{% if prev %}{{ (('Você: ' if prev.autor == 'sato' else '') ~ prev.texto)|truncate(42, true, '…') }}{% else %}{{ a.cargo }}{% endif %}</small></span>
+      </a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <section class="kb-chat-main card" aria-labelledby="kb-chat-title" data-chat="{{ url_for('kanbagent.chat_messages', agent=current.slug) }}"
+           data-send="{{ url_for('kanbagent.chat_send', agent=current.slug) }}" data-csrf="{{ session.get('web_chat_csrf', '') }}"
+           data-agent-name="{{ current.nome }}" data-agent-avatar="{{ kb_avatar(current.slug) }}" data-sato-avatar="{{ kb_avatar('sato') }}">
+    <header class="kb-chat-head">
+      <img src="{{ kb_avatar(current.slug) }}" alt="" width="48" height="48">
+      <div>
+        <h1 id="kb-chat-title">{{ current.nome }}</h1>
+        <p class="muted">{{ current.cargo }} · {{ 'Hermes · perfil ' ~ current.perfil if current.motor == 'hermes' else 'Claude' }}
+          {% set job = busy.get(current.slug) %}{% if job %} · trabalhando no <a href="{{ url_for('kanbagent.card_page', card_id=job.card_id) }}">#{{ job.card_id }}</a>{% endif %}</p>
+      </div>
+    </header>
+    <ol class="kb-chat-log" aria-live="polite" aria-label="Mensagens">
+      {% for m in messages %}
+      <li class="kb-msg{% if m.autor == 'sato' %} mine{% endif %}{% if m.status != 'done' %} {{ m.status }}{% endif %}" data-id="{{ m.id }}" data-status="{{ m.status }}">
+        <img src="{{ kb_avatar(m.autor) }}" alt="" width="32" height="32">
+        <div class="kb-msg-body">
+          <p class="kb-msg-meta"><strong>{{ 'Você' if m.autor == 'sato' else current.nome }}</strong> <time datetime="{{ m.criado_em }}">{{ m.criado_em[11:16] }}</time></p>
+          {% if m.status == 'done' %}<div data-rich>{{ m.texto }}</div>
+          {% elif m.status == 'failed' %}<p class="kb-msg-error">{{ icon('triangle-exclamation-point') }} Não respondeu: {{ m.erro }}</p>
+          {% else %}<p class="kb-typing" aria-label="{{ current.nome }} está escrevendo"><span></span><span></span><span></span></p>{% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="kb-chat-empty muted">Comece a conversa. Cite um card com <code>#N</code> para {{ current.nome }} ler o contexto dele.</li>
+      {% endfor %}
+    </ol>
+    <form class="kb-chat-form" method="post" action="{{ url_for('kanbagent.chat_send', agent=current.slug) }}">{{ ui.csrf() }}
+      <textarea name="texto" rows="2" maxlength="4000" required placeholder="Mensagem para {{ current.nome }} (Enter envia, Shift+Enter quebra linha)" aria-label="Mensagem para {{ current.nome }}"></textarea>
+      <button class="btn" type="submit" aria-label="Enviar">{{ icon('send') }}</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -28,6 +28,7 @@
     <ul class="kb-agent-does">{% for f in a.faz %}<li>{{ icon('check') }} {{ f }}</li>{% endfor %}</ul>
     <p class="kb-agent-not muted">{{ a.nao_faz }}</p>
     <p class="kb-agent-stages">Etapa: {% for s in a.etapas %}<span class="kb-chip">{{ kb_labels[s] }}</span>{% endfor %}</p>
+    <a class="btn kb-agent-talk" href="{{ url_for('kanbagent.chat_page', agent=a.slug) }}">{{ icon('message-circle') }} Conversar</a>
     <dl class="kb-agent-stats">
       <div><dt>Cards</dt><dd>{{ st.cards }}</dd></div>
       <div><dt>Ações</dt><dd>{{ st.eventos }}</dd></div>
