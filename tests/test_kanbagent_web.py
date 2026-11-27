@@ -445,3 +445,29 @@ def test_board_shows_cost_on_cards_and_in_the_bar(client):
     kb.record_run(cheap, "opus", "opus", 1.1, 8, 900)
     page = client.get("/kanbagent").get_data(as_text=True)
     assert page.count("kb-badge-cost") == 1 and "US$ 1.30" in page and "kb-boardbar-cost" in page
+
+
+def test_presence_ping_feeds_effort_and_the_page_separates_it_from_waiting(client):
+    card_id = kb.create_card("A", "a", "sato", occurred_at="2026-11-01T10:00:00+00:00")     # já aberto há dias
+    response = client.post(f"/kanbagent/card/{card_id}/presenca", headers={"X-Chat-CSRF": client.csrf})
+    assert response.status_code == 204 and kb.card(card_id)["esforco"]["atencao"] > 0
+    assert client.post("/kanbagent/card/999/presenca", headers={"X-Chat-CSRF": client.csrf}).status_code == 404
+    assert client.post(f"/kanbagent/card/{card_id}/presenca").status_code in (400, 401, 403)   # sem CSRF não conta
+    page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+    assert "Esforço" in page and "Espera" in page and "Decorrido" in page and "data-attention" in page
+    assert "esperando</em>" in page and "kb-bar-split" in page
+    board = client.get("/kanbagent").get_data(as_text=True)
+    assert "kb-badge-wait-you" in board          # card de Ideia espera você: ampulheta, não cronômetro de trabalho
+    kb.change_stage(card_id, "descartado", "sato")
+    assert "data-attention" not in client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
+
+
+def test_metrics_split_effort_from_waiting(client):
+    card_id = kb.create_card("A", "a", "sato", occurred_at="2026-11-01T10:00:00+00:00")
+    kb.add_attention(card_id, now="2026-11-01T11:00:00+00:00")
+    kb.change_stage(card_id, "proposta", "sato", occurred_at="2026-11-01T12:00:00+00:00")
+    data = kb.metrics(now="2026-11-02T00:00:00+00:00")["por_etapa"]["ideia"]
+    assert data["total_seconds"] == 7200 and data["esforco_seconds"] == 5
+    assert data["espera_media_seconds"] == 7195
+    page = client.get("/kanbagent/metricas").get_data(as_text=True)
+    assert "esforço" in page and "Esperando há mais tempo" in page

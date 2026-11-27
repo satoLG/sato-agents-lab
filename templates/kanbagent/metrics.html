@@ -3,7 +3,7 @@
 {% set kb_page = 'metrics' %}
 {% block title %}Métricas · kanbagent{% endblock %}
 {% block kb_content %}
-<div class="kb-head"><div><h1>Métricas</h1><p class="muted">Tempo corrido calculado pelas datas de cada mudança de etapa.</p></div></div>
+<div class="kb-head"><div><h1>Métricas</h1><p class="muted">Esforço = agente trabalhando + você com o card aberto. Espera = o resto do tempo corrido da etapa.</p></div></div>
 {{ ui.filters(projects, filters, days) }}
 
 <div class="stat-grid kb-stats">
@@ -15,13 +15,13 @@
 
 <section class="card" aria-labelledby="kb-avg">
   <h2 id="kb-avg">Tempo médio por etapa</h2>
-  {% if m.gargalo %}<p>Onde mais emperra: <strong>{{ kb_labels[m.gargalo] }}</strong> ({{ m.por_etapa[m.gargalo].media_seconds|kb_duration }} em média).</p>{% endif %}
+  {% if m.gargalo %}<p>Onde mais espera: <strong>{{ kb_labels[m.gargalo] }}</strong> ({{ m.por_etapa[m.gargalo].espera_media_seconds|kb_duration }} parado em média).</p>{% endif %}
   <ul class="kb-bars">
     {% for stage in kb_stages if stage in m.por_etapa %}{% set s = m.por_etapa[stage] %}
     <li>
       <span class="kb-bar-label">{{ kb_labels[stage] }} <em class="muted">{{ m.por_etapa_agora[stage] }} agora</em></span>
-      <span class="kb-bar" data-stage="{{ stage }}"><span style="width: {{ (100 * (s.media_seconds or 0) / longest)|round(1) }}%"></span></span>
-      <span class="kb-bar-value">{{ s.media_seconds|kb_duration }} <em class="muted">({{ s.passagens }})</em></span>
+      <span class="kb-bar kb-bar-split" data-stage="{{ stage }}"><span class="agent" style="width: {{ (100 * (s.esforco_media_seconds or 0) / longest)|round(1) }}%"></span><span class="wait" style="width: {{ (100 * (s.espera_media_seconds or 0) / longest)|round(1) }}%"></span></span>
+      <span class="kb-bar-value">{{ s.esforco_media_seconds|kb_duration }} <em class="muted">esforço + {{ s.espera_media_seconds|kb_duration }} espera ({{ s.passagens }})</em></span>
     </li>
     {% endfor %}
   </ul>
@@ -30,7 +30,7 @@
 
 <div class="kb-two">
   <section class="card" aria-labelledby="kb-stuck">
-    <h2 id="kb-stuck">Parados há mais tempo</h2>
+    <h2 id="kb-stuck">Esperando há mais tempo</h2>
     <ol class="kb-list-plain">
       {% for c in m.parados[:10] %}<li><a href="{{ url_for('kanbagent.card_page', card_id=c.id) }}">{{ c.titulo }}</a> <span class="muted">{{ kb_labels[c.etapa_atual] }} · {{ c.parado_seconds|kb_duration }}</span></li>{% else %}<li class="muted">Nada parado.</li>{% endfor %}
     </ol>
