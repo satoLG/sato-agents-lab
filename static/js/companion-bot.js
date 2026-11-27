@@ -150,16 +150,17 @@ function armGeometry(){
  geometry.computeBoundingSphere();return geometry;
 }
 
-export function createCompanionBot(art,{reduced=()=>false}={}){
+// shell and led recolour a team member (kanbagent Time page); the home keeps the defaults.
+export function createCompanionBot(art,{reduced=()=>false,shell:shellColor='#f4f6f3',led='#2aa8ff'}={}){
  const {mesh,geo}=art;
  const bone=(parent,name,x,y,z)=>{const b=new T.Bone();b.name=name;b.position.set(x,y,z);parent.add(b);return b;};
  const root=new T.Group(),hips=bone(root,'hips',0,.54,0),spine=bone(hips,'spine',0,.66,0),head=bone(spine,'head',0,0,0);
  const rig={type:'robot',floating:true,root,hips,spine,head,arms:[],legs:[],eyes:[],move:0};
- const shell=new T.MeshStandardMaterial({color:'#f4f6f3',metalness:.06,roughness:.33,map:grainTexture()});
+ const shell=new T.MeshStandardMaterial({color:shellColor,metalness:.06,roughness:.33,map:grainTexture()});
  const ball=mesh(spine,geo('companion-ball',()=>new T.SphereGeometry(RADIUS,32,20)),shell);ball.name='companion-ball';
  const visorMaterial=new T.ShaderMaterial({vertexShader,fragmentShader,transparent:true,toneMapped:false,uniforms:{
   uGrid:{value:new T.Vector2(...GRID)},uSize:{value:new T.Vector2(VISOR.radius*VISOR.width,VISOR.radius*VISOR.height)},uLook:{value:new T.Vector2()},uSquash:{value:new T.Vector2(1,1)},
-  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uDrawing:{value:0},uMimicFrom:{value:null},uMimicTo:{value:null},uMimicBlend:{value:0},uMimicFromBuiltin:{value:1},uMimicToBuiltin:{value:1},uLed:{value:new T.Color('#2aa8ff')}}});
+  uMood:{value:new T.Vector4(1,0,0,0)},uBlink:{value:0},uTalk:{value:0},uTime:{value:0},uPower:{value:0},uSep:{value:5.6},uDrawing:{value:0},uMimicFrom:{value:null},uMimicTo:{value:null},uMimicBlend:{value:0},uMimicFromBuiltin:{value:1},uMimicToBuiltin:{value:1},uLed:{value:new T.Color(led)}}});
  const visor=mesh(head,geo('companion-visor',()=>new T.SphereGeometry(VISOR.radius,40,20,Math.PI/2-VISOR.width/2,VISOR.width,Math.PI/2-VISOR.height/2-VISOR.lift,VISOR.height)),visorMaterial);
  visor.name='led-visor';visor.castShadow=false;
  rig.visor=visor;rig.face=createFace(visorMaterial,{reduced});

@@ -489,3 +489,8 @@ function clock(iso) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
 }
+
+// Robôs 3D do time (página Time e chat): o three.js só carrega onde há avatar de agente.
+if (document.querySelector('canvas[data-bot]')) {
+  import('./team-bots.js').then(m => m.mountTeamBots()).catch(() => {});
+}

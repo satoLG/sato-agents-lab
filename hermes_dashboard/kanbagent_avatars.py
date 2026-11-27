@@ -12,11 +12,11 @@ MAX_SIZE = 2 * 1024 * 1024
 STATIC = Path(__file__).resolve().parent.parent / "static"
 DEFAULTS = {"sato": "avatars/sato.svg", "hermes": "avatars/hermes.png",
             "claude": "avatars/claude.svg", "github-sync": "avatars/github-sync.svg",
-            # o time (ADR 0014): bonequinhos SVG animados
-            "requisitos": "avatars/requisitos.svg", "planejador": "avatars/planejador.svg",
-            "programador": "avatars/programador.svg", "revisor": "avatars/revisor.svg"}
+            # o time (ADR 0014): o robô da home nas cores do agente (imagem parada; a página Time anima em 3D)
+            "requisitos": "avatars/requisitos.png", "planejador": "avatars/planejador.png",
+            "programador": "avatars/programador.png", "revisor": "avatars/revisor.png"}
 NAMES = {"sato": "Sato", "hermes": "Sato Agent (Hermes)", "claude": "Claude (antes do time)",
-         "github-sync": "GitHub (sync)", "requisitos": "Requisitos", "planejador": "Planejador",
+         "github-sync": "GitHub (sync)", "requisitos": "Mapeador", "planejador": "Planejador",
          "programador": "Programador", "revisor": "Revisor"}
 TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}
 
@@ -61,7 +61,9 @@ def path(author):
 def version(author):
     """Muda quando a imagem muda, para a URL furar o cache."""
     found = custom(author)
-    return int(found.stat().st_mtime) if found else 0
+    if found:
+        return int(found.stat().st_mtime)
+    return sum(DEFAULTS[author].encode()) % 1000   # padrão novo (ex.: .svg → .png) também fura o cache
 
 
 def save(author, data):

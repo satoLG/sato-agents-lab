@@ -1,5 +1,6 @@
 {% extends "kanbagent/_layout.html" %}
 {% import "kanbagent/_macros.html" as ui %}
+{% import "kanbagent/_bot.html" as avatar with context %}
 {% set kb_page = 'team' %}
 {% block title %}{{ current.nome }} · Time · kanbagent{% endblock %}
 {% block kb_content %}
@@ -10,7 +11,7 @@
       {% for a in agents %}
       {% set prev = last.get(a.slug) %}
       <li><a href="{{ url_for('kanbagent.chat_page', agent=a.slug) }}" {% if a.slug == current.slug %}aria-current="page"{% endif %} style="--agent: {{ a.cor }}">
-        <span class="kb-chat-pic"><img src="{{ kb_avatar(a.slug) }}" alt="" width="36" height="36"><span class="kb-presence {{ 'busy' if busy.get(a.slug) else 'free' }}" aria-hidden="true"></span></span>
+        <span class="kb-chat-pic">{{ avatar.bot(a, 36, 'busy' if busy.get(a.slug) else 'free') }}</span>
         <span class="kb-chat-who"><strong>{{ a.nome }}</strong>
           <small>{% if prev %}{{ (('Você: ' if prev.autor == 'sato' else '') ~ prev.texto)|truncate(42, true, '…') }}{% else %}{{ a.cargo }}{% endif %}</small></span>
       </a></li>
@@ -22,7 +23,7 @@
            data-send="{{ url_for('kanbagent.chat_send', agent=current.slug) }}" data-csrf="{{ session.get('web_chat_csrf', '') }}"
            data-agent-name="{{ current.nome }}" data-agent-avatar="{{ kb_avatar(current.slug) }}" data-sato-avatar="{{ kb_avatar('sato') }}">
     <header class="kb-chat-head">
-      <img src="{{ kb_avatar(current.slug) }}" alt="" width="48" height="48">
+      {{ avatar.bot(current, 48) }}
       <div>
         <h1 id="kb-chat-title">{{ current.nome }}</h1>
         <p class="muted">{{ current.cargo }} · {{ 'Hermes · perfil ' ~ current.perfil if current.motor == 'hermes' else 'Claude' }}

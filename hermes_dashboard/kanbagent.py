@@ -465,7 +465,7 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync" and empty:
             raise InvalidTransition("A proposta ainda está vazia.")
         if (from_stage, to_stage) == ("proposta", "revisao") and author not in (*team.PROPOSAL_AUTHORS, "github-sync"):
-            raise InvalidTransition("Quem manda a proposta para revisão é o agente Requisitos (ou o Sato).")
+            raise InvalidTransition("Quem manda a proposta para revisão é o agente Mapeador (ou o Sato).")
         if (from_stage, to_stage) == ("revisao", "aprovado") and author not in ("sato", "github-sync"):
             raise InvalidTransition("Só o Sato aprova a proposta.")
         # A proposta aprovada é a spec: sem critério de aceite não há como conferir a entrega (ADR 0013).
@@ -833,7 +833,7 @@ def update_proposal(card_id, proposta, author, occurred_at=None):
     if not proposta:
         raise ValueError("Proposta vazia.")
     if author not in team.PROPOSAL_AUTHORS:
-        raise InvalidTransition("Quem escreve a proposta é o agente Requisitos (ou o Sato).")
+        raise InvalidTransition("Quem escreve a proposta é o agente Mapeador (ou o Sato).")
     with closing(_connection()) as conn, _transaction(conn):
         _card(conn, card_id)
         if author == "sato" and _open_job(conn, card_id):
