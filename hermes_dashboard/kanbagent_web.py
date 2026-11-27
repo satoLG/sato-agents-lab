@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 
 from . import kanbagent as kb
+from . import kanbagent_team as team
 from . import kanbagent_avatars, kanbagent_exec, kanbagent_github, kanbagent_hermes, kanbagent_review
 
 bp = Blueprint("kanbagent", __name__, url_prefix="/kanbagent")
@@ -42,7 +43,12 @@ def check_bearer():
 
 
 def _author():
-    return "hermes" if bearer_request() else "sato"
+    """Pela API: o agente Hermes que se identifica (`X-Kanbagent-Agent`, perfis do time) ou o Sato Agent
+    principal. Na página: o Sato."""
+    if not bearer_request():
+        return "sato"
+    claimed = (request.headers.get("X-Kanbagent-Agent") or "").strip().lower()
+    return claimed if claimed in team.HERMES_AGENTS else "hermes"
 
 
 # --- formatação ------------------------------------------------------------------------------------
@@ -236,6 +242,12 @@ def card_page(card_id):
 @bp.get("/projetos")
 def projects_page():
     return _render("kanbagent/projects.html", projects=kb.projects())
+
+
+@bp.get("/time")
+def team_page():
+    busy = team.status(kb.open_jobs())
+    return _render("kanbagent/team.html", agents=team.team(), busy=busy, stats=kb.team_stats())
 
 
 @bp.get("/ajustes")

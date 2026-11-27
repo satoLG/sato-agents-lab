@@ -25,8 +25,8 @@ def test_hermes_writes_proposal_and_job_closes_with_progress(db):
         assert f"Card {card} do kanbagent" in prompt and "kanbagent.sh proposal" in prompt
         on_event({"type": "tool_use", "name": "terminal", "input": {"command": f"~/.hermes/scripts/kanbagent.sh card {card}"}})
         seen.append(kb.card(card)["job"]["progress"])
-        kb.update_proposal(card, "**Problema** ...", "hermes")
-        kb.change_stage(card, "revisao", "hermes")
+        kb.update_proposal(card, "**Problema** ...", "requisitos")
+        kb.change_stage(card, "revisao", "requisitos")
         return 0, "Proposta gravada."
 
     assert worker.drain(hermes) == 1

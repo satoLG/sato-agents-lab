@@ -6,6 +6,7 @@
 {% block side %}
 <p class="app-side-label">Kanbagent</p>
 <nav class="kb-nav" aria-label="kanbagent">
+  <a href="{{ url_for('kanbagent.team_page') }}" {% if kb_page == 'team' %}aria-current="page"{% endif %}>{{ icon('users') }} Time</a>
   <a href="{{ url_for('kanbagent.board') }}" {% if kb_page == 'board' %}aria-current="page"{% endif %}>{{ icon('square-kanban') }} Quadro</a>
   <a href="{{ url_for('kanbagent.metrics_page') }}" {% if kb_page == 'metrics' %}aria-current="page"{% endif %}>{{ icon('chart-column') }} Métricas</a>
   <a href="{{ url_for('kanbagent.projects_page') }}" {% if kb_page == 'projects' %}aria-current="page"{% endif %}>{{ icon('folder-kanban') }} Projetos</a>

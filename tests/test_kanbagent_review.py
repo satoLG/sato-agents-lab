@@ -19,8 +19,8 @@ def delivered(summary="- 1. botão: haiku"):
     card = kb.create_card("Botão", "ideia", "sato", project_id=project,
                           repo_id=kb.add_repo_to_project(project, "sato/app"))
     kb.change_stage(card, "proposta", "hermes")
-    kb.update_proposal(card, "Botão novo\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    for stage, who in (("revisao", "hermes"), ("aprovado", "sato"), ("execucao", "sato")):
+    kb.update_proposal(card, "Botão novo\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    for stage, who in (("revisao", "requisitos"), ("aprovado", "sato"), ("execucao", "sato")):
         kb.change_stage(card, stage, who)
     kb.finish_job(kb.claim_job("execucao")["id"])
     kb.add_link(card, PR, "claude")
@@ -65,7 +65,7 @@ def test_small_diff_is_reviewed_by_hermes_alone(db):
     review = kb.review(item)
     assert tools.asked == ["hermes"] and review["aprovar"]
     assert item["etapa_atual"] == "revisao_codigo" and tools.comments
-    assert any(e["author"] == "hermes" and "VEREDITO: APROVAR" in (e["text"] or "") for e in item["events"])
+    assert any(e["author"] == "revisor" and "VEREDITO: APROVAR" in (e["text"] or "") for e in item["events"])
 
 
 @pytest.mark.parametrize("changed,summary,expected", [
