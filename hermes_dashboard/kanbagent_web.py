@@ -215,8 +215,10 @@ def board():
              "needsText": [f"{a}>{b}" for a, b in sorted(kb.NEEDS_TEXT)],
              "returns": [f"{a}>{b}" for a, b in sorted(kb.RETURNS)],
              "stages": kb.STAGE_LABELS}
+    show_discarded = request.args.get("descartados") == "1"
+    total_cost = sum(i["custo"] for i in items if show_discarded or i["etapa_atual"] != "descartado")
     return _render("kanbagent/board.html", columns=columns, projects=kb.projects(), filters=filters,
-                   show_discarded=request.args.get("descartados") == "1", rules=rules, **_github_context())
+                   show_discarded=show_discarded, rules=rules, total_cost=total_cost, **_github_context())
 
 
 @bp.get("/card/<int:card_id>")

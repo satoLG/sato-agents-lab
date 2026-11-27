@@ -8,6 +8,7 @@
 <div class="kb-boardbar">
   <h1>Quadro</h1>
   {{ ui.filters(projects, filters) }}
+  {% if total_cost %}<span class="kb-chip kb-boardbar-cost" data-tip="Gasto do Claude nos cards filtrados (equivalente em API)" data-tip-pos="below">{{ icon('coins') }} US$ {{ '%.2f'|format(total_cost) }}</span>{% endif %}
   <form method="post" action="{{ url_for('kanbagent.sync_form') }}" class="kb-boardbar-end">{{ ui.csrf() }}<button class="btn ghost small" type="submit" data-tip="Sincronizar com o GitHub" data-tip-pos="below">{{ icon('refresh-cw') }} Sincronizar</button></form>
 </div>
 
@@ -37,6 +38,7 @@
             {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">{{ icon('triangle-exclamation-point') }} {{ kb_job_text[job.kind][2] }}</span>
             {% elif review %}<span class="kb-badge {{ 'kb-badge-ok' if review.aprovar else 'kb-badge-fail' }}" title="Revisão concluída: abra o card para aprovar ou reprovar">{% if review.aprovar %}{{ icon('circle-check') }} revisado{% else %}{{ icon('triangle-exclamation-point') }} ajustes{% endif %}</span>
             {% elif c.proposta %}<span class="kb-badge" title="Tem proposta">{{ icon('file-text', 'Tem proposta') }}</span>{% endif %}
+            {% if c.custo %}<span class="kb-badge kb-badge-cost" title="Gasto do Claude neste card (equivalente em API)">{{ icon('coins') }} US$ {{ '%.2f'|format(c.custo) }}</span>{% endif %}
             {% if c.ajustes %}<span class="kb-badge" title="Voltas de ajuste" data-ajustes>{{ icon('rotate-ccw') }} <span>{{ c.ajustes }}</span></span>{% endif %}
             {% if c.links %}<span class="kb-badge" title="PRs e issues do card">{{ icon('git-pull-request') }} {{ c.links }}</span>{% endif %}
           </span>
