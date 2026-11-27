@@ -127,7 +127,8 @@ def card_moves(item):
 def _labels():
     return {"kb_labels": kb.STAGE_LABELS, "kb_stages": kb.STAGES, "kb_moves": card_moves,
             "kb_action": action, "kb_needs_text": kb.NEEDS_TEXT, "kb_returns": kb.RETURNS,
-            "kb_job_text": JOB_TEXT, "kb_review": kb.review, "kb_avatar": avatar_url}
+            "kb_job_text": JOB_TEXT, "kb_review": kb.review, "kb_avatar": avatar_url,
+            "kb_user_stages": kb.USER_STAGES}
 
 
 def avatar_url(author):
@@ -391,6 +392,16 @@ def ref_link_form(card_id):
     except (ValueError, kb.NotFound) as error:
         return _back(card_id, error)
     return _back(card_id)
+
+
+@bp.post("/card/<int:card_id>/presenca")
+def card_presence(card_id):
+    """A página do card avisa a cada 15 s enquanto está visível e com interação recente."""
+    try:
+        kb.add_attention(card_id)
+    except kb.NotFound:
+        abort(404)
+    return "", 204
 
 
 @bp.post("/card/<int:card_id>/anexo")

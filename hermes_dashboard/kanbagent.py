@@ -64,6 +64,11 @@ _SCHEMA = (
         kind TEXT NOT NULL, model TEXT NOT NULL, cost_usd REAL NOT NULL DEFAULT 0,
         turns INTEGER NOT NULL DEFAULT 0, duration_ms INTEGER NOT NULL DEFAULT 0, criado_em TEXT NOT NULL
     )""",
+    # Atenção do Sato: segundos com o card aberto, visível e ativo, por etapa (ver `add_attention`).
+    """CREATE TABLE IF NOT EXISTS card_attention (
+        card_id INTEGER NOT NULL REFERENCES cards(id), stage TEXT NOT NULL,
+        seconds REAL NOT NULL DEFAULT 0, last_ping TEXT, PRIMARY KEY (card_id, stage)
+    )""",
     """CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id),
         kind TEXT NOT NULL, from_stage TEXT, to_stage TEXT, author TEXT NOT NULL,
@@ -606,6 +611,67 @@ def stage_durations(card_id, now=None):
     return durations
 
 
+# --- esforço x espera -----------------------------------------------------------------------------
+# Tempo corrido numa etapa não é trabalho: um card esperando você abrir não gastou esforço nenhum.
+# esforço = agente trabalhando (pedidos ao Hermes/Claude) + você com o card aberto, visível e ativo;
+# espera  = o resto do tempo corrido da etapa.
+
+PING_MAX = 30       # crédito máximo por aviso de presença (a página avisa a cada 15 s)
+PING_GAP = 60       # silêncio maior que isso encerra a sessão de leitura
+PING_FIRST = 5      # crédito do primeiro aviso de uma sessão
+USER_STAGES = ("ideia", "revisao", "aprovado", "revisao_codigo")    # etapas que esperam uma ação sua
+JOB_STAGE = {"proposta": "proposta", "execucao": "execucao", "revisao_codigo": "revisao_codigo"}
+
+
+def add_attention(card_id, now=None):
+    """Avisa que o Sato está com o card aberto agora. Credita o tempo desde o aviso anterior (no máximo
+    PING_MAX), então avisar mais vezes não infla nada. Devolve os segundos creditados."""
+    moment = _parse(_iso(now))
+    with closing(_connection()) as conn, _transaction(conn):
+        row = _card(conn, card_id)
+        stage = row["etapa_atual"]
+        if stage in TERMINAL:
+            return 0.0
+        prev = conn.execute("SELECT last_ping FROM card_attention WHERE card_id=? AND stage=?",
+                            (card_id, stage)).fetchone()
+        credit = float(PING_FIRST)
+        if prev and prev["last_ping"]:
+            gap = (moment - _parse(prev["last_ping"])).total_seconds()
+            if 0 <= gap <= PING_GAP:
+                credit = min(gap, float(PING_MAX))
+            elif gap < 0:
+                credit = 0.0
+        conn.execute("INSERT INTO card_attention (card_id, stage, seconds, last_ping) VALUES (?,?,?,?)"
+                     " ON CONFLICT(card_id, stage) DO UPDATE SET seconds=seconds+excluded.seconds,"
+                     " last_ping=excluded.last_ping", (card_id, stage, credit, _iso(moment)))
+        return credit
+
+
+def effort(card_id, now=None):
+    """Por etapa aberta: {total, agente, atencao, espera} em segundos, mais os totais do card."""
+    durations = stage_durations(card_id, now=now)
+    end = _parse(_iso(now))
+    with closing(_connection()) as conn:
+        attention = {r["stage"]: r["seconds"] for r in conn.execute(
+            "SELECT stage, seconds FROM card_attention WHERE card_id=?", (card_id,)).fetchall()}
+        agent = {}
+        for job in conn.execute("SELECT kind, started_at, finished_at FROM agent_jobs WHERE card_id=?"
+                                " AND started_at IS NOT NULL", (card_id,)).fetchall():
+            stage = JOB_STAGE.get(job["kind"])
+            if stage:
+                until = _parse(job["finished_at"]) if job["finished_at"] else end
+                agent[stage] = agent.get(stage, 0.0) + max(0.0, (until - _parse(job["started_at"])).total_seconds())
+    stages = {}
+    for stage, total in durations.items():
+        if stage in TERMINAL:
+            continue
+        worked = min(agent.get(stage, 0.0), total)
+        looked = min(attention.get(stage, 0.0), total - worked)
+        stages[stage] = {"total": total, "agente": worked, "atencao": looked, "espera": total - worked - looked}
+    sums = {key: sum(s[key] for s in stages.values()) for key in ("total", "agente", "atencao", "espera")}
+    return {"por_etapa": stages, **sums, "esforco": sums["agente"] + sums["atencao"]}
+
+
 # --- leitura, proposta, links e métricas (página, API e sync) -------------------------------------
 
 STAGE_LABELS = {
@@ -715,6 +781,7 @@ def card(card_id, now=None):
                   if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
     total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
     row.update(events=events, links=links, refs=refs, artifacts=artifacts, durations=durations, custo=card_cost(card_id),
+               esforco=effort(card_id, now=now),
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),
@@ -843,13 +910,25 @@ def metrics(project_id=None, repo_id=None, since=None, now=None):
             elif item["etapa_atual"] not in TERMINAL and item["na_etapa_desde"]:
                 open_cards.append(dict(item, parado_seconds=(end - _parse(item["na_etapa_desde"])).total_seconds()))
     por_etapa = {stage: {"passagens": len(values), "media_seconds": (sum(values) / len(values)) if values else None,
-                         "total_seconds": sum(values)} for stage, values in passages.items() if stage not in TERMINAL}
+                         "total_seconds": sum(values), "esforco_seconds": 0.0}
+                 for stage, values in passages.items() if stage not in TERMINAL}
+    for item in selected:      # esforço do card, repartido pelas passagens do período
+        worked = effort(item["id"], now=now)["por_etapa"]
+        for stage, parts in worked.items():
+            row = por_etapa.get(stage)
+            if row and row["total_seconds"] and parts["total"]:
+                row["esforco_seconds"] += (parts["agente"] + parts["atencao"]) * min(1.0, row["total_seconds"] / parts["total"])
+    for row in por_etapa.values():
+        n = row["passagens"]
+        row["esforco_seconds"] = min(row["esforco_seconds"], row["total_seconds"])
+        row["esforco_media_seconds"] = (row["esforco_seconds"] / n) if n else None
+        row["espera_media_seconds"] = ((row["total_seconds"] - row["esforco_seconds"]) / n) if n else None
     totals = [d["total_seconds"] for d in delivered]
     return {
         "cards": len(selected),
         "por_etapa": por_etapa,
         "gargalo": max((s for s in por_etapa if por_etapa[s]["media_seconds"] is not None),
-                       key=lambda s: por_etapa[s]["media_seconds"], default=None),
+                       key=lambda s: por_etapa[s]["espera_media_seconds"], default=None),
         "parados": sorted(open_cards, key=lambda c: c["parado_seconds"], reverse=True),
         "entregues": sorted(delivered, key=lambda c: c["entregue_em"], reverse=True),
         "lead_time_medio_seconds": (sum(totals) / len(totals)) if totals else None,

@@ -92,6 +92,21 @@ Com a revisão concluída, o card mostra o parecer e dois botões: **Aprovar (me
 **Reprovar** volta para `execucao` com o parecer pré-preenchido como texto, o que dispara o executor de
 novo no mesmo branch. Arrastar continua valendo pelas mesmas regras.
 
+## Esforço x espera
+
+O tempo corrido de uma etapa (da entrada à saída) não é trabalho: um card esperando você abrir não gastou
+esforço nenhum. Por isso cada etapa se divide em:
+
+- **agente:** soma dos pedidos ao Hermes/Claude daquela etapa (`agent_jobs`, de `started_at` a `finished_at`);
+- **você:** segundos com a página do card aberta, visível e com interação nos últimos 60 s. A página avisa
+  `POST /kanbagent/card/<id>/presenca` a cada 15 s; o servidor credita só o tempo real desde o aviso
+  anterior (no máximo 30 s), então avisar mais vezes não infla, e etapa fechada não conta (`card_attention`);
+- **espera:** o resto. Etapas que esperam uma ação sua (`USER_STAGES`: ideia, em revisão, fila de execução,
+  revisão de código) aparecem no quadro com ampulheta em vez de cronômetro.
+
+O card mostra Esforço, Espera e Decorrido; as barras por etapa e as métricas separam os dois. Histórico
+anterior a esta mudança não tem medição de atenção: o esforço dele é só o tempo do agente.
+
 ## Custo da execução
 
 Cada chamada do Claude (planejar, tarefa, revisão) grava uma linha em `card_runs` com modelo, turnos e o

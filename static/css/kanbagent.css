@@ -252,3 +252,13 @@ body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; mi
 .kb-cost li { display: flex; gap: 8px; justify-content: space-between; }
 .kb-boardbar-cost { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .kb-boardbar-cost + .kb-boardbar-end { margin-left: 0; }
+
+/* Esforço x espera */
+.kb-bar-split { display: flex; }
+.kb-bar-split > span { height: 100%; min-width: 0; border-radius: 0; }
+.kb-bar-split .agent, .kb-dot.agent { background: var(--stage); }
+.kb-bar-split .you, .kb-dot.you { background: #ffffffd9; }
+.kb-bar-split .wait, .kb-dot.wait { background: repeating-linear-gradient(45deg, #ffffff22 0 4px, #ffffff0d 4px 8px); }
+.kb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: .75rem; }
+.kb-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: -6px; }
+.kb-badge-wait-you { background: #ffffff0d; color: var(--tile-muted); }

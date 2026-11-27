@@ -29,7 +29,9 @@
         </details>
         {% endif %}
       </div>
-      <div><span class="kb-fact-label">Tempo total</span><span class="kb-chip">{{ icon('timer') }} {{ card.total_seconds|kb_duration }}</span></div>
+      <div><span class="kb-fact-label">Esforço</span><span class="kb-chip" data-tip="Agente trabalhando + você com o card aberto e ativo" data-tip-pos="below">{{ icon('timer') }} {{ card.esforco.esforco|kb_duration }}</span></div>
+      <div><span class="kb-fact-label">Espera</span><span class="kb-chip muted" data-tip="Tempo parado esperando alguém agir" data-tip-pos="below">{{ icon('hourglass') }} {{ card.esforco.espera|kb_duration }}</span></div>
+      <div><span class="kb-fact-label">Decorrido</span><span class="kb-chip" data-tip="Da criação até agora (ou até a entrega)" data-tip-pos="below">{{ card.total_seconds|kb_duration }}</span></div>
       <div><span class="kb-fact-label">Criado</span><span class="kb-chip">{{ card.criado_em|kb_time }}</span></div>
     </div>
   </header>
@@ -141,14 +143,17 @@
       <section aria-labelledby="kb-durations">
         <h2 id="kb-durations">{{ icon('timer') }}Tempo por etapa</h2>
         <ul class="kb-bars">
-          {% for stage in kb_stages if stage in card.durations %}
+          {% for stage in kb_stages if stage in card.esforco.por_etapa %}{% set e = card.esforco.por_etapa[stage] %}
           <li>
-            <span class="kb-bar-label">{{ kb_labels[stage] }}{% if stage == card.etapa_atual and stage not in ('entregue','descartado') %} <em>(agora)</em>{% endif %}</span>
-            <span class="kb-bar" data-stage="{{ stage }}"><span style="width: {{ (100 * card.durations[stage] / longest)|round(1) }}%"></span></span>
-            <span class="kb-bar-value">{{ card.durations[stage]|kb_duration }}</span>
+            <span class="kb-bar-label">{{ kb_labels[stage] }}{% if stage == card.etapa_atual %} <em>(agora)</em>{% endif %}</span>
+            <span class="kb-bar kb-bar-split" data-stage="{{ stage }}" title="agente {{ e.agente|kb_duration }} · você {{ e.atencao|kb_duration }} · espera {{ e.espera|kb_duration }}">
+              <span class="agent" style="width: {{ (100 * e.agente / longest)|round(1) }}%"></span><span class="you" style="width: {{ (100 * e.atencao / longest)|round(1) }}%"></span><span class="wait" style="width: {{ (100 * e.espera / longest)|round(1) }}%"></span>
+            </span>
+            <span class="kb-bar-value">{{ (e.agente + e.atencao)|kb_duration }} <em class="muted">+ {{ e.espera|kb_duration }} esperando</em></span>
           </li>
           {% endfor %}
         </ul>
+        <p class="muted kb-legend"><span class="kb-dot agent"></span>agente <span class="kb-dot you"></span>você com o card aberto <span class="kb-dot wait"></span>espera</p>
         {% if card.ajustes %}<p class="muted">{{ card.ajustes }} volta(s) de ajuste.</p>{% endif %}
       </section>
 
@@ -235,4 +240,7 @@
     </aside>
   </div>
 </article>
+{% if card.etapa_atual not in ('entregue', 'descartado') %}
+<div hidden data-attention="{{ url_for('kanbagent.card_presence', card_id=card.id) }}" data-csrf="{{ session.get('web_chat_csrf', '') }}"></div>
+{% endif %}
 {% endblock %}

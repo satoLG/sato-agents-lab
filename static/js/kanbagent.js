@@ -78,6 +78,25 @@ for (const form of document.querySelectorAll('form[data-confirm]')) {
   });
 }
 
+// Esforço x espera: enquanto o card está aberto, visível e com interação nos últimos 60 s, avisa o servidor
+// a cada 15 s. Aba em segundo plano ou parada não conta como esforço.
+const attention = document.querySelector('[data-attention]');
+if (attention) {
+  let lastTouch = Date.now();
+  const touch = () => { lastTouch = Date.now(); };
+  for (const type of ['pointerdown', 'pointermove', 'keydown', 'scroll', 'wheel', 'touchstart']) {
+    window.addEventListener(type, touch, {passive: true});
+  }
+  const ping = () => {
+    if (document.visibilityState !== 'visible' || Date.now() - lastTouch > 60000) return;
+    fetch(attention.dataset.attention, {method: 'POST', credentials: 'same-origin', keepalive: true,
+                                        headers: {'X-Chat-CSRF': attention.dataset.csrf}}).catch(() => {});
+  };
+  ping();
+  setInterval(ping, 15000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') touch(); });
+}
+
 // Escolha de repositório: o nome do repositório novo só aparece quando "Novo repositório…" é escolhido.
 for (const picker of document.querySelectorAll('[data-repo-picker]')) {
   const select = picker.querySelector('select');

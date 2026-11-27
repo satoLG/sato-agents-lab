@@ -329,3 +329,33 @@ def test_artifacts_replace_same_name_and_live_beside_the_db(db):
     assert not Path(first).exists() and first != art["path"]
     with pytest.raises(ValueError):
         kanbagent.add_artifact(card, "claude", "x", b"")
+
+
+def test_effort_separates_agent_work_and_attention_from_idle_wait(db):
+    T = lambda hh, mm, ss=0: f"2026-11-01T{hh:02d}:{mm:02d}:{ss:02d}+00:00"
+    card = kanbagent.create_card("A", "a", "sato", occurred_at=T(10, 0))
+    kanbagent.change_stage(card, "proposta", "sato", occurred_at=T(10, 30))
+    job = kanbagent.claim_job("proposta", now=T(10, 31))
+    kanbagent.finish_job(job["id"], now=T(10, 41))                       # Hermes trabalhou 10 min
+    kanbagent.update_proposal(card, "p", "hermes", occurred_at=T(10, 45))
+    kanbagent.change_stage(card, "revisao", "hermes", occurred_at=T(11, 0))
+    # Sato com o card aberto: avisos a cada 15 s, um aviso repetido 1 s depois e outra sessão 10 min mais tarde
+    credits = [kanbagent.add_attention(card, now=T(11, 10, s)) for s in (0, 15, 16)]
+    credits.append(kanbagent.add_attention(card, now=T(11, 20)))
+    assert credits == [5, 15, 1, 5]                                    # avisar mais vezes não infla
+    result = kanbagent.effort(card, now=T(15, 0))
+    proposta, revisao = result["por_etapa"]["proposta"], result["por_etapa"]["revisao"]
+    assert proposta["total"] == 1800 and proposta["agente"] == 600 and proposta["espera"] == 1200
+    assert revisao["total"] == 4 * 3600 and revisao["atencao"] == 26 and revisao["agente"] == 0
+    assert revisao["espera"] == 4 * 3600 - 26
+    assert result["esforco"] == 600 + 26 and result["total"] == 1800 + proposta["total"] + revisao["total"]
+    assert "ideia" in result["por_etapa"] and result["por_etapa"]["ideia"]["espera"] == 1800   # ideia sem ninguém: tudo espera
+
+
+def test_attention_is_ignored_on_closed_cards_and_never_exceeds_the_stage(db):
+    card = kanbagent.create_card("A", "a", "sato", occurred_at="2026-11-01T10:00:00+00:00")
+    kanbagent.add_attention(card, now="2026-11-01T10:00:20+00:00")
+    assert kanbagent.effort(card, now="2026-11-01T10:00:03+00:00")["por_etapa"]["ideia"]["atencao"] == 3   # no máximo o tempo da etapa
+    kanbagent.change_stage(card, "descartado", "sato", occurred_at="2026-11-01T11:00:00+00:00")
+    assert kanbagent.add_attention(card, now="2026-11-01T11:05:00+00:00") == 0.0
+    assert "descartado" not in kanbagent.effort(card, now="2026-11-02T00:00:00+00:00")["por_etapa"]

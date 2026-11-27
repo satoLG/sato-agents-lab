@@ -33,7 +33,8 @@
           <strong class="kb-card-title">{{ c.titulo }}</strong>
           {% if c.repo %}<span class="kb-meta">{{ c.repo }}</span>{% endif %}
           <span class="kb-badges">
-            <span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">{{ icon('timer') }} <span data-since>{{ c.na_etapa_desde|kb_since }}</span></span>
+            {% if stage in kb_user_stages and not locked %}<span class="kb-badge kb-badge-wait-you" title="Esperando você desde {{ c.na_etapa_desde|kb_time }} (não conta como esforço)">{{ icon('hourglass') }} <span data-since>{{ c.na_etapa_desde|kb_since }}</span></span>
+            {% else %}<span class="kb-badge{% if stage not in ('entregue','descartado') %} kb-badge-time{% endif %}" title="Na etapa desde {{ c.na_etapa_desde|kb_time }}">{{ icon('timer') }} <span data-since>{{ c.na_etapa_desde|kb_since }}</span></span>{% endif %}
             {% if locked %}<span class="kb-badge kb-badge-wait" title="{{ kb_job_text[job.kind][1] }}"><span class="kb-spinner" aria-hidden="true"></span> {{ kb_job_text[job.kind][0] }} <span data-job-progress>{{ job.progress or 'na fila' }}</span></span>
             {% elif failed %}<span class="kb-badge kb-badge-fail" title="{{ job.error }}">{{ icon('triangle-exclamation-point') }} {{ kb_job_text[job.kind][2] }}</span>
             {% elif review %}<span class="kb-badge {{ 'kb-badge-ok' if review.aprovar else 'kb-badge-fail' }}" title="Revisão concluída: abra o card para aprovar ou reprovar">{% if review.aprovar %}{{ icon('circle-check') }} revisado{% else %}{{ icon('triangle-exclamation-point') }} ajustes{% endif %}</span>
