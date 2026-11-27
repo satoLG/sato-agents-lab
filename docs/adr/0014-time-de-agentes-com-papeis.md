@@ -41,6 +41,11 @@ de colaboradores, cada um com papel claro, e conversar com cada um.
 - **Chat direto com cada agente** (`/kanbagent/time/<agente>`, tabela `agent_messages`, worker
   `kanbagent_chat`): conversa no papel do agente, com os cards citados por `#N`. Hermes responde no
   perfil; Claude responde sem repositório nem ferramentas.
+- **Grupo de cada card** (`/kanbagent/time/card-N`, na lista do chat em "Grupos dos cards"): as passagens
+  de bastão entre os agentes ("@Planejador, spec aprovada…", "@Revisor, PR pronto…", o veredito do
+  Revisor) são geradas do histórico do card, sem chamar modelo. No grupo só responde quem o Sato cita
+  com `@nome` (até dois por mensagem), e quem responde vê o que os colegas já disseram. Conversa
+  automática agente↔agente via modelo ficou de fora: gastaria token para repetir o que o card já registra.
 
 ## Consequências
 - Quem escreve a spec não é quem julga a entrega: o Revisor não tem a memória da proposta.

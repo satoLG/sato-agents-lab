@@ -58,3 +58,58 @@ def test_failures_are_shown_and_old_pending_replies_expire(db):
     last = chat.messages("revisor")[-1]
     assert last["status"] == "failed" and "rate limit" in last["erro"]
     chat.send("revisor", "de novo?")                           # falha libera mandar de novo
+
+
+SPEC = "**Objetivo** — CSV.\n\n**Critérios de aceite**\n- C1: baixa o CSV — verificar: teste\n- C2: tem cabeçalho — verificar: teste\n"
+
+
+def _card_through_review():
+    card = kb.create_card("Exportar CSV", "quero CSV", "sato")
+    kb.change_stage(card, "proposta", "sato")
+    kb.update_proposal(card, SPEC, "requisitos")
+    kb.change_stage(card, "revisao", "requisitos")
+    kb.change_stage(card, "aprovado", "sato")
+    kb.add_comment(card, "planejador", "Plano de execução (planejado pelo sonnet):\n1. [haiku] CSV (C1, C2)")
+    kb.add_comment(card, "revisor", "VEREDITO: AJUSTAR\n\n- C2: falta cabeçalho")
+    return card
+
+
+def test_card_group_is_built_from_the_card_history_without_any_model(db):
+    card = _card_through_review()
+    convo = chat.conversation(f"card-{card}")
+    said = [(m["autor"], m["texto"].split("\n")[0]) for m in convo]
+    assert said == [
+        ("sato", "@Mapeador, card na Proposta: é contigo."),
+        ("requisitos", "@Sato, proposta pronta com 2 critérios de aceite. Revisa e aprova?"),
+        ("sato", "Aprovado."),
+        ("requisitos", "@Planejador, spec aprovada com 2 critérios de aceite. É contigo na execução."),
+        ("planejador", "@Programador, plano pronto:"),
+        ("revisor", "@Programador, precisa ajustar."),
+    ]
+    assert all(m["custo"] == 0 for m in convo) and "C2: falta cabeçalho" in convo[-1]["texto"]
+    groups = chat.groups()
+    assert [g["conv"] for g in groups] == [f"card-{card}"]
+    assert groups[0]["members"] == ["requisitos", "planejador", "revisor"]
+    assert chat.last_messages() == {}                               # grupo não entra na lista de DMs
+
+
+def test_in_a_group_only_mentioned_agents_reply(db):
+    card = _card_through_review()
+    conv = f"card-{card}"
+    assert [m["autor"] for m in chat.send(conv, "anotado, sigo amanhã")] == ["sato"]      # ninguém citado: zero token
+    sent = chat.send(conv, "@revisor e @Programador, o C2 é só o cabeçalho? @Mapeador")
+    assert [(m["autor"], m["status"]) for m in sent] == [("sato", "done"), ("revisor", "pending"),
+                                                          ("programador", "pending")]   # no máximo dois
+    with pytest.raises(kb.InvalidTransition, match="Revisor ainda está respondendo"):
+        chat.send(conv, "@Revisor?")
+    seen = []
+    chat.drain({"hermes": lambda a, p: (seen.append((a, p)), (0, "Sim, só o cabeçalho.", 0.0))[1],
+                "claude": lambda a, p: (seen.append((a, p)), (0, "Ajusto.", 0.02))[1]})
+    (who1, p1), (who2, p2) = seen
+    assert who1 == "revisor" and "grupo do card" in p1 and "Revisor: @Programador, precisa ajustar." in p1
+    assert "Exportar CSV" in p1 and "Sato: @revisor e @Programador" in p1
+    assert who2 == "programador" and "Revisor: Sim, só o cabeçalho." in p2     # vê a resposta do colega
+    assert [m["texto"] for m in chat.conversation(conv)[-2:]] == ["Sim, só o cabeçalho.", "Ajusto."]
+    assert chat.chat_cost()["programador"] == pytest.approx(0.02)
+    with pytest.raises(kb.NotFound):
+        chat.send("card-999", "@Revisor oi")

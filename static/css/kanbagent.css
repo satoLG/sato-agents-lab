@@ -349,3 +349,14 @@ body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; mi
   .kb-chat-log { max-height: calc(100dvh - 320px); }
 }
 @media (prefers-reduced-motion: reduce) { .kb-typing span { animation: none; opacity: .7; } }
+
+/* Grupos dos cards no chat do time */
+.kb-chat-list ul + .kb-chat-list-title { margin-top: 14px; }
+.kb-chat-group-pics { display: flex; flex: none; width: 36px; justify-content: center; }
+.kb-chat-group-pics img { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--surface, #1d2125); margin-left: -9px; }
+.kb-chat-group-pics img:first-child { margin-left: 0; }
+.kb-chat-group-head { width: auto; }
+.kb-chat-group-head img { width: 30px; height: 30px; margin-left: -10px; }
+.kb-msg[style*="--agent"] .kb-msg-meta strong { color: var(--agent); }
+.kb-chat-list-title { display: flex; gap: 6px; align-items: center; }
+.kb-chat-list-title svg { width: 15px; height: 15px; }

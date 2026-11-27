@@ -261,24 +261,39 @@ def team_page():
 
 
 def _chat_json(rows):
-    return [{"id": m["id"], "autor": m["autor"], "texto": m["texto"], "status": m["status"], "erro": m["erro"],
-             "criado_em": m["criado_em"]} for m in rows]
+    return [{"id": m["id"], "autor": m["autor"], "nome": chat.name_of(m["autor"]), "avatar": avatar_url(m["autor"]),
+             "texto": m["texto"], "status": m["status"], "erro": m["erro"], "criado_em": m["criado_em"]}
+            for m in rows]
+
+
+def _conversation(conv):
+    """O agente da DM, ou um "agente" de mentira para o grupo do card (`card-N`). 404 se não existe."""
+    card_id = chat.group_card(conv)
+    if card_id is None:
+        current = team.agent(conv)
+        if current is None:
+            abort(404)
+        return current
+    try:
+        item = kb.card(card_id)
+    except kb.NotFound:
+        abort(404)
+    return {"slug": conv, "grupo": True, "card_id": card_id, "nome": f"#{card_id} {item['titulo']}",
+            "cargo": kb.STAGE_LABELS[item["etapa_atual"]], "cor": "#8b98a9"}
 
 
 @bp.get("/time/<agent>")
 def chat_page(agent):
-    current = team.agent(agent)
-    if current is None:
-        abort(404)
+    current = _conversation(agent)
     busy = team.status(kb.open_jobs())
     return _render("kanbagent/chat.html", agents=team.team(), current=current, busy=busy,
-                   last=chat.last_messages(), messages=chat.messages(agent))
+                   last=chat.last_messages(), groups=chat.groups(), messages=chat.conversation(agent),
+                   name_of=chat.name_of)
 
 
 @bp.get("/time/<agent>/mensagens")
 def chat_messages(agent):
-    if agent not in team.AGENTS:
-        abort(404)
+    _conversation(agent)
     return jsonify(_chat_json(chat.messages(agent, after=request.args.get("depois", 0, type=int))))
 
 
