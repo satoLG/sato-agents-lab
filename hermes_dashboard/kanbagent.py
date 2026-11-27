@@ -385,13 +385,18 @@ def add_artifact(card_id, author, nome, data):
 
 # --- custo (chamadas do Claude) -------------------------------------------------------------------
 
-def record_run(card_id, kind, model, cost_usd=0.0, turns=0, duration_ms=0, job_id=None):
+def record_run(card_id, kind, model, cost_usd=0.0, turns=0, duration_ms=0, job_id=None, when=None):
     with closing(_connection()) as conn, _transaction(conn):
         _card(conn, card_id)
         conn.execute("INSERT INTO card_runs (card_id, job_id, kind, model, cost_usd, turns, duration_ms, criado_em)"
                      " VALUES (?,?,?,?,?,?,?,?)",
                      (card_id, job_id, kind, model, max(0.0, float(cost_usd or 0)), int(turns or 0),
-                      int(duration_ms or 0), _iso(None)))
+                      int(duration_ms or 0), _iso(when)))
+
+
+def has_runs(card_id):
+    with closing(_connection()) as conn:
+        return conn.execute("SELECT 1 FROM card_runs WHERE card_id=? LIMIT 1", (card_id,)).fetchone() is not None
 
 
 def job_cost(job_id):
@@ -671,7 +676,8 @@ def cards(project_id=None, repo_id=None, stage=None):
            " (SELECT MAX(occurred_at) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change') AS na_etapa_desde,"
            " (SELECT COUNT(*) FROM events e WHERE e.card_id=c.id AND e.kind='stage_change'"
            "   AND (e.from_stage, e.to_stage) IN (" + _RETURNS_SQL + ")) AS ajustes,"
-           " (SELECT COUNT(*) FROM card_links l WHERE l.card_id=c.id) AS links"
+           " (SELECT COUNT(*) FROM card_links l WHERE l.card_id=c.id) AS links,"
+           " (SELECT COALESCE(SUM(cr.cost_usd), 0) FROM card_runs cr WHERE cr.card_id=c.id) AS custo"
            " FROM cards c LEFT JOIN projects p ON p.id=c.project_id LEFT JOIN repos r ON r.id=c.repo_id")
     if where:
         sql += " WHERE " + " AND ".join(where)

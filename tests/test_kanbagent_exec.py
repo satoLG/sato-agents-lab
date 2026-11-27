@@ -262,3 +262,16 @@ def test_parse_usage_reads_the_cli_json_and_tolerates_garbage():
 def test_task_limit_follows_the_proposal_size():
     assert worker.task_limit("**Tamanho** — pequeno") == 2 and worker.task_limit("**Tamanho** — médio") == 4
     assert worker.task_limit("**Tamanho** — grande") == worker.MAX_TASKS and worker.task_limit("sem tamanho") == 4
+
+
+def test_parse_log_reads_old_executor_logs_even_when_output_was_cut():
+    text = ('\n== 2026-11-25T19:20:01.5 plan sonnet rc=0\n{"type":"result","duration_ms":10218,"num_turns":4,'
+            '"total_cost_usd":0.1226642}\n\n'
+            '== 2026-11-25T19:22:10.1 free nvidia/nemotron-3.5-super-vl:free rc=0\ncortado...","num_turns":8,'
+            '"total_cost_usd":0}\n'
+            '== 2026-11-25T19:30:00.0 opus opus rc=124\n\ntimeout\n')
+    runs = worker.parse_log(text)
+    assert [(r[1], r[2], r[3], r[4]) for r in runs] == [("plan", "sonnet", 0.1226642, 4),
+                                                       ("free", "nvidia/nemotron-3.5-super-vl:free", 0.0, 8),
+                                                       ("opus", "opus", 0.0, 0)]
+    assert runs[0][5] == 10218

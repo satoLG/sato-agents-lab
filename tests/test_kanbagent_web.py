@@ -436,3 +436,12 @@ def test_card_page_shows_the_cost_per_model(client):
     kb.record_run(card_id, "opus", "opus", 0.5, 9, 2000)
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "US$ 0.70" in page and "2 chamada(s)" in page and "US$ 0.50" in page
+
+
+def test_board_shows_cost_on_cards_and_in_the_bar(client):
+    cheap = kb.create_card("Barato", "a", "sato")
+    kb.create_card("Sem custo", "b", "sato")
+    kb.record_run(cheap, "plan", "sonnet", 0.2, 3, 100)
+    kb.record_run(cheap, "opus", "opus", 1.1, 8, 900)
+    page = client.get("/kanbagent").get_data(as_text=True)
+    assert page.count("kb-badge-cost") == 1 and "US$ 1.30" in page and "kb-boardbar-cost" in page

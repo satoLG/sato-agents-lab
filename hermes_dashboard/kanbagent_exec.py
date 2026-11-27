@@ -125,6 +125,23 @@ def parse_usage(stdout):
             int(data.get("duration_ms") or 0))
 
 
+def parse_log(text):
+    """Chamadas gravadas no log antigo do executor (`== ISO tipo modelo rc=N` + saída da CLI, cortada em 4000
+    caracteres): [(quando, tipo, modelo, custo, turnos, ms)]. Serve para importar o que veio antes do custo
+    ser gravado no banco."""
+    runs = []
+    for block in re.split(r"\n== ", "\n" + text):
+        head = re.match(r"(\d{4}-\d\d-\d\dT[\d:.]+) (\S+) (\S+) rc=-?\d+", block)
+        if not head:
+            continue
+        cost = re.search(r'"total_cost_usd":\s*([0-9.eE+-]+)', block)
+        turns = re.search(r'"num_turns":\s*(\d+)', block)
+        ms = re.search(r'"duration_ms":\s*(\d+)', block)
+        runs.append((head.group(1), head.group(2), head.group(3), float(cost.group(1)) if cost else 0.0,
+                     int(turns.group(1)) if turns else 0, int(ms.group(1)) if ms else 0))
+    return runs
+
+
 def planner_model(proposta, titulo=""):
     """Planejar não é arte: sonnet, e opus só quando a própria proposta se diz grande."""
     return "opus" if proposal_size(proposta) == "grande" else "sonnet"
