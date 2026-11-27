@@ -15,7 +15,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(worker, "LOCK_PATH", tmp_path / "exec.lock")
 
 
-def queued(proposta="**Tamanho:** pequeno"):
+def queued(proposta="**Tamanho:** pequeno\n**Critérios de aceite**\n- C1: funciona — verificar: teste"):
     project = kb.create_project("app", "App")
     repo = kb.add_repo_to_project(project, "sato/app")
     card = kb.create_card("Botão novo", "ideia", "sato", project_id=project, repo_id=repo)
@@ -42,7 +42,14 @@ class FakeBox:
         return full_name
 
     def prepare(self, item):
-        return {"repo": item["repo"], "public": self.public, "branch": f"kanbagent/card-{item['id']}"}
+        return {"repo": item["repo"], "public": self.public, "branch": f"kanbagent/card-{item['id']}",
+                "constitution": self.constitution}
+
+    constitution = ["AGENTS.md"]
+    spec = None
+
+    def write_spec(self, path, text):
+        self.spec = (path, text)
 
     def run_claude(self, kind, tier, prompt):
         self.calls.append((kind, tier, prompt))
@@ -65,6 +72,8 @@ class FakeBox:
         return self.sha > 0
 
     def read(self, name):
+        if isinstance(self.plan, list):          # um plano por rodada do planejador
+            return json.dumps(self.plan.pop(0) if len(self.plan) > 1 else self.plan[0])
         return json.dumps(self.plan)
 
     def head(self):
@@ -85,8 +94,9 @@ class FakeBox:
         self.cleaned = True
 
 
-def task(title, tier, check=""):
-    return {"title": title, "tier": tier, "why": "x", "instructions": f"faça {title}", "check": check}
+def task(title, tier, check="", criteria=("C1",)):
+    return {"title": title, "tier": tier, "why": "x", "instructions": f"faça {title}", "check": check,
+            "criteria": list(criteria)}
 
 
 def test_cheap_plan_runs_each_task_once_and_opens_pr(db):
@@ -129,7 +139,7 @@ def test_private_repo_never_uses_free_models(db):
 
 
 def test_big_proposal_is_planned_by_opus(db):
-    queued("## Tamanho\n**grande**: mexe em tudo")
+    queued("## Tamanho\n**grande**: mexe em tudo\n**Critérios de aceite**\n- C1: ok — verificar: teste")
     box = FakeBox({"tasks": [task("t", "opus")]})
     worker.drain(lambda job: box)
     assert box.calls[0][:2] == ("plan", "opus")
@@ -190,7 +200,7 @@ def test_new_repo_is_created_before_planning_and_refs_reach_the_card_md(db):
     card = kb.create_card("Jogo", "ideia", "sato", novo_repo="sato/jogo", publico=False)
     kb.add_ref_link(card, "https://example.com/arte", "sato", "Arte")
     kb.change_stage(card, "proposta", "hermes")
-    kb.update_proposal(card, "p", "hermes")
+    kb.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
     for stage, who in (("revisao", "hermes"), ("aprovado", "sato"), ("execucao", "sato")):
         kb.change_stage(card, stage, who)
     box = FakeBox({"tasks": [task("t", "free")]}, public=False)
@@ -275,3 +285,56 @@ def test_parse_log_reads_old_executor_logs_even_when_output_was_cut():
                                                        ("free", "nvidia/nemotron-3.5-super-vl:free", 0.0, 8),
                                                        ("opus", "opus", 0.0, 0)]
     assert runs[0][5] == 10218
+
+
+
+SPEC = ("**Problema** — x\n**Tamanho:** pequeno\n**Critérios de aceite**\n- C1: exporta CSV — verificar: teste\n"
+        "- C2: botão ao lado do filtro — verificar: visual\n**Decisão de arquitetura** — não\n**Dúvidas** — nenhuma")
+
+
+def test_planner_gets_the_criteria_and_pr_carries_the_spec_file(db):
+    card = queued(SPEC)
+    box = FakeBox({"tasks": [task("csv", "haiku", criteria=["c1", "C2"])]})
+    worker.drain(lambda job: box)
+    plan_prompt = box.calls[0][2]
+    assert "- C1: exporta CSV (verificar: teste)" in plan_prompt and "C2: botão ao lado do filtro" in plan_prompt
+    assert box.spec[0] == f"specs/card-{card}.md" and "- C1: exporta CSV" in box.spec[1]
+    assert "specs/card-" in box.summary and kb.card(card)["etapa_atual"] == "revisao_codigo"
+    plan_note = next(e["text"] for e in kb.card(card)["events"] if (e["text"] or "").startswith("Plano"))
+    assert "(C1, C2)" in plan_note and "AGENTS.md" not in plan_note
+
+
+def test_plan_missing_a_criterion_is_redone_once_then_fails(db):
+    card = queued(SPEC)
+    partial = {"tasks": [task("csv", "haiku", criteria=["C1"])]}
+    full = {"tasks": [task("csv", "haiku", criteria=["C1"]), task("layout", "haiku", criteria=["C2"])]}
+    box = FakeBox([partial, full])
+    worker.drain(lambda job: box)
+    assert [k for k, _, _ in box.calls][:2] == ["plan", "plan"] and "C2 (botão ao lado do filtro) sem tarefa" in box.calls[1][2]
+    assert kb.card(card)["etapa_atual"] == "revisao_codigo"
+
+
+def test_plan_that_still_misses_a_criterion_fails_the_job(db):
+    card = queued(SPEC)
+    box = FakeBox([{"tasks": [task("csv", "haiku", criteria=["C1"])]}])
+    worker.drain(lambda job: box)
+    item = kb.card(card)
+    assert item["etapa_atual"] == "execucao" and item["job"]["status"] == "failed"
+    assert "não cobre a spec" in item["job"]["error"] and all(k == "plan" for k, _, _ in box.calls)
+
+
+def test_architecture_decision_requires_an_adr_task(db):
+    queued(SPEC.replace("**Decisão de arquitetura** — não", "**Decisão de arquitetura** — sim: troca SQLite por Postgres"))
+    box = FakeBox([{"tasks": [task("migra", "sonnet", criteria=["C1", "C2"])]},
+                   {"tasks": [task("migra", "sonnet", criteria=["C1", "C2"]), task("ADR 0013", "haiku", criteria=[])]}])
+    worker.drain(lambda job: box)
+    assert "troca SQLite por Postgres" in box.calls[0][2] and "como ADR" in box.calls[1][2]
+    assert box.spec is not None
+
+
+def test_missing_constitution_is_flagged_in_the_plan_comment(db):
+    card = queued()
+    box = FakeBox({"tasks": [task("t", "haiku")]})
+    box.constitution = []
+    worker.drain(lambda job: box)
+    assert any("não tem AGENTS.md nem CLAUDE.md" in (e["text"] or "") for e in kb.card(card)["events"])

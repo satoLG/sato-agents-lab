@@ -128,6 +128,24 @@
 
       <section aria-labelledby="kb-proposal">
         <h2 id="kb-proposal">{{ icon('file-text') }}Proposta</h2>
+        {% if card.proposta and card.etapa_atual not in ('ideia', 'proposta', 'descartado') %}
+        {% set sp = card.spec %}
+        <div class="kb-spec" aria-label="Spec do card">
+          <h3>{{ icon('list-checks') }}Critérios de aceite</h3>
+          {% if sp.criterios %}
+          <ul class="kb-criteria">
+            {% for c in sp.criterios %}
+            <li><strong>{{ c.id }}</strong> {{ c.texto }}
+              {% if c.verificar %}<span class="kb-verify{% if c.visual %} kb-verify-visual{% endif %}">{{ icon('eye' if c.visual else ('flask-conical' if 'teste' in c.verificar|lower else 'terminal')) }} {{ c.verificar|replace('`', '') }}</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="notice kb-flash error" role="alert">{{ icon('triangle-exclamation-point') }} A proposta não tem critérios de aceite (<code>- C1: … — verificar: teste</code>). Sem eles não dá para aprovar: peça ajuste ao Hermes ou edite a proposta.</p>
+          {% endif %}
+          {% if sp.adr %}<p class="kb-hint">{{ icon('file-text') }} Decisão de arquitetura: o PR precisa trazer uma ADR.</p>{% endif %}
+          {% if sp.duvidas and card.etapa_atual == 'revisao' %}<p class="notice kb-flash" role="status">{{ icon('triangle-exclamation-point') }} Dúvidas em aberto na proposta. Responda (ajuste) antes de aprovar, ou aprove sabendo que o agente vai decidir sozinho.</p>{% endif %}
+        </div>
+        {% endif %}
         {% if card.proposta %}<div class="kb-pre kb-box" data-rich>{{ card.proposta }}</div>{% else %}<p class="muted kb-box">Ainda sem proposta. O Sato Agent escreve pela API, ou você escreve aqui.</p>{% endif %}
         {% if not locked %}
         <details class="kb-inline-edit">
@@ -205,8 +223,12 @@
           <button class="btn small" type="submit">{{ icon('send') }} Enviar</button>
         </form>
       </details>
+      {% elif move == ('revisao', 'aprovado') and not card.spec.criterios %}
+      {% set act = kb_action(card.etapa_atual, to) %}
+      <button class="btn" type="button" disabled data-tip="A proposta precisa de critérios de aceite">{{ icon(act[0]) }} {{ act[1] }}</button>
+      <p class="muted kb-hint">Sem critérios de aceite não dá para aprovar.</p>
       {% else %}
-      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}">{{ ui.csrf() }}
+      <form method="post" action="{{ url_for('kanbagent.stage_form', card_id=card.id) }}"{% if move == ('revisao', 'aprovado') and card.spec.duvidas %} data-confirm="A proposta ainda tem dúvidas em aberto; o agente vai decidir sozinho." data-confirm-title="Aprovar mesmo assim?" data-confirm-ok="Aprovar"{% endif %}>{{ ui.csrf() }}
         <input type="hidden" name="para" value="{{ to }}">
         {% set act = kb_action(card.etapa_atual, to) %}
         <button class="btn" type="submit" data-tip="{{ act[2] }}">{{ icon(act[0]) }} {{ act[1] }}</button>

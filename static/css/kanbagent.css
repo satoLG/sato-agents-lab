@@ -262,3 +262,14 @@ body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; mi
 .kb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: .75rem; }
 .kb-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: -6px; }
 .kb-badge-wait-you { background: #ffffff0d; color: var(--tile-muted); }
+
+/* Spec do card: critérios de aceite (ADR 0013) */
+.kb-spec { margin: 0 0 12px; }
+.kb-spec h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: .95rem; }
+.kb-criteria { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.kb-criteria li { padding: 6px 10px; border-radius: 6px; background: #ffffff0d; line-height: 1.4; overflow-wrap: anywhere; }
+.kb-criteria strong { margin-right: 4px; }
+.kb-verify { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  background: #ffffff14; font-size: .78rem; color: var(--tile-ink-strong); }
+.kb-verify-visual { background: #f5a62326; }
+.kb-verify svg { width: 13px; height: 13px; }
