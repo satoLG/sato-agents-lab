@@ -19,6 +19,7 @@ crie um ADR novo com `Substitui: NNNN` e marque o antigo como `Substituído por 
 | [0011](0011-icones-svg-sem-emoji.md) | Ícones SVG do sprite Lucide, nunca emoji; botões com uma palavra | Aceito |
 | [0012](0012-texto-rico-markdown-padrao.md) | Texto gerado é Markdown e aparece estilizado em todo o site | Aceito |
 | [0013](0013-proposta-aprovada-e-a-spec.md) | A proposta aprovada é a spec: critérios de aceite, spec no PR, constituição do repo | Aceito |
+| [0014](0014-time-de-agentes-com-papeis.md) | Time de agentes com papéis: Requisitos, Planejador, Programador e Revisor | Aceito |
 
 ## Modelo
 

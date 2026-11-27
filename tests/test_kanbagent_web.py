@@ -86,13 +86,13 @@ def test_full_flow_through_the_pages(client):
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "Hermes está escrevendo" in page
-    kb.update_proposal(card_id, "Fazer X e Y\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.update_proposal(card_id, "Fazer X e Y\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    kb.change_stage(card_id, "revisao", "requisitos")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "Aprovar" in page and "Pedir ajuste" in page
 
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta", texto="menos escopo")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.change_stage(card_id, "revisao", "requisitos")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="aprovado")
     form(client, f"/kanbagent/card/{card_id}/comentario", texto="bora")
     kb.add_link(card_id, "https://github.com/satoLG/sato-agents-lab/issues/42", "hermes")   # links vêm do fluxo
@@ -111,8 +111,8 @@ def test_full_flow_through_the_pages(client):
 def test_adjust_requires_text(client):
     card_id = kb.create_card("T", "i", "sato")
     kb.change_stage(card_id, "proposta", "hermes")
-    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    kb.change_stage(card_id, "revisao", "requisitos")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="proposta")
     assert kb.card(card_id)["etapa_atual"] == "revisao"
 
@@ -120,7 +120,7 @@ def test_adjust_requires_text(client):
 def test_board_marks_where_each_card_can_be_dropped(client):
     idea = kb.create_card("Ideia solta", "i", "sato")
     empty = kb.create_card("Sem proposta", "i", "sato")
-    kb.change_stage(empty, "proposta", "hermes")
+    kb.change_stage(empty, "proposta", "github-sync")
     writing = kb.create_card("Hermes escrevendo", "i", "sato")
     kb.change_stage(writing, "proposta", "sato")
     kb.job_progress(kb.claim_job()["id"], "lendo o card")
@@ -150,7 +150,7 @@ def test_failed_job_offers_retry_and_jobs_api_reports_progress(client):
 
 def test_returns_from_the_card_page(client):
     card_id = kb.create_card("T", "i", "sato")
-    kb.change_stage(card_id, "proposta", "hermes")
+    kb.change_stage(card_id, "proposta", "github-sync")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "Voltar para ideia" in page and "Enviar para revisão" not in page
     form(client, f"/kanbagent/card/{card_id}/etapa", para="ideia", texto="faltou contexto")
@@ -210,11 +210,14 @@ def test_api_flow_with_token(api):
 
     response = api.post(f"/kanbagent/api/cards/{card_id}/proposal",
                         json={"proposta": "Plano", "revisar": True}, headers=h)
+    assert response.status_code == 409 and "Requisitos" in response.get_json()["error"]   # o Sato Agent não propõe
+    response = api.post(f"/kanbagent/api/cards/{card_id}/proposal", json={"proposta": "Plano", "revisar": True},
+                        headers={**h, "X-Kanbagent-Agent": "requisitos"})
     assert response.status_code == 200
     item = api.get(f"/kanbagent/api/cards/{card_id}", headers=h).get_json()
     assert item["etapa_atual"] == "revisao"
     assert item["proposta"] == "Plano"
-    assert {e["author"] for e in item["events"]} == {"hermes"}
+    assert {e["author"] for e in item["events"]} == {"hermes", "requisitos"}
 
     response = api.post(f"/kanbagent/api/cards/{card_id}/stage", json={"para": "entregue"}, headers=h)
     assert response.status_code == 409
@@ -237,10 +240,10 @@ def test_api_with_session_needs_csrf_header(client):
 
 def test_sync_moves_approved_card_to_delivered(vm):
     card_id = kb.create_card("T", "i", "sato", occurred_at="2026-01-01T00:00:00Z")
-    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes", occurred_at="2026-01-01T12:00:00Z")
+    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos", occurred_at="2026-01-01T12:00:00Z")
     for stage, when in (("proposta", "2026-01-02T00:00:00Z"), ("revisao", "2026-01-03T00:00:00Z"),
                         ("aprovado", "2026-01-04T00:00:00Z")):
-        kb.change_stage(card_id, stage, "hermes", occurred_at=when)
+        kb.change_stage(card_id, stage, {"revisao": "requisitos", "aprovado": "sato"}.get(stage, "hermes"), occurred_at=when)
     kb.add_link(card_id, "https://github.com/o/r/issues/7", "sato")
 
     def fake(link):
@@ -265,9 +268,9 @@ def test_sync_ignores_cards_before_approval_and_survives_errors(vm):
     early = kb.create_card("cedo", "i", "sato")
     kb.add_link(early, "https://github.com/o/r/issues/1", "sato")
     late = kb.create_card("tarde", "i", "sato")
-    kb.update_proposal(late, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
+    kb.update_proposal(late, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
     for stage in ("proposta", "revisao", "aprovado"):
-        kb.change_stage(late, stage, "hermes")
+        kb.change_stage(late, stage, {"revisao": "requisitos", "aprovado": "sato"}.get(stage, "hermes"))
     kb.add_link(late, "https://github.com/o/r/pull/2", "sato")
 
     def broken(link):
@@ -288,8 +291,8 @@ def test_execution_job_shows_executing_and_kicks_the_exec_worker(client, monkeyp
     project = kb.create_project("app", "App")
     card_id = kb.create_card("T", "i", "sato", project_id=project, repo_id=kb.add_repo_to_project(project, "sato/app"))
     kb.change_stage(card_id, "proposta", "hermes")
-    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    kb.change_stage(card_id, "revisao", "requisitos")
     kb.change_stage(card_id, "aprovado", "sato")
     form(client, f"/kanbagent/card/{card_id}/etapa", para="execucao")
     assert kicked == ["exec"]
@@ -403,8 +406,8 @@ def test_queued_card_without_repo_shows_the_picker(client):
     kb.change_stage(card_id, "proposta", "sato")
     while (job := kb.claim_job("proposta")) is not None:
         kb.finish_job(job["id"])
-    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.update_proposal(card_id, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    kb.change_stage(card_id, "revisao", "requisitos")
     kb.change_stage(card_id, "aprovado", "sato")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "não tem repositório" in page and "Definir" in page
@@ -477,12 +480,41 @@ def test_metrics_split_effort_from_waiting(client):
 def test_card_page_shows_the_spec_and_blocks_approval_without_criteria(client):
     card_id = kb.create_card("A", "a", "sato")
     kb.change_stage(card_id, "proposta", "sato")
-    kb.update_proposal(card_id, "**Proposta** — y\n**Dúvidas** — nenhuma", "hermes")
-    kb.change_stage(card_id, "revisao", "hermes")
+    kb.update_proposal(card_id, "**Proposta** — y\n**Dúvidas** — nenhuma", "requisitos")
+    kb.change_stage(card_id, "revisao", "requisitos")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "não tem critérios de aceite" in page and "Sem critérios de aceite não dá para aprovar" in page
     kb.update_proposal(card_id, "**Proposta** — y\n**Critérios de aceite**\n- C1: abre — verificar: visual\n"
-                       "**Dúvidas** — qual cor?", "hermes")
+                       "**Dúvidas** — qual cor?", "requisitos")
     page = client.get(f"/kanbagent/card/{card_id}").get_data(as_text=True)
     assert "kb-criteria" in page and "kb-verify-visual" in page and "Dúvidas em aberto" in page
     assert "Aprovar mesmo assim?" in page and "Sem critérios de aceite não dá" not in page
+
+
+
+def test_team_page_lists_the_four_agents_with_status_and_stats(client):
+    page = client.get("/kanbagent/time").get_data(as_text=True)
+    for name in ("Requisitos", "Planejador", "Programador", "Revisor"):
+        assert f"<h2>{name}</h2>" in page
+    assert page.count("Livre") == 4 and "perfil requisitos" in page
+    card_id = kb.create_card("Exportar CSV", "i", "sato")
+    kb.change_stage(card_id, "proposta", "sato")
+    kb.job_progress(kb.claim_job("proposta")["id"], "lendo o card")
+    kb.record_run(card_id, "plan", "sonnet", 0.5, 3, 100)
+    page = client.get("/kanbagent/time").get_data(as_text=True)
+    assert "Exportar CSV</a> · lendo o card" in page and page.count("Livre") == 3 and "US$ 0.50" in page
+    for slug in ("requisitos", "planejador", "programador", "revisor"):
+        response = client.get(f"/kanbagent/avatar/{slug}")
+        assert response.status_code == 200 and b"@keyframes" in response.data
+        response.close()
+
+
+def test_api_agent_header_only_names_hermes_agents(api):
+    h = api.headers
+    card_id = api.post("/kanbagent/api/cards", json={"titulo": "X", "ideia": "y"}, headers=h).get_json()["id"]
+    for claimed in ("programador", "sato", "qualquer"):    # só os perfis Hermes do time podem se declarar
+        response = api.post(f"/kanbagent/api/cards/{card_id}/proposal", json={"proposta": "P"},
+                            headers={**h, "X-Kanbagent-Agent": claimed})
+        assert response.status_code == 409
+    kb_card = kb.card(card_id)
+    assert kb_card["proposta"] in (None, "") and kb_card["events"][0]["author"] == "hermes"

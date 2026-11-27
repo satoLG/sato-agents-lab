@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import config
 from . import kanbagent_spec as spec
+from . import kanbagent_team as team
 
 DB_PATH = Path(os.getenv("KANBAGENT_DB_PATH", str(config.HERMES_HOME / "kanbagent.sqlite3")))
 
@@ -21,7 +22,9 @@ STAGES = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codig
 TERMINAL = {"entregue", "descartado"}
 MAIN_PATH = ("ideia", "proposta", "revisao", "aprovado", "execucao", "revisao_codigo", "entregue")
 EVENT_KINDS = ("stage_change", "comment", "link_added", "proposal_updated", "repo_changed", "ref_added", "artifact_added")
-AUTHORS = ("sato", "hermes", "github-sync", "claude")
+# "hermes" é o Sato Agent principal; "claude" ficou nos eventos de antes do time (ADR 0014).
+AUTHORS = ("sato", "hermes", "github-sync", "claude", *team.ORDER)
+EXECUTORS = ("claude", *team.CLAUDE_AGENTS)   # quem pode gravar o repositório criado na execução
 
 _SCHEMA = (
     """CREATE TABLE IF NOT EXISTS projects (
@@ -296,7 +299,7 @@ def set_repo(card_id, author, repo=None, novo_repo=None, publico=False):
     repositório que acabou de criar."""
     with closing(_connection()) as conn, _transaction(conn):
         row = _card(conn, card_id)
-        if author != "claude" and not repo_editable(row):
+        if author not in EXECUTORS and not repo_editable(row):
             raise InvalidTransition("O repositório fica fixo depois que a proposta é aprovada.")
         if author == "sato" and _open_job(conn, card_id):
             raise InvalidTransition(LOCKED)
@@ -461,6 +464,10 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         empty = not (row["proposta"] or "").strip()
         if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync" and empty:
             raise InvalidTransition("A proposta ainda está vazia.")
+        if (from_stage, to_stage) == ("proposta", "revisao") and author not in (*team.PROPOSAL_AUTHORS, "github-sync"):
+            raise InvalidTransition("Quem manda a proposta para revisão é o agente Requisitos (ou o Sato).")
+        if (from_stage, to_stage) == ("revisao", "aprovado") and author not in ("sato", "github-sync"):
+            raise InvalidTransition("Só o Sato aprova a proposta.")
         # A proposta aprovada é a spec: sem critério de aceite não há como conferir a entrega (ADR 0013).
         if (from_stage, to_stage) == ("revisao", "aprovado") and author != "github-sync" \
                 and not spec.criteria(row["proposta"]):
@@ -471,7 +478,9 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         if from_stage in JOB_STAGES:
             conn.execute("UPDATE agent_jobs SET status='done', finished_at=? WHERE card_id=?"
                          " AND status IN ('queued','running')", (occurred, card_id))
-        if to_stage in JOB_STAGES and (author == "sato" or (author, to_stage) == ("claude", "revisao_codigo")):
+        # O Sato (ou o Sato Agent, a pedido dele) chama o agente da etapa; a entrega chama o Revisor.
+        if to_stage in JOB_STAGES and (author == "sato" or (author, to_stage) == ("hermes", "proposta")
+                                       or (author in EXECUTORS and to_stage == "revisao_codigo")):
             return _queue_job(conn, card_id, occurred, to_stage)
         return None
 
@@ -588,6 +597,29 @@ def latest_jobs(card_ids=None):
     if card_ids is not None:
         rows = [r for r in rows if r["card_id"] in set(card_ids)]
     return {r["card_id"]: r for r in rows}
+
+
+def team_stats():
+    """{agente: {eventos, cards, custo}}: o que cada um do time já fez no quadro. Custo de execução é do
+    Programador, do plano é do Planejador e da segunda revisão (Claude) é do Revisor."""
+    owner = {"plan": "planejador", "revisao": "revisor"}
+    stats = {slug: {"eventos": 0, "cards": 0, "custo": 0.0} for slug in team.ORDER}
+    with closing(_connection()) as conn:
+        for row in conn.execute("SELECT author, COUNT(*), COUNT(DISTINCT card_id) FROM events GROUP BY author"):
+            if row[0] in stats:
+                stats[row[0]].update(eventos=row[1], cards=row[2])
+        for kind, cost in conn.execute("SELECT kind, COALESCE(SUM(cost_usd), 0) FROM card_runs GROUP BY kind"):
+            stats[owner.get(kind, "programador")]["custo"] += cost
+    return stats
+
+
+def open_jobs():
+    """Pedidos na fila ou rodando, com o título do card (a página do time mostra quem está ocupado)."""
+    with closing(_connection()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT j.*, c.titulo FROM agent_jobs j JOIN cards c ON c.id=j.card_id"
+            " WHERE j.status IN ('queued','running') ORDER BY j.id").fetchall()]
+    return [r for r in rows if not _stale(r)]
 
 
 def add_comment(card_id, author, text, occurred_at=None):
@@ -800,6 +832,8 @@ def update_proposal(card_id, proposta, author, occurred_at=None):
     proposta = proposta.strip() if isinstance(proposta, str) else ""
     if not proposta:
         raise ValueError("Proposta vazia.")
+    if author not in team.PROPOSAL_AUTHORS:
+        raise InvalidTransition("Quem escreve a proposta é o agente Requisitos (ou o Sato).")
     with closing(_connection()) as conn, _transaction(conn):
         _card(conn, card_id)
         if author == "sato" and _open_job(conn, card_id):

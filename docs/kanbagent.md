@@ -56,6 +56,20 @@ planejar. O repositório só muda até a proposta ser aprovada; depois fica fixo
 ligados à mão: nascem do fluxo. Links e arquivos de referência entram enquanto a ideia amadurece
 (ideia, proposta, revisão) e seguem com o card.
 
+## O time (ADR 0014)
+
+| Agente | Motor | Etapa | Faz |
+|---|---|---|---|
+| Requisitos | Hermes, perfil `requisitos` | Proposta | escreve a proposta/spec com critérios de aceite |
+| Planejador | Claude Sonnet (Opus se grande) | início da Execução | quebra a spec em tarefas que cobrem todos os critérios |
+| Programador | Claude, nível por tarefa | Execução | faz as tarefas, artefatos, `specs/card-N.md` e o PR |
+| Revisor | Hermes, perfil `revisor` (+ Claude em diff grande) | Revisão de código | confere o PR critério por critério |
+
+Você (Sato) aprova a proposta e a entrega. O Sato Agent principal (Hermes `default`) cria cards,
+comenta e chama o Requisitos, mas não escreve proposta: a API recusa. Os perfis ficam em
+`~/.hermes/profiles/<perfil>/` (SOUL.md próprio, `KANBAGENT_AGENT` no `.env`). A página **Time** mostra
+cada agente, o que está fazendo e quanto já custou.
+
 ## A proposta é a spec (ADR 0013)
 
 A proposta do Hermes tem formato fixo e a parte que importa para a entrega é:

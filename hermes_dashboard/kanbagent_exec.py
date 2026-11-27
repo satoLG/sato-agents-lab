@@ -263,7 +263,7 @@ def execute(job, box):
     if item.get("novo_repo") and not item.get("repo"):
         with heartbeat(job["id"], f"criando o repositório {item['novo_repo']}"):
             created = box.create_repo(item["novo_repo"], bool(item.get("novo_repo_publico")))
-        kb.set_repo(item["id"], "claude", repo=created)
+        kb.set_repo(item["id"], "programador", repo=created)
         item = kb.card(item["id"])
     with heartbeat(job["id"], "preparando o repositório"):
         info = box.prepare(item)
@@ -293,7 +293,7 @@ def execute(job, box):
                    ". Reescreva ../PLAN.json cobrindo tudo.")
     else:
         raise ExecFailed("O plano não cobre a spec mesmo depois de refeito: " + "; ".join(gaps))
-    kb.add_comment(item["id"], "claude", plan_comment(plan, model, info.get("constitution")))
+    kb.add_comment(item["id"], "planejador", plan_comment(plan, model, info.get("constitution")))
 
     done, total = [], len(plan["tasks"])
     for n, task in enumerate(plan["tasks"], 1):
@@ -337,19 +337,19 @@ def execute(job, box):
         artifacts = box.collect_artifacts()
     for name, data in artifacts:
         try:
-            kb.add_artifact(item["id"], "claude", name, data)
+            kb.add_artifact(item["id"], "programador", name, data)
         except ValueError as error:   # grande demais: o resto segue
-            kb.add_comment(item["id"], "claude", f"Artefato {name} ficou de fora: {error}")
+            kb.add_comment(item["id"], "programador", f"Artefato {name} ficou de fora: {error}")
     if artifacts and not box.has_commits():
         names = ", ".join(name for name, _ in artifacts)
-        kb.change_stage(item["id"], "revisao_codigo", "claude",
+        kb.change_stage(item["id"], "revisao_codigo", "programador",
                         text=f"Artefatos prontos (sem mudança no repositório): {names}\n{summary}")
         return None
     box.write_spec(f"specs/card-{item['id']}.md", spec_markdown(item))
     with heartbeat(job["id"], "abrindo o PR"):
         url = box.publish(item, f"Spec: `specs/card-{item['id']}.md`\n\nTarefas e níveis usados:\n{summary}")
-    kb.add_link(item["id"], url, "claude")
-    review = kb.change_stage(item["id"], "revisao_codigo", "claude", text=f"PR pronto: {url}\n{summary}")
+    kb.add_link(item["id"], url, "programador")
+    review = kb.change_stage(item["id"], "revisao_codigo", "programador", text=f"PR pronto: {url}\n{summary}")
     if review and os.getenv("KANBAGENT_HERMES_WORKER", "1") != "0":
         from .kanbagent_review import spawn as spawn_review
         spawn_review()      # a entrega pede revisão do Hermes
@@ -416,7 +416,7 @@ def _card_markdown(item):
         parts.append("")
     parts.append("## Histórico")
     for e in item["events"]:
-        if e["text"] and e["kind"] in ("comment", "stage_change") and e["author"] != "claude":
+        if e["text"] and e["kind"] in ("comment", "stage_change") and e["author"] not in kb.EXECUTORS:
             parts.append(f"- {e['occurred_at']} {e['author']} ({e['from_stage'] or ''}→{e['to_stage'] or 'comentário'}): {e['text']}")
     return "\n".join(parts) + "\n"
 

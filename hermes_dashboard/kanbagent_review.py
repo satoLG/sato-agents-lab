@@ -14,6 +14,7 @@ import subprocess
 
 from . import kanbagent as kb
 from . import kanbagent_spec as spec
+from . import kanbagent_team as team
 from . import config
 from .kanbagent_hermes import run_hermes, single_worker, describe
 
@@ -96,7 +97,7 @@ def pr_link(item):
 
 
 def used_opus(item):
-    return any(e["author"] == "claude" and e["text"] and re.search(r"\[opus\]|: opus\b", e["text"])
+    return any(e["author"] in kb.EXECUTORS and e["text"] and re.search(r"\[opus\]|: opus\b", e["text"])
                for e in item["events"])
 
 
@@ -167,7 +168,7 @@ def execute(job, tools):
     result = f"VEREDITO: {final}\n\n" + "\n\n".join(parts)
     kb.job_progress(job["id"], "publicando a revisão")
     tools.comment(repo, number, f"Revisão do kanbagent\n\n{result}")
-    kb.add_comment(item["id"], "hermes", result)
+    kb.add_comment(item["id"], "revisor", result)
     kb.finish_job(job["id"], result=result)
     return result
 
@@ -216,7 +217,7 @@ class GitHubTools:
                 "changed": data["additions"] + data["deletions"]}
 
     def hermes(self, prompt, on_event):
-        return run_hermes(prompt, on_event, skill=None)
+        return run_hermes(prompt, on_event, skill=None, profile=team.AGENTS["revisor"]["perfil"])
 
     def claude(self, model, prompt):
         script = (f"cd /home/agent && timeout {CLAUDE_TIMEOUT} {self.CLAUDE} -p \"$0\" --model {shlex.quote(model)}"

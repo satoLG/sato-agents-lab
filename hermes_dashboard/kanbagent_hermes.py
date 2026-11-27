@@ -17,13 +17,14 @@ from pathlib import Path
 
 from . import config
 from . import kanbagent as kb
+from . import kanbagent_team as team
 
 LOG = logging.getLogger(__name__)
 HERMES_BIN = Path(os.getenv("KANBAGENT_HERMES_BIN", str(config.HERMES_HOME / "hermes-agent/venv/bin/hermes")))
 LOCK_PATH = config.HERMES_HOME / "kanbagent-hermes.lock"
 TIMEOUT = 15 * 60   # abaixo do JOB_STALE (20 min) do domínio
 
-PROMPT = """Card {id} do kanbagent ("{titulo}") acabou de ser movido para Proposta pelo Sato, na página.
+PROMPT = """Card {id} do kanbagent ("{titulo}") acabou de ser movido para Proposta. Você é o agente Requisitos.
 
 Use a skill kanbagent-proposta para escrever a proposta deste card agora e grave com
 `~/.hermes/scripts/kanbagent.sh proposal {id} ARQUIVO` (isso leva o card para "Em revisão").
@@ -70,14 +71,15 @@ def single_worker(lock_path=None):
         yield True
 
 
-def run_hermes(prompt, on_event, timeout=TIMEOUT, skill="kanbagent-proposta"):
-    """Roda o Hermes (com a skill de proposta por padrão); devolve (código de saída, texto final ou erro)."""
+def run_hermes(prompt, on_event, timeout=TIMEOUT, skill="kanbagent-proposta", profile=None):
+    """Roda o Hermes (com a skill de proposta por padrão) no perfil do agente; devolve (código de saída,
+    texto final ou erro). Sem perfil, é o Sato Agent principal."""
     if not HERMES_BIN.exists():
         return 127, f"Hermes não encontrado em {HERMES_BIN}."
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as handle:
         handle.write(prompt)
         query = handle.name
-    command = [str(HERMES_BIN), "chat", "--query-file", query, "--oneshot", *(["-s", skill] if skill else []),
+    command = [str(HERMES_BIN), *(["-p", profile] if profile else []), "chat", "--query-file", query, "--oneshot", *(["-s", skill] if skill else []),
                "--format", "stream-json", "--source", "tool", "--max-turns", "40"]
     result = {"code": None, "text": ""}
     try:
@@ -108,7 +110,12 @@ def run_hermes(prompt, on_event, timeout=TIMEOUT, skill="kanbagent-proposta"):
         os.unlink(query)
 
 
-def handle(job, runner=run_hermes):
+def run_requisitos(prompt, on_event):
+    """A proposta é do agente Requisitos: perfil Hermes próprio, que se identifica na API."""
+    return run_hermes(prompt, on_event, profile=team.AGENTS["requisitos"]["perfil"])
+
+
+def handle(job, runner=run_requisitos):
     item = kb.card(job["card_id"])
     last = {"text": None}
 
@@ -129,7 +136,7 @@ def handle(job, runner=run_hermes):
         kb.finish_job(job["id"], error=(reason or f"Hermes saiu com código {code}.").strip()[-400:])
 
 
-def drain(runner=run_hermes):
+def drain(runner=run_requisitos):
     """Atende a fila até esvaziar. Devolve quantos pedidos pegou."""
     done = 0
     with single_worker() as mine:

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Planejador">
+  <style>
+    .bob { animation: bob 3.6s ease-in-out infinite; }
+    .eye { transform-box: fill-box; transform-origin: center; animation: blink 5.2s infinite; }
+    .bulb { transform-box: fill-box; transform-origin: center bottom; animation: glow 2.4s ease-in-out infinite; }
+    .ray { animation: ray 2.4s ease-in-out infinite; }
+    .step { transform-box: fill-box; transform-origin: left center; animation: draw 3.6s ease-in-out infinite; }
+    .step2 { animation-delay: .6s; } .step3 { animation-delay: 1.2s; }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    @keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.1); } }
+    @keyframes glow { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-3px) rotate(4deg); } }
+    @keyframes ray { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+    @keyframes draw { 0% { transform: scaleX(0); } 30%, 85% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) { .bob, .eye, .bulb, .ray, .step { animation: none; } }
+  </style>
+  <defs><clipPath id="round"><circle cx="64" cy="64" r="64"/></clipPath></defs>
+  <g clip-path="url(#round)">
+  <circle cx="64" cy="64" r="64" fill="#2a1d48"/>
+  <circle cx="64" cy="64" r="58" fill="#3b2966"/>
+  <g class="bulb">
+    <g class="ray" stroke="#ffd65a" stroke-width="2.4" stroke-linecap="round">
+      <path d="M100 13v-5"/><path d="M111 18l4-3"/><path d="M89 18l-4-3"/>
+    </g>
+    <circle cx="100" cy="27" r="9" fill="#ffd65a"/>
+    <rect x="96" y="35" width="8" height="6" rx="1.5" fill="#c9cde0"/>
+    <path d="M97 27l3 4 3-4" fill="none" stroke="#c98d00" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+  <g class="bob">
+    <!-- corpo: colete roxo sobre camisa -->
+    <path d="M30 128c0-24 15-38 34-38s34 14 34 38z" fill="#e6e1f5"/>
+    <path d="M30 128c0-20 9-32 22-36l12 22 12-22c13 4 22 16 22 36z" fill="#b07cff"/>
+    <!-- cabeça -->
+    <circle cx="64" cy="62" r="25" fill="#e9b892"/>
+    <path d="M39 58c1-16 12-25 25-25 14 0 25 9 25 24-4-5-9-8-15-9-4 4-10 6-17 6-7 0-12 1-18 4z" fill="#22201f"/>
+    <!-- óculos quadrados -->
+    <g fill="none" stroke="#22201f" stroke-width="2.4">
+      <rect x="47" y="57" width="14" height="11" rx="2.5"/><rect x="67" y="57" width="14" height="11" rx="2.5"/>
+      <path d="M61 61h6"/>
+    </g>
+    <ellipse class="eye" cx="54" cy="62.5" rx="2.6" ry="3.2" fill="#22201f"/>
+    <ellipse class="eye" cx="74" cy="62.5" rx="2.6" ry="3.2" fill="#22201f"/>
+    <path d="M58 76q6 3 12 0" fill="none" stroke="#7a4a35" stroke-width="2.2" stroke-linecap="round"/>
+    <!-- planta (blueprint) -->
+    <g transform="rotate(-6 64 112)">
+      <rect x="36" y="96" width="56" height="30" rx="2" fill="#2f6fd8"/>
+      <g stroke="#7fb0ff" stroke-width=".8" opacity=".6">
+        <path d="M36 104h56M36 112h56M36 120h56M46 96v30M56 96v30M66 96v30M76 96v30M86 96v30"/>
+      </g>
+      <g stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+        <path class="step" d="M42 103h20"/>
+        <path class="step step2" d="M42 111h30"/>
+        <path class="step step3" d="M42 119h16"/>
+      </g>
+      <rect x="32" y="94" width="6" height="34" rx="3" fill="#1f4fa3"/>
+      <rect x="90" y="94" width="6" height="34" rx="3" fill="#1f4fa3"/>
+    </g>
+  </g>
+  </g>
+</svg>

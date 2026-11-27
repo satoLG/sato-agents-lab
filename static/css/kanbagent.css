@@ -273,3 +273,33 @@ body.kb-dragging .kb-list.kb-list-empty.kb-drop-ok .kb-cards { display: flex; mi
   background: #ffffff14; font-size: .78rem; color: var(--tile-ink-strong); }
 .kb-verify-visual { background: #f5a62326; }
 .kb-verify svg { width: 13px; height: 13px; }
+
+/* Time (ADR 0014) */
+.kb-team { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); counter-reset: agent; }
+.kb-agent { position: relative; display: grid; gap: 10px; align-content: start; padding: 16px; border-top: 4px solid var(--agent); }
+.kb-agent::before { counter-increment: agent; content: counter(agent); position: absolute; top: 10px; right: 14px; font-weight: 800; color: var(--agent); opacity: .6; }
+.kb-agent p { margin: 0; }
+.kb-agent-top { display: flex; gap: 14px; align-items: center; }
+.kb-agent-top h2 { margin: 0; font-size: 1.15rem; }
+.kb-agent-pic { position: relative; flex: none; }
+.kb-agent-pic img { display: block; width: 88px; height: 88px; border-radius: 50%; box-shadow: 0 0 0 3px var(--agent); }
+.kb-presence { position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--surface, #1d2125); }
+.kb-presence.free { background: #3ecf8e; }
+.kb-presence.busy { background: #ffb020; animation: kb-pulse 1.4s ease-in-out infinite; }
+@keyframes kb-pulse { 50% { box-shadow: 0 0 0 5px #ffb02033; } }
+.kb-agent-role { color: var(--agent); font-weight: 700; font-size: .9rem; }
+.kb-agent-engine { display: flex; gap: 4px; align-items: center; font-size: .78rem; color: var(--muted, #9aa4af); }
+.kb-agent-engine svg { width: 14px; height: 14px; flex: none; }
+.kb-agent-status { display: flex; gap: 6px; align-items: center; font-size: .88rem; padding: 6px 10px; border-radius: 6px; background: #ffffff0d; overflow-wrap: anywhere; }
+.kb-agent-status svg { width: 15px; height: 15px; flex: none; animation: kb-spin 1.2s linear infinite; }
+@keyframes kb-spin { to { transform: rotate(360deg); } }
+.kb-agent-does { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: .88rem; }
+.kb-agent-does li { display: flex; gap: 6px; align-items: flex-start; }
+.kb-agent-does svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--agent); }
+.kb-agent-not { font-size: .82rem; }
+.kb-agent-stages { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .85rem; }
+.kb-agent-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; }
+.kb-agent-stats div { padding: 6px; border-radius: 6px; background: #ffffff0a; text-align: center; }
+.kb-agent-stats dt { font-size: .72rem; color: var(--muted, #9aa4af); }
+.kb-agent-stats dd { margin: 0; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .kb-presence.busy, .kb-agent-status svg { animation: none; } }

@@ -20,8 +20,8 @@ def queued(proposta="**Tamanho:** pequeno\n**Critérios de aceite**\n- C1: funci
     repo = kb.add_repo_to_project(project, "sato/app")
     card = kb.create_card("Botão novo", "ideia", "sato", project_id=project, repo_id=repo)
     kb.change_stage(card, "proposta", "sato")
-    kb.update_proposal(card, proposta, "hermes")
-    kb.change_stage(card, "revisao", "hermes")
+    kb.update_proposal(card, proposta, "requisitos")
+    kb.change_stage(card, "revisao", "requisitos")
     kb.change_stage(card, "aprovado", "sato")
     kb.change_stage(card, "execucao", "sato")
     return card
@@ -108,7 +108,7 @@ def test_cheap_plan_runs_each_task_once_and_opens_pr(db):
     assert (item["job"]["kind"], item["job"]["status"]) == ("revisao_codigo", "queued")   # entrega pede revisão
     assert [link["url"] for link in item["links"]] == [PR]
     assert [(k, t) for k, t, _ in box.calls] == [("plan", "sonnet"), ("free", "free"), ("sonnet", "sonnet")]
-    assert any(e["author"] == "claude" and "[free] texto" in (e["text"] or "") for e in item["events"])
+    assert any(e["author"] == "planejador" and "[free] texto" in (e["text"] or "") for e in item["events"])
     assert "texto: free" in box.summary and box.cleaned
 
 
@@ -200,8 +200,8 @@ def test_new_repo_is_created_before_planning_and_refs_reach_the_card_md(db):
     card = kb.create_card("Jogo", "ideia", "sato", novo_repo="sato/jogo", publico=False)
     kb.add_ref_link(card, "https://example.com/arte", "sato", "Arte")
     kb.change_stage(card, "proposta", "hermes")
-    kb.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
-    for stage, who in (("revisao", "hermes"), ("aprovado", "sato"), ("execucao", "sato")):
+    kb.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "requisitos")
+    for stage, who in (("revisao", "requisitos"), ("aprovado", "sato"), ("execucao", "sato")):
         kb.change_stage(card, stage, who)
     box = FakeBox({"tasks": [task("t", "free")]}, public=False)
     worker.drain(lambda job: box)

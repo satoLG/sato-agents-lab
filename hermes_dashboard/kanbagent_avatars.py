@@ -11,8 +11,13 @@ from . import kanbagent as kb
 MAX_SIZE = 2 * 1024 * 1024
 STATIC = Path(__file__).resolve().parent.parent / "static"
 DEFAULTS = {"sato": "avatars/sato.svg", "hermes": "avatars/hermes.png",
-            "claude": "avatars/claude.svg", "github-sync": "avatars/github-sync.svg"}
-NAMES = {"sato": "Sato", "hermes": "Hermes", "claude": "Claude", "github-sync": "GitHub (sync)"}
+            "claude": "avatars/claude.svg", "github-sync": "avatars/github-sync.svg",
+            # o time (ADR 0014): bonequinhos SVG animados
+            "requisitos": "avatars/requisitos.svg", "planejador": "avatars/planejador.svg",
+            "programador": "avatars/programador.svg", "revisor": "avatars/revisor.svg"}
+NAMES = {"sato": "Sato", "hermes": "Sato Agent (Hermes)", "claude": "Claude (antes do time)",
+         "github-sync": "GitHub (sync)", "requisitos": "Requisitos", "planejador": "Planejador",
+         "programador": "Programador", "revisor": "Revisor"}
 TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}
 
 
