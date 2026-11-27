@@ -56,6 +56,31 @@ planejar. O repositório só muda até a proposta ser aprovada; depois fica fixo
 ligados à mão: nascem do fluxo. Links e arquivos de referência entram enquanto a ideia amadurece
 (ideia, proposta, revisão) e seguem com o card.
 
+## A proposta é a spec (ADR 0013)
+
+A proposta do Hermes tem formato fixo e a parte que importa para a entrega é:
+
+```
+**Critérios de aceite**
+- C1: o botão baixa um CSV com cabeçalho — verificar: teste
+- C2: vírgula no título sai entre aspas — verificar: `pytest tests/test_csv.py`
+- C3: o botão fica ao lado do filtro — verificar: visual
+
+**Decisão de arquitetura** — não   (ou "sim: <qual>", que exige ADR no PR)
+
+**Dúvidas** — nenhuma
+```
+
+- Sem critério, **Aprovar** fica desligado (e a API recusa `revisao → aprovado`). Dúvida em aberto só
+  pede confirmação.
+- O plano marca em cada tarefa os critérios que ela atende; critério sem tarefa faz o planejador
+  refazer o plano uma vez, depois falha.
+- O PR leva `specs/card-N.md` (ideia, proposta e ajustes pedidos nas reprovações).
+- A revisão responde `- Cn: ok|falha` para cada critério; o código troca APROVAR por AJUSTAR se faltar
+  `ok` num critério não visual ou se a ADR pedida não veio. Critério visual fica em "Para você conferir".
+- AGENTS.md / CLAUDE.md do repositório são a constituição: o planejador lê, a revisão recebe o texto, e
+  o comentário do plano avisa quando o repositório não tem nenhum dos dois.
+
 ## Claude executa o card (níveis por tarefa)
 
 Levar um card da Fila de execução para `execucao` (ou reprovar a entrega em `revisao_codigo`) exige

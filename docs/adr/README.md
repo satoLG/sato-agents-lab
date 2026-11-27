@@ -18,6 +18,7 @@ crie um ADR novo com `Substitui: NNNN` e marque o antigo como `Substituído por 
 | [0010](0010-login-do-site-protege-dashboard-e-kanbagent.md) | Login do site protege dashboard e kanbagent; só a home é pública | Aceito |
 | [0011](0011-icones-svg-sem-emoji.md) | Ícones SVG do sprite Lucide, nunca emoji; botões com uma palavra | Aceito |
 | [0012](0012-texto-rico-markdown-padrao.md) | Texto gerado é Markdown e aparece estilizado em todo o site | Aceito |
+| [0013](0013-proposta-aprovada-e-a-spec.md) | A proposta aprovada é a spec: critérios de aceite, spec no PR, constituição do repo | Aceito |
 
 ## Modelo
 

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import config
+from . import kanbagent_spec as spec
 
 DB_PATH = Path(os.getenv("KANBAGENT_DB_PATH", str(config.HERMES_HOME / "kanbagent.sqlite3")))
 
@@ -460,6 +461,10 @@ def change_stage(card_id, to_stage, author, text=None, occurred_at=None):
         empty = not (row["proposta"] or "").strip()
         if (from_stage, to_stage) == ("proposta", "revisao") and author != "github-sync" and empty:
             raise InvalidTransition("A proposta ainda está vazia.")
+        # A proposta aprovada é a spec: sem critério de aceite não há como conferir a entrega (ADR 0013).
+        if (from_stage, to_stage) == ("revisao", "aprovado") and author != "github-sync" \
+                and not spec.criteria(row["proposta"]):
+            raise InvalidTransition("A proposta não tem critérios de aceite (C1, C2…). Peça ajuste ao Hermes.")
         occurred = _insert_event(conn, card_id, "stage_change", author, from_stage=from_stage,
                                  to_stage=to_stage, text=text or None, occurred_at=occurred_at)
         conn.execute("UPDATE cards SET etapa_atual=?, atualizado_em=? WHERE id=?", (to_stage, occurred, card_id))
@@ -781,7 +786,7 @@ def card(card_id, now=None):
                   if e["kind"] == "stage_change" and e["to_stage"] in TERMINAL), None)
     total_until = _parse(final) if final and row["etapa_atual"] in TERMINAL else end
     row.update(events=events, links=links, refs=refs, artifacts=artifacts, durations=durations, custo=card_cost(card_id),
-               esforco=effort(card_id, now=now),
+               esforco=effort(card_id, now=now), spec=spec.summary(row.get("proposta")),
                total_seconds=max(0.0, (total_until - _parse(row["criado_em"])).total_seconds()),
                ajustes=sum(1 for e in events if e["kind"] == "stage_change"
                            and (e["from_stage"], e["to_stage"]) in RETURNS),

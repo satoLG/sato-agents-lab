@@ -19,7 +19,7 @@ def delivered(summary="- 1. botão: haiku"):
     card = kb.create_card("Botão", "ideia", "sato", project_id=project,
                           repo_id=kb.add_repo_to_project(project, "sato/app"))
     kb.change_stage(card, "proposta", "hermes")
-    kb.update_proposal(card, "Botão novo", "hermes")
+    kb.update_proposal(card, "Botão novo\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
     for stage, who in (("revisao", "hermes"), ("aprovado", "sato"), ("execucao", "sato")):
         kb.change_stage(card, stage, who)
     kb.finish_job(kb.claim_job("execucao")["id"])
@@ -30,17 +30,23 @@ def delivered(summary="- 1. botão: haiku"):
 
 
 class FakeTools:
-    def __init__(self, hermes=(0, "VEREDITO: APROVAR\n- ok"), claude=(0, "VEREDITO: APROVAR\n- ok"), changed=40):
+    def __init__(self, hermes=(0, "VEREDITO: APROVAR\n- C1: ok — teste novo"),
+                 claude=(0, "VEREDITO: APROVAR\n- C1: ok — teste novo"), changed=40, diff="+botão", constitution=None):
         self.hermes_answer, self.claude_answer, self.changed = hermes, claude, changed
-        self.asked, self.comments = [], []
+        self.diff, self.texts = diff, constitution or []
+        self.asked, self.comments, self.prompts = [], [], []
 
     def pr(self, repo, number):
         assert (repo, number) == ("sato/app", 7)
-        return {"title": "Botão", "body": "corpo", "diff": "+botão", "changed": self.changed}
+        return {"title": "Botão", "body": "corpo", "diff": self.diff, "changed": self.changed}
+
+    def constitution(self, repo):
+        return self.texts
 
     def hermes(self, prompt, on_event):
         self.asked.append("hermes")
-        assert "+botão" in prompt and "Botão novo" in prompt
+        self.prompts.append(prompt)
+        assert "Botão novo" in prompt
         return self.hermes_answer
 
     def claude(self, model, prompt):
@@ -98,7 +104,7 @@ def form(client, target, /, **data):
 
 def reviewed(verdict="AJUSTAR"):
     card = delivered()
-    worker.drain(lambda: FakeTools(hermes=(0, f"VEREDITO: {verdict}\n- trocar a cor")))
+    worker.drain(lambda: FakeTools(hermes=(0, f"VEREDITO: {verdict}\n- C1: ok — teste\n- trocar a cor")))
     return card
 
 
@@ -140,3 +146,47 @@ def test_review_in_progress_locks_card(client):
     assert "revisando…" in board and "Hermes revisando" in board
     response = form(client, f"/kanbagent/card/{card}/aprovar")
     assert kb.card(card)["etapa_atual"] == "revisao_codigo" and response.status_code == 303
+
+
+
+def test_approval_without_ok_on_every_criterion_becomes_adjust(db):
+    card = delivered()
+    tools = FakeTools(hermes=(0, "VEREDITO: APROVAR\n- tudo certo"))
+    worker.drain(lambda: tools)
+    review = kb.review(kb.card(card))
+    assert not review["aprovar"] and "sem `ok` do revisor: C1" in review["texto"]
+    assert "- C1: funciona (verificar: teste)" in tools.prompts[0]
+
+
+def test_failed_criterion_wins_and_visual_ones_are_left_for_sato(db):
+    card = delivered()
+    kb_proposal = ("Botão novo\n**Critérios de aceite**\n- C1: funciona — verificar: teste\n"
+                   "- C2: fica bonito — verificar: visual")
+    with kb._connection() as conn:
+        conn.execute("UPDATE cards SET proposta=? WHERE id=?", (kb_proposal, card))
+        conn.commit()
+    tools = FakeTools(hermes=(0, "VEREDITO: APROVAR\n- C1: ok — teste novo"))
+    worker.drain(lambda: tools)
+    review = kb.review(kb.card(card))
+    assert review["aprovar"] and "Para você conferir" in review["texto"] and "C2: fica bonito" in review["texto"]
+
+
+def test_constitution_goes_into_the_prompt_and_missing_adr_blocks(db):
+    card = delivered()
+    with kb._connection() as conn:
+        conn.execute("UPDATE cards SET proposta=? WHERE id=?",
+                     ("Botão novo\n**Critérios de aceite**\n- C1: funciona — verificar: teste\n"
+                      "**Decisão de arquitetura** — sim: Postgres no lugar do SQLite", card))
+        conn.commit()
+    tools = FakeTools(constitution=[("AGENTS.md", "Sempre use tabs.")])
+    worker.drain(lambda: tools)
+    prompt = tools.prompts[0]
+    assert "## Constituição do repositório" in prompt and "Sempre use tabs." in prompt
+    assert "Postgres no lugar do SQLite" in prompt
+    review = kb.review(kb.card(card))
+    assert not review["aprovar"] and "não traz nenhuma" in review["texto"]
+
+
+def test_adr_in_the_diff_satisfies_the_decision(db):
+    assert worker.has_adr("+++ b/docs/adr/0013-postgres.md\n+# ADR")
+    assert not worker.has_adr("+++ b/app.py\n+adr = 1")

@@ -37,7 +37,7 @@ def card_at(stage, **kwargs):
             "descartado": ["descartado"]}[stage]
     for step in path:
         if step == "revisao":
-            kanbagent.update_proposal(card, "proposta pronta", "hermes")
+            kanbagent.update_proposal(card, "proposta pronta\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
         kanbagent.change_stage(card, step, "hermes")
     return card
 
@@ -140,7 +140,7 @@ def test_new_repo_card_can_execute_and_repo_freezes_after_approval(db):
     assert kanbagent.card(card)["repo"] == "satoLG/existente" and kanbagent.card(card)["novo_repo"] is None
     kanbagent.set_repo(card, "sato", novo_repo="satoLG/jogo-novo")
     kanbagent.change_stage(card, "proposta", "hermes")
-    kanbagent.update_proposal(card, "p", "hermes")
+    kanbagent.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
     kanbagent.change_stage(card, "revisao", "hermes")
     kanbagent.change_stage(card, "aprovado", "sato")
     with pytest.raises(kanbagent.InvalidTransition):
@@ -172,7 +172,7 @@ def test_refs_follow_the_card_until_approval(db):
 def test_stage_durations_sum_an_adjustment_loop(db):
     card = kanbagent.create_card("Kanban", "ideia", "sato", occurred_at="2026-11-01T10:00:00+00:00")
     kanbagent.change_stage(card, "proposta", "hermes", occurred_at="2026-11-01T11:00:00+00:00")
-    kanbagent.update_proposal(card, "proposta", "hermes", occurred_at="2026-11-01T12:00:00+00:00")
+    kanbagent.update_proposal(card, "proposta\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes", occurred_at="2026-11-01T12:00:00+00:00")
     kanbagent.change_stage(card, "revisao", "hermes", occurred_at="2026-11-01T13:00:00+00:00")
     kanbagent.change_stage(card, "proposta", "sato", text="ajuste", occurred_at="2026-11-02T13:00:00+00:00")
     kanbagent.change_stage(card, "revisao", "hermes", occurred_at="2026-11-02T13:30:00+00:00")
@@ -230,7 +230,7 @@ def test_moving_to_proposal_queues_hermes_and_locks_the_card(db):
     kanbagent.job_progress(job, "lendo o card")
     assert kanbagent.card(card)["job"]["progress"] == "lendo o card"
     # o Hermes escreve e manda para revisão: o pedido fecha sozinho e o card destrava
-    kanbagent.update_proposal(card, "proposta do hermes", "hermes")
+    kanbagent.update_proposal(card, "proposta do hermes\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
     kanbagent.change_stage(card, "revisao", "hermes")
     assert kanbagent.job(job)["status"] == "done"
     kanbagent.change_stage(card, "proposta", "sato", text="mais curto")
@@ -309,7 +309,7 @@ def test_approved_card_without_repo_can_still_get_one(db):
     kanbagent.change_stage(card, "proposta", "sato")
     while (job := kanbagent.claim_job("proposta")) is not None:
         kanbagent.finish_job(job["id"])
-    kanbagent.update_proposal(card, "p", "hermes")
+    kanbagent.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes")
     kanbagent.change_stage(card, "revisao", "hermes")
     kanbagent.change_stage(card, "aprovado", "sato")
     assert kanbagent.card(card)["etapa_atual"] == "aprovado"
@@ -337,7 +337,7 @@ def test_effort_separates_agent_work_and_attention_from_idle_wait(db):
     kanbagent.change_stage(card, "proposta", "sato", occurred_at=T(10, 30))
     job = kanbagent.claim_job("proposta", now=T(10, 31))
     kanbagent.finish_job(job["id"], now=T(10, 41))                       # Hermes trabalhou 10 min
-    kanbagent.update_proposal(card, "p", "hermes", occurred_at=T(10, 45))
+    kanbagent.update_proposal(card, "p\n**Critérios de aceite**\n- C1: funciona — verificar: teste", "hermes", occurred_at=T(10, 45))
     kanbagent.change_stage(card, "revisao", "hermes", occurred_at=T(11, 0))
     # Sato com o card aberto: avisos a cada 15 s, um aviso repetido 1 s depois e outra sessão 10 min mais tarde
     credits = [kanbagent.add_attention(card, now=T(11, 10, s)) for s in (0, 15, 16)]
@@ -359,3 +359,32 @@ def test_attention_is_ignored_on_closed_cards_and_never_exceeds_the_stage(db):
     kanbagent.change_stage(card, "descartado", "sato", occurred_at="2026-11-01T11:00:00+00:00")
     assert kanbagent.add_attention(card, now="2026-11-01T11:05:00+00:00") == 0.0
     assert "descartado" not in kanbagent.effort(card, now="2026-11-02T00:00:00+00:00")["por_etapa"]
+
+
+
+def test_spec_parser_reads_criteria_adr_and_doubts():
+    from hermes_dashboard import kanbagent_spec as spec
+    text = ("**Problema** — x\n**Critérios de aceite**\n- C1: exporta CSV — verificar: teste\n"
+            "- **C2**: vírgula entre aspas — verificar: `pytest tests/test_csv.py`\n3. C3) botão ao lado — verificar: visual\n"
+            "- nota solta\n**Decisão de arquitetura** — sim: troca X por Y\n**Dúvidas** — qual separador?")
+    items = spec.criteria(text)
+    assert [(c["id"], c["visual"]) for c in items] == [("C1", False), ("C2", False), ("C3", True)]
+    assert items[1]["verificar"] == "`pytest tests/test_csv.py`" and items[0]["texto"] == "exporta CSV"
+    assert spec.needs_adr(text) and spec.open_doubts(text) == "qual separador?"
+    plain = "**Critérios de aceite**\n- C1: a\n**Decisao de arquitetura**: não\n**Dúvidas** — Nenhuma."
+    assert not spec.needs_adr(plain) and spec.open_doubts(plain) is None and spec.criteria(plain)[0]["verificar"] == ""
+    assert spec.criteria("sem seções") == [] and spec.criteria(None) == []
+    review = "VEREDITO: APROVAR\n- C1: ok — teste\n- **C2**: falha — sem aspas\n"
+    assert spec.unmet(items, review) == ["C2"]                     # C3 é visual: fica com o Sato
+    assert spec.unmet(items, "- C1: ok\n- C2: ok\n- C1: falha") == ["C1"]   # qualquer falha vence
+
+
+def test_approval_requires_acceptance_criteria(db):
+    card = kanbagent.create_card("A", "a", "sato")
+    kanbagent.change_stage(card, "proposta", "sato")
+    kanbagent.update_proposal(card, "**Problema** — x\n**Proposta** — y", "hermes")
+    kanbagent.change_stage(card, "revisao", "hermes")
+    with pytest.raises(kanbagent.InvalidTransition, match="critérios de aceite"):
+        kanbagent.change_stage(card, "aprovado", "sato")
+    kanbagent.change_stage(card, "aprovado", "github-sync")         # o sync espelha o GitHub, não valida
+    assert kanbagent.card(card)["etapa_atual"] == "aprovado"
