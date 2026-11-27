@@ -393,14 +393,14 @@ if (chatBox) {
     li.dataset.id = m.id;
     li.dataset.status = m.status;
     const img = document.createElement('img');
-    img.src = mine ? chatBox.dataset.satoAvatar : chatBox.dataset.agentAvatar;
+    img.src = m.avatar;
     img.alt = ''; img.width = 32; img.height = 32;
     const body = document.createElement('div');
     body.className = 'kb-msg-body';
     const meta = document.createElement('p');
     meta.className = 'kb-msg-meta';
     const who = document.createElement('strong');
-    who.textContent = mine ? 'Você' : chatBox.dataset.agentName;
+    who.textContent = m.nome;
     const time = document.createElement('time');
     time.dateTime = m.criado_em;
     time.textContent = ` ${clock(m.criado_em)}`;
@@ -415,7 +415,7 @@ if (chatBox) {
     } else {
       const p = document.createElement('p');
       p.className = 'kb-typing';
-      p.setAttribute('aria-label', `${chatBox.dataset.agentName} está escrevendo`);
+      p.setAttribute('aria-label', `${m.nome} está escrevendo`);
       p.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
       body.append(p);
     }

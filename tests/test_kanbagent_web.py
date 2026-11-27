@@ -546,3 +546,22 @@ def test_chat_page_sends_and_polls_messages(client, monkeypatch):
     form = client.post("/kanbagent/time/planejador/mensagem", data={"csrf": client.csrf, "texto": "sem JS"})
     assert form.status_code == 303
     assert "Conversar" in client.get("/kanbagent/time").get_data(as_text=True)
+
+
+def test_chat_lists_card_groups_and_posts_into_them(client, monkeypatch):
+    from hermes_dashboard import kanbagent_chat as chat
+    monkeypatch.setattr(chat, "LOCK_PATH", kb.DB_PATH.parent / "chat.lock")
+    card_id = kb.create_card("Exportar CSV", "i", "sato")
+    kb.change_stage(card_id, "proposta", "github-sync")
+    kb.add_comment(card_id, "planejador", "Plano de execução (planejado pelo sonnet):\n1. [haiku] CSV")
+    page = client.get("/kanbagent/time/revisor").get_data(as_text=True)
+    assert "Grupos dos cards" in page and f"/kanbagent/time/card-{card_id}" in page
+    page = client.get(f"/kanbagent/time/card-{card_id}").get_data(as_text=True)
+    assert "Grupo do card" in page and "@Programador, plano pronto:" in page and "Planejador" in page
+    response = client.post(f"/kanbagent/time/card-{card_id}/mensagem", json={"texto": "@Planejador quanto custa?"},
+                           headers={"X-Chat-CSRF": client.csrf})
+    data = response.get_json()
+    assert response.status_code == 201 and [(m["autor"], m["nome"]) for m in data] == [("sato", "Você"),
+                                                                                      ("planejador", "Planejador")]
+    assert data[1]["avatar"].startswith("/kanbagent/avatar/planejador")
+    assert client.get("/kanbagent/time/card-999").status_code == 404

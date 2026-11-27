@@ -72,6 +72,10 @@ cada agente, o que está fazendo e quanto já custou. O avatar é o robô da hom
 do visor nas cores do agente (`static/js/team-bots.js`, um só WebGL para a página, 24 fps, pausa fora
 da tela); no resto do quadro vai um PNG parado do mesmo robô.
 
+**Grupos dos cards** (na lista do chat): cada card em que o time já agiu vira um grupo com as passagens
+de etapa entre os agentes, geradas do histórico (zero token). Escreva lá e cite `@Mapeador`, `@Planejador`,
+`@Programador` ou `@Revisor` (até dois) para eles responderem; sem citação, ninguém responde.
+
 **Conversar** abre um chat direto com o agente (`/kanbagent/time/<agente>`), estilo Slack: lista de
 conversas à esquerda, mensagens à direita. A resposta é gerada pelo worker `kanbagent_chat` (disparado
 ao enviar): Mapeador e Revisor respondem no próprio perfil Hermes; Planejador e Programador respondem
